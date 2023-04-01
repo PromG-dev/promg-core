@@ -1,7 +1,7 @@
-from data_managers.semantic_header import Entity, Relation, Relationship, SemanticHeader
-from database_managers.db_connection import DatabaseConnection
-from utilities.performance_handling import Performance
-from cypher_queries.query_library import CypherQueryLibrary
+from ..data_managers.semantic_header import Entity, Relation, Relationship, SemanticHeader
+from ..database_managers.db_connection import DatabaseConnection
+from ..utilities.performance_handling import Performance
+from ..cypher_queries.query_library import CypherQueryLibrary
 
 
 class EKGUsingSemanticHeaderBuilder:

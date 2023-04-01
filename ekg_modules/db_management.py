@@ -1,8 +1,9 @@
 from typing import List, Set, Optional, Dict
 
-from database_managers.db_connection import DatabaseConnection
-from utilities.performance_handling import Performance
-from cypher_queries.query_library import CypherQueryLibrary as cql
+
+from ..cypher_queries.query_library import CypherQueryLibrary as cql
+from ..database_managers.db_connection import DatabaseConnection
+from ..utilities.performance_handling import Performance
 
 
 class DBManagement:

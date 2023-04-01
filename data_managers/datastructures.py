@@ -10,7 +10,7 @@ import numpy as np
 import pandas as pd
 from pandas import DataFrame
 
-from utilities.auxiliary_functions import replace_undefined_value, create_list
+from ..utilities.auxiliary_functions import replace_undefined_value, create_list
 
 
 @dataclass

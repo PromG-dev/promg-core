@@ -1,4 +1,4 @@
-from cypher_queries.query_translators import ClassCypher, ConditionCypher, EntityCypher, \
+from ..cypher_queries.query_translators import ClassCypher, ConditionCypher, EntityCypher, \
     RelationConstructorByNodesCypher, RelationCypher, RelationConstructorByRelationsCypher, \
     RelationConstructorByQueryCypher, EntityConstructorByQueryCypher, EntityConstructorByRelationCypher, \
     EntityConstructorByNodesCypher, RelationshipCypher, NodesCypher, LogCypher

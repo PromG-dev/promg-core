@@ -2,8 +2,8 @@ from dataclasses import dataclass
 from typing import Dict, Optional, Any, List
 import re
 
-from data_managers.datastructures import DataStructure
-from data_managers.semantic_header import Class, Entity, Relation
+from ..data_managers.datastructures import DataStructure
+from ..data_managers.semantic_header import Class, Entity, Relation
 from string import Template
 
 

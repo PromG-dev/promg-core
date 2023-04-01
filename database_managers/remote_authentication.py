@@ -1,5 +1,5 @@
 # remote credentials --> STORE REMOTE CREDENTIALS SOMEWHERE DIFFERENT (not pushed to github)
-from database_managers.authentication import Credentials
+from .authentication import Credentials
 
 remote = Credentials(
     uri="[your_uri]",

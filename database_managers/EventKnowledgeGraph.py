@@ -1,14 +1,14 @@
 from typing import List, Set
 
-from data_managers.semantic_header import SemanticHeader
-from database_managers.db_connection import DatabaseConnection
-from ekg_modules.ekg_builder_semantic_header import EKGUsingSemanticHeaderBuilder
-from ekg_modules.db_management import DBManagement
-from data_managers.datastructures import ImportedDataStructures
-from ekg_modules.data_importer import Importer
-from utilities.performance_handling import Performance
+from .db_connection import DatabaseConnection
+from ..data_managers.semantic_header import SemanticHeader
+from ..data_managers.datastructures import ImportedDataStructures
+from ..ekg_modules.ekg_builder_semantic_header import EKGUsingSemanticHeaderBuilder
+from ..ekg_modules.db_management import DBManagement
+from ..ekg_modules.data_importer import Importer
+from ..ekg_modules.inference_engine import InferenceEngine
+from ..utilities.performance_handling import Performance
 
-from ekg_modules.inference_engine import InferenceEngine
 
 from tabulate import tabulate
 
