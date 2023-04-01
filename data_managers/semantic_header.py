@@ -1,5 +1,6 @@
 import json
 from abc import ABC
+from pathlib import Path
 from typing import List, Any, Optional, Union
 
 from dataclasses import dataclass
@@ -494,8 +495,8 @@ class SemanticHeader(ABC):
                               _classes, _log)
 
     @staticmethod
-    def create_semantic_header(dataset_name: str, query_interpreter, **kwargs):
-        with open(f'../json_files/{dataset_name}.json') as f:
+    def create_semantic_header(path: Path, query_interpreter, **kwargs):
+        with open(path) as f:
             json_semantic_header = json.load(f)
 
         semantic_header = SemanticHeader.from_dict(json_semantic_header, query_interpreter, **kwargs)

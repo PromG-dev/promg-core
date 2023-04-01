@@ -2,6 +2,7 @@ import json
 import os
 import warnings
 import random
+from pathlib import Path
 
 from typing import List, Dict, Any, Optional
 from dataclasses import dataclass
@@ -144,7 +145,8 @@ class DataStructure:
             return None
 
         _name = obj.get("name")
-        _file_directory = os.path.join(*obj.get("file_directory").split("\\"))
+        _path_of_executed_file = os.getcwd()
+        _file_directory = os.path.join(os.getcwd(), *obj.get("file_directory").split("\\"))
         _file_names = obj.get("file_names")
         _labels = obj.get("labels")
         _true_values = obj.get("true_values")
@@ -331,9 +333,9 @@ class DataStructure:
 
 
 class ImportedDataStructures:
-    def __init__(self, dataset_name):
+    def __init__(self, path: Path):
         random.seed(1)
-        with open(f'../json_files/{dataset_name}_DS.json') as f:
+        with open(path) as f:
             json_event_tables = json.load(f)
 
         self.structures = [DataStructure.from_dict(item) for item in json_event_tables]
