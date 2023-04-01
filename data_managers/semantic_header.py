@@ -4,7 +4,7 @@ from typing import List, Any, Optional, Union
 
 from dataclasses import dataclass
 
-from data_managers.interpreters import Interpreter
+from .interpreters import Interpreter
 from ..utilities.auxiliary_functions import replace_undefined_value, create_list
 import re
 
