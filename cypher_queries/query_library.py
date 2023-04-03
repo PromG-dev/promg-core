@@ -142,6 +142,24 @@ class CypherQueryLibrary:
         return Query(query_string=q_make_timestamp, kwargs={})
 
     @staticmethod
+    def get_convert_epoch_to_timestamp(attribute, datetime_object):
+        unit = datetime_object.unit
+        offset = datetime_object.timezone_offset
+        offset = f"+'{offset}'" if offset != "" else offset
+
+        q_convert_epoch_to_timestamp = f'''
+                                    CALL apoc.periodic.iterate(
+                                    "MATCH (e:Event) WHERE e.{attribute} IS NOT NULL AND e.justImported = True 
+                                    WITH e, e.{attribute} as timezone_dt
+                                    WITH e, apoc.date.format(timezone_dt, '{unit}', 
+                                        '{datetime_object.format}') as converted
+                                    RETURN e, converted",
+                                    "SET e.{attribute} = converted",
+                                    {{batchSize:10000, parallel:false}})
+                                '''
+        return Query(query_string=q_convert_epoch_to_timestamp, kwargs={})
+
+    @staticmethod
     def get_finalize_import_events_query(labels) -> Query:
         labels = ":".join(labels)
         q_set_just_imported_to_false = f'''
@@ -467,7 +485,7 @@ class CypherQueryLibrary:
         return Query(query_string=q_delete_df, kwargs={})
 
     @staticmethod
-    def _get_aggregate_df_relations_query(entity: Entity,
+    def get_aggregate_df_relations_query(entity: Entity,
                                           include_label_in_c_df: bool = True,
                                           classifiers: Optional[List[str]] = None, df_threshold: int = 0,
                                           relative_df_threshold: float = 0) -> Query:
@@ -480,6 +498,7 @@ class CypherQueryLibrary:
         df_label = entity.get_df_label()
         entity_type = entity.type
         dfc_label = CypherQueryLibrary.get_dfc_label(entity_type, include_label_in_c_df)
+
         # add relations between classes when desired
         if df_threshold == 0 and relative_df_threshold == 0:
             # corresponds to aggregate_df_relations &  aggregate_df_relations_for_entities in graphdb-event-logs
@@ -488,7 +507,8 @@ class CypherQueryLibrary:
                             MATCH (c1:Class) <-[:OBSERVED]- (e1:Event) -[df:{df_label} {{entityType: '{entity_type}'}}]-> 
                                 (e2:Event) -[:OBSERVED]-> (c2:Class)
                             MATCH (e1) -[:CORR] -> (n) <-[:CORR]- (e2)
-                            WHERE n.entityType = df.entityType AND {classifier_condition}
+                            WHERE n.entityType = df.entityType AND 
+                                c1.classType = c2.classType {classifier_condition}
                             WITH n.entityType as EType,c1,count(df) AS df_freq,c2
                             MERGE (c1) -[rel2:{dfc_label} {{entityType: '{entity_type}', type:"DF_C"}}]-> (c2) 
                             ON CREATE SET rel2.count=df_freq'''
@@ -500,7 +520,8 @@ class CypherQueryLibrary:
                             MATCH (c1:Class) <-[:OBSERVED]- (e1:Event) -[df:{df_label} {{entityType: '{entity_type}'}}]-> 
                                 (e2:Event) -[:OBSERVED]-> (c2:Class)
                             MATCH (e1) -[:CORR] -> (n) <-[:CORR]- (e2)
-                            WHERE n.entityType = df.entityType {classifier_condition}
+                            WHERE n.entityType = df.entityType 
+                                AND c1.classType = c2.classType {classifier_condition}
                             WITH n.entityType as entityType,c1,count(df) AS df_freq,c2
                             WHERE df_freq > {df_threshold}
                             OPTIONAL MATCH (c2:Class) <-[:OBSERVED]- (e2b:Event) -[df2:DF]-> 
@@ -600,6 +621,20 @@ class CypherQueryLibrary:
             """
 
         return Query(query_string=query_count_relations, kwargs={})
+
+    @staticmethod
+    def get_event_log(entity: Entity, additional_event_attributes):
+        attributes_query = ",".join(f"e.{attribute} as {attribute}" for attribute in additional_event_attributes)
+        attributes_query = f", {attributes_query}"
+        query = '''
+            MATCH (e:Event) - [:CORR] -> (n:$entity_label)
+            RETURN n.ID as caseId, e.activity as activity, e.timestamp as timestamp $extra_attributes
+            ORDER BY n.ID, e.timestamp
+        '''
+
+        query_str = Template(query).substitute(entity_label=entity.get_label_string(),
+                                               extra_attributes=attributes_query)
+        return Query(query_string=query_str, kwargs={})
 
     @staticmethod
     def merge_same_nodes(data_structure: DataStructure):

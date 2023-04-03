@@ -106,8 +106,8 @@ class Relationship(ABC):
             "undefined": {"has_direction": False, "from_node": 0, "to_node": 1}
         }
 
-        nodes = re.findall(r'\(.*?\)', relation_description)
-        _relation_string = re.findall(r'\[.*?\]', relation_description)[0]
+        nodes = re.findall(r'\([^>]*\)', relation_description)
+        _relation_string = re.findall(r'\[[^>]*]', relation_description)[0]
         _relation_string = re.sub(r"[\[\]]", "", _relation_string)
         _relation_components = _relation_string.split(":")
         _relation_name = _relation_components[0]
@@ -441,26 +441,17 @@ class Log:
 
 class SemanticHeader(ABC):
     def __init__(self, name: str, version: str,
-                 entities_derived_from_nodes: List[Entity], entities_derived_from_relations: List[Entity],
-                 entities_derived_from_query: List[Entity],
-                 relations_derived_from_nodes: List[Relation], relation_derived_from_relations: List[Relation],
-                 relations_derived_from_query: List[Relation],
+                 entities: List[Entity], relations: List[Relation],
                  classes: List[Class], log: Log):
         self.name = name
         self.version = version
-
-        self.entities_derived_from_nodes = entities_derived_from_nodes
-        self.entities_derived_from_relations = entities_derived_from_relations
-        self.entities_derived_from_query = entities_derived_from_query
-        self.relations_derived_from_nodes = relations_derived_from_nodes
-        self.relation_derived_from_relations = relation_derived_from_relations
-        self.relations_derived_from_query = relations_derived_from_query
+        self.entities = entities
+        self.relations = relations
         self.classes = classes
         self.log = log
 
     def get_entity(self, entity_type) -> Optional[Entity]:
-        for entity in self.entities_derived_from_nodes + self.entities_derived_from_relations + \
-                      self.entities_derived_from_query:
+        for entity in self.entities:
             if entity_type == entity.type:
                 return entity
         return None
@@ -472,32 +463,40 @@ class SemanticHeader(ABC):
         _name = obj.get("name")
         _version = obj.get("version")
         _entities = create_list(Entity, obj.get("entities"), interpreter)
-        _entities_derived_from_nodes = [entity for entity in _entities if
-                                        entity.constructor_type == "EntityConstructorByNode"]
-        _entities_derived_from_relations = [entity for entity in _entities if
-                                            entity.constructor_type == "EntityConstructorByRelation"]
-        _entities_derived_from_query = [entity for entity in _entities if
-                                        entity.constructor_type == "EntityConstructorByQuery"]
         _relations = create_list(Relation, obj.get("relations"), interpreter)
-        _relations_derived_from_nodes = [relation for relation in _relations if
-                                         relation.constructor_type == "RelationConstructorByNodes"]
-        _relations_derived_from_relations = [relation for relation in _relations if
-                                             "RelationConstructorByRelations" in relation.constructor_type]
-        _relations_derived_from_query = [relation for relation in _relations if
-                                         relation.constructor_type == "RelationConstructorByQuery"]
         _classes = create_list(Class, obj.get("classes"), interpreter)
         _log = Log.from_dict(obj.get("log"), interpreter)
-        return SemanticHeader(_name, _version,
-                              _entities_derived_from_nodes, _entities_derived_from_relations,
-                              _entities_derived_from_query,
-                              _relations_derived_from_nodes, _relations_derived_from_relations,
-                              _relations_derived_from_query,
+        return SemanticHeader(_name, _version, _entities, _relations,
                               _classes, _log)
 
     @staticmethod
-    def create_semantic_header(path: Path, query_interpreter, **kwargs):
+    def create_semantic_header(path: Path, query_interpreter):
         with open(path) as f:
             json_semantic_header = json.load(f)
 
-        semantic_header = SemanticHeader.from_dict(json_semantic_header, query_interpreter, **kwargs)
+        semantic_header = SemanticHeader.from_dict(json_semantic_header, query_interpreter)
         return semantic_header
+
+    def get_entities_constructed_by_nodes(self):
+        return [entity for entity in self.entities if
+                entity.constructor_type == "EntityConstructorByNode"]
+
+    def get_entities_constructed_by_relations(self):
+        return [entity for entity in self.entities if
+                entity.constructor_type == "EntityConstructorByRelation"]
+
+    def get_entities_constructed_by_query(self):
+        return [entity for entity in self.entities if
+                entity.constructor_type == "EntityConstructorByQuery"]
+
+    def get_relations_derived_from_nodes(self):
+        return [relation for relation in self.relations if
+                                         relation.constructor_type == "RelationConstructorByNodes"]
+
+    def get_relations_derived_from_relations(self):
+        return [relation for relation in self.relations if
+                                             "RelationConstructorByRelations" in relation.constructor_type]
+
+    def get_relations_derived_from_query(self):
+        return [relation for relation in self.relations if
+                                         relation.constructor_type == "RelationConstructorByQuery"]

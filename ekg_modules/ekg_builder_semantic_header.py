@@ -28,7 +28,7 @@ class EKGUsingSemanticHeaderBuilder:
 
     def create_entities(self, node_label) -> None:
         entity: Entity
-        for entity in self.semantic_header.entities_derived_from_nodes:
+        for entity in self.semantic_header.get_entities_constructed_by_nodes():
             if node_label is None or entity.constructed_by.node_label == node_label:
                 self.connection.exec_query(CypherQueryLibrary.get_create_entity_query, **{"entity": entity})
                 self._write_message_to_performance(f"Entity (:{entity.get_label_string()}) node created")
@@ -36,7 +36,7 @@ class EKGUsingSemanticHeaderBuilder:
     def correlate_events_to_entities(self, node_label) -> None:
         # correlate events that contain a reference from an entity to that entity node
         entity: Entity
-        for entity in self.semantic_header.entities_derived_from_nodes:
+        for entity in self.semantic_header.get_entities_constructed_by_nodes():
             if entity.corr and (node_label is None or entity.constructed_by.node_label == node_label):
                 # find events that contain the entity as property and not nan
                 # save the value of the entity property as id and also whether it is a virtual entity
@@ -51,7 +51,7 @@ class EKGUsingSemanticHeaderBuilder:
         # find events that are related to different entities of which one event also has a reference to the other entity
         # create a relation between these two entities
         relation: Relation
-        for relation in self.semantic_header.relations_derived_from_nodes:
+        for relation in self.semantic_header.get_relations_derived_from_nodes():
             if relation.include:
                 self.create_foreign_nodes(relation)
                 self.create_relations_using_nodes(relation)
@@ -78,9 +78,9 @@ class EKGUsingSemanticHeaderBuilder:
 
     def create_entity_relations_using_relations(self, relation_types) -> None:
         if relation_types is None:
-            relation_types = [relation.type for relation in self.semantic_header.relation_derived_from_relations]
+            relation_types = [relation.type for relation in self.semantic_header.get_relations_derived_from_relations()]
         relation: Relation
-        for relation in self.semantic_header.relation_derived_from_relations:
+        for relation in self.semantic_header.get_relations_derived_from_relations():
             if relation.include and relation.type in relation_types:
                 self.connection.exec_query(CypherQueryLibrary.get_create_relation_by_relations_query,
                                            **{"relation": relation,
@@ -89,7 +89,7 @@ class EKGUsingSemanticHeaderBuilder:
     def create_entities_by_relations(self) -> None:
         relation: Relation
         entity: Entity
-        for entity in self.semantic_header.entities_derived_from_relations:
+        for entity in self.semantic_header.get_entities_constructed_by_relations():
             if entity.include:
                 self.connection.exec_query(CypherQueryLibrary.get_create_entities_by_relations_query,
                                            **{"entity": entity})
@@ -102,7 +102,7 @@ class EKGUsingSemanticHeaderBuilder:
 
     def correlate_events_to_reification(self) -> None:
         reified_entity: Entity
-        for reified_entity in self.semantic_header.entities_derived_from_relations:
+        for reified_entity in self.semantic_header.get_entities_constructed_by_relations():
             if reified_entity.corr:
                 reified_entity_labels = reified_entity.get_label_string()
                 # correlate events that are related to an entity which is reified into a new entity
@@ -114,25 +114,21 @@ class EKGUsingSemanticHeaderBuilder:
                 self._write_message_to_performance(
                     f"Relation (:Event) - [:CORR] -> (:Entity:{reified_entity_labels}) created")
 
-    def create_df_edges(self) -> None:
+    def create_df_edges(self, entity_types) -> None:
         entity: Entity
 
-        for entity in self.semantic_header.entities_derived_from_nodes:
-            if entity.df:
+        if entity_types is None:
+            entity_types = [entity.type for entity in self.semantic_header.entities]
+
+        for entity in self.semantic_header.entities:
+            if entity.df and entity.type in entity_types:
                 self.connection.exec_query(CypherQueryLibrary.get_create_directly_follows_query,
                                            **{"entity": entity, "batch_size": self.batch_size})
                 self._write_message_to_performance(f"Created [:DF] edge for (:{entity.get_label_string()})")
 
-        for entity in self.semantic_header.entities_derived_from_relations:
-            if entity.df:
-                self.connection.exec_query(CypherQueryLibrary.get_create_directly_follows_query,
-                                           **{"entity": entity, "batch_size": self.batch_size})
-                self._write_message_to_performance(
-                    f"Created [:DF] edge for (:{entity.get_label_string()})")
-
     def merge_duplicate_df(self):
         entity: Entity
-        for entity in self.semantic_header.entities_derived_from_nodes:
+        for entity in self.semantic_header.entities:
             if entity.merge_duplicate_df:
                 self.connection.exec_query(CypherQueryLibrary.get_merge_duplicate_df_entity_query, **{"entity": entity})
                 self.perf.finished_step(
@@ -142,7 +138,7 @@ class EKGUsingSemanticHeaderBuilder:
         reified_entity: Entity
         original_entity: Entity
         relation: Relationship
-        for reified_entity in self.semantic_header.entities_derived_from_relations:
+        for reified_entity in self.semantic_header.get_entities_constructed_by_relations():
             if reified_entity.delete_parallel_df:
                 relation = reified_entity.constructed_by.relation
                 parent_entity = self.semantic_header.get_entity(relation.from_node.node_label)

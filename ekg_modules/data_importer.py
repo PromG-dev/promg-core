@@ -59,6 +59,10 @@ class Importer:
     def _reformat_timestamps(self, structure):
         datetime_formats = structure.get_datetime_formats()
         for attribute, datetime_format in datetime_formats.items():
+            if datetime_format.is_epoch:
+                self.connection.exec_query(CypherQueryLibrary.get_convert_epoch_to_timestamp,
+                                           **{"attribute": attribute, "datetime_object": datetime_format})
+
             self.connection.exec_query(CypherQueryLibrary.get_make_timestamp_date_query,
                                        **{"attribute": attribute, "datetime_object": datetime_format})
 
