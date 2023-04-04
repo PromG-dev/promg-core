@@ -15,6 +15,6 @@ class EKGAnalysis:
         if self.perf is not None:
             self.perf.finished_step(activity=message)
 
-    def create_df_process_model(self, entity):
+    def create_df_process_model(self, entity, classifiers):
         self.connection.exec_query(cql.get_aggregate_df_relations_query,
-                                   **{"entity": entity})
+                                   **{"entity": entity, "classifiers": classifiers})
