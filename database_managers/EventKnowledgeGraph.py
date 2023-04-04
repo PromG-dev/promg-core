@@ -8,10 +8,8 @@ from ..ekg_modules.ekg_analysis import EKGAnalysis
 from ..ekg_modules.ekg_builder_semantic_header import EKGUsingSemanticHeaderBuilder
 from ..ekg_modules.db_management import DBManagement
 from ..ekg_modules.data_importer import Importer
-from ..ekg_modules.ekg_custom_module import CustomModule
 from ..ekg_modules.inference_engine import InferenceEngine
 from ..utilities.performance_handling import Performance
-
 
 from tabulate import tabulate
 import pandas as pd
@@ -22,7 +20,7 @@ class EventKnowledgeGraph:
     def __init__(self, db_connection: DatabaseConnection, db_name: str, event_tables: ImportedDataStructures,
                  batch_size: int = 5000, use_sample: bool = False,
                  semantic_header: SemanticHeader = None,
-                 perf: Performance = None):
+                 perf: Performance = None, custom_module_name=None):
         # classes responsible for executing queries
         self.ekg_management = DBManagement(db_connection=db_connection, db_name=db_name, perf=perf)
         self.data_importer = Importer(db_connection, data_structures=event_tables, batch_size=batch_size,
@@ -31,7 +29,11 @@ class EventKnowledgeGraph:
                                                          batch_size=batch_size, perf=perf)
         self.inference_engine = InferenceEngine(db_connection=db_connection, perf=perf)
         self.ekg_analysis = EKGAnalysis(db_connection=db_connection, perf=perf)
-        self.custom_module = CustomModule(db_connection=db_connection, perf=perf)
+
+        if custom_module_name is not None:
+            self.custom_module = custom_module_name(db_connection=db_connection, perf=perf)
+        else:
+            self.custom_module = None
 
         self.semantic_header = semantic_header
 
@@ -83,7 +85,6 @@ class EventKnowledgeGraph:
         file_path = os.path.join(dir_path, f"{entity_object.type}.csv")
         os.makedirs(dir_path, exist_ok=True)
         df.to_csv(file_path, index=True, index_label="idx")
-
 
     # endregion
 
@@ -173,12 +174,13 @@ class EventKnowledgeGraph:
 
     # endregion
 
-    def create_df_process_model(self, entity_type):
+    def create_df_process_model(self, entity_type, classifiers=None):
         entity = self.semantic_header.get_entity(entity_type)
         if entity_type is None:
             raise ValueError(f"{entity_type} is not defined in semantic header")
-        self.ekg_analysis.create_df_process_model(entity)
+        self.ekg_analysis.create_df_process_model(entity, classifiers)
 
     def do_custom_query(self, query_name, **kwargs):
+        if self.custom_module is None:
+            raise NameError("No custom module has been defined")
         self.custom_module.do_custom_query(query_name, **kwargs)
-

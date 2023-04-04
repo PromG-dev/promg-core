@@ -486,18 +486,21 @@ class CypherQueryLibrary:
 
     @staticmethod
     def get_aggregate_df_relations_query(entity: Entity,
-                                          include_label_in_c_df: bool = True,
-                                          classifiers: Optional[List[str]] = None, df_threshold: int = 0,
-                                          relative_df_threshold: float = 0) -> Query:
+                                         include_label_in_c_df: bool = True,
+                                         classifiers: Optional[List[str]] = None, df_threshold: int = 0,
+                                         relative_df_threshold: float = 0,
+                                         exclude_self_loops=True) -> Query:
 
         classifier_condition = ""
         if classifiers is not None:
             classifier_string = "_".join(classifiers)
-            classifier_condition = f"AND c1.classType = {classifier_string}"
+            classifier_condition = f"AND c1.classType = '{classifier_string}'"
 
         df_label = entity.get_df_label()
         entity_type = entity.type
         dfc_label = CypherQueryLibrary.get_dfc_label(entity_type, include_label_in_c_df)
+
+        classifier_self_loops = "AND c1 <> c2" if exclude_self_loops else ""
 
         # add relations between classes when desired
         if df_threshold == 0 and relative_df_threshold == 0:
@@ -508,9 +511,9 @@ class CypherQueryLibrary:
                                 (e2:Event) -[:OBSERVED]-> (c2:Class)
                             MATCH (e1) -[:CORR] -> (n) <-[:CORR]- (e2)
                             WHERE n.entityType = df.entityType AND 
-                                c1.classType = c2.classType {classifier_condition}
+                                c1.classType = c2.classType {classifier_condition} {classifier_self_loops}
                             WITH n.entityType as EType,c1,count(df) AS df_freq,c2
-                            MERGE (c1) -[rel2:{dfc_label} {{entityType: '{entity_type}', type:"DF_C"}}]-> (c2) 
+                            MERGE (c1) -[rel2:{dfc_label} {{entityType: '{entity_type}', type:"DF_C", classType: c1.classType}}]-> (c2) 
                             ON CREATE SET rel2.count=df_freq'''
             return Query(query_string=q_create_dfc, kwargs={})
         else:
@@ -521,14 +524,14 @@ class CypherQueryLibrary:
                                 (e2:Event) -[:OBSERVED]-> (c2:Class)
                             MATCH (e1) -[:CORR] -> (n) <-[:CORR]- (e2)
                             WHERE n.entityType = df.entityType 
-                                AND c1.classType = c2.classType {classifier_condition}
+                                AND c1.classType = c2.classType {classifier_condition} {classifier_self_loops}
                             WITH n.entityType as entityType,c1,count(df) AS df_freq,c2
                             WHERE df_freq > {df_threshold}
                             OPTIONAL MATCH (c2:Class) <-[:OBSERVED]- (e2b:Event) -[df2:DF]-> 
                                 (e1b:Event) -[:OBSERVED]-> (c1:Class)
                             WITH entityType as EType,c1,df_freq,count(df2) AS df_freq2,c2
                             WHERE (df_freq*{relative_df_threshold} > df_freq2)
-                            MERGE (c1) -[rel2:{dfc_label} {{entityType: '{entity_type}', type:"DF_C"}}]-> (c2) 
+                            MERGE (c1) -[rel2:{dfc_label} {{entityType: '{entity_type}', type:"DF_C", classType: c1.classType}}]-> (c2) 
                             ON CREATE SET rel2.count=df_freq'''
             return Query(query_string=q_create_dfc, kwargs={})
 
