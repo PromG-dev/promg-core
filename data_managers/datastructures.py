@@ -122,17 +122,22 @@ class Sample:
 
 
 class DataStructure:
-    def __init__(self, include: bool, name: str, file_directory: str, file_names: List[str], seperator: str,
-                 labels: List[str], true_values: List[str],
-                 false_values: List[str], samples: Dict[str, Sample], attributes: List[Attribute]):
+    def __init__(self, include: bool, name: str, file_directory: str, file_names: List[str],
+                 encoding: str, seperator: str,
+                 labels: List[str], true_values: List[str], false_values: List[str],
+                 add_log: bool, add_event_index: bool,
+                 samples: Dict[str, Sample], attributes: List[Attribute]):
         self.include = include
         self.name = name
         self.file_directory = file_directory
         self.file_names = file_names
+        self.encoding = encoding
         self.seperator = seperator
         self.labels = labels
         self.true_values = true_values
         self.false_values = false_values
+        self.add_log = add_log
+        self.add_event_index = add_event_index
         self.samples = samples
         self.attributes = attributes
 
@@ -153,15 +158,19 @@ class DataStructure:
         _path_of_executed_file = os.getcwd()
         _file_directory = os.path.join(os.getcwd(), *obj.get("file_directory").split("\\"))
         _file_names = obj.get("file_names")
+        _encoding = replace_undefined_value(obj.get("encoding"), "utf-8")
         _seperator = replace_undefined_value(obj.get("seperator"), ",")
         _labels = obj.get("labels")
         _true_values = obj.get("true_values")
         _false_values = obj.get("false_values")
+        _add_log = replace_undefined_value(obj.get("get_log"), True)
+        _add_event_index = replace_undefined_value(obj.get("add_event_index"), True)
         _samples = create_list(Sample, obj.get("samples"))
         _samples = {sample.file_name: sample for sample in _samples}
         _attributes = create_list(Attribute, obj.get("attributes"))
-        return DataStructure(_include, _name, _file_directory, _file_names, _seperator,
-                             _labels, _true_values, _false_values, _samples, _attributes)
+        return DataStructure(_include, _name, _file_directory, _file_names, _encoding, _seperator,
+                             _labels, _true_values, _false_values, _add_log, _add_event_index,
+                             _samples, _attributes)
 
     def get_primary_keys(self):
         return [attribute.name for attribute in self.attributes if attribute.is_primary_key]
@@ -300,7 +309,8 @@ class DataStructure:
 
         df_log: DataFrame = pd.read_csv(os.path.join(input_path, file_name), keep_default_na=True,
                                         usecols=required_columns, dtype=dtypes, true_values=true_values,
-                                        false_values=false_values, sep=self.seperator)
+                                        false_values=false_values, sep=self.seperator,
+                                        encoding=self.encoding)
 
         if use_sample and self.is_event_data():
             df_log = self.create_sample(file_name, df_log)
@@ -314,6 +324,12 @@ class DataStructure:
                                        self.attributes}
         df_log = df_log[required_attributes]
         df_log = df_log.rename(columns=required_attributes_mapping)
+
+        if self.add_log:
+            df_log["log"] = file_name
+
+        if self.add_event_index:
+            df_log["idx"] = df_log.reset_index().index
 
         return df_log
 
