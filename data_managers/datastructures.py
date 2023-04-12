@@ -109,10 +109,14 @@ class Sample:
     ids: List[Any]
 
     @staticmethod
-    def from_dict(obj: Any) -> Optional['Sample']:
+    def from_dict(obj: Any, default_file_name: Optional[str] = None) -> Optional['Sample']:
         if obj is None:
             return None
-        _file_name = obj.get("file_name")
+        # when there is a single file specified, then we can use the default file name
+        if default_file_name is not None:
+            _file_name = replace_undefined_value(obj.get("file_name"), default_file_name)
+        else:
+            _file_name = obj.get("file_name")
         _use_random_sample = obj.get("use_random_sample")
         _population_column = obj.get("population_column")
         _size = obj.get("size")
@@ -123,7 +127,7 @@ class Sample:
 
 class DataStructure:
     def __init__(self, include: bool, name: str, file_directory: str, file_names: List[str],
-                 encoding: str, seperator: str,
+                 encoding: str, seperator: str, decimal: str,
                  labels: List[str], true_values: List[str], false_values: List[str],
                  add_log: bool, add_event_index: bool,
                  samples: Dict[str, Sample], attributes: List[Attribute]):
@@ -133,6 +137,7 @@ class DataStructure:
         self.file_names = file_names
         self.encoding = encoding
         self.seperator = seperator
+        self.decimal = decimal
         self.labels = labels
         self.true_values = true_values
         self.false_values = false_values
@@ -157,18 +162,25 @@ class DataStructure:
         _name = obj.get("name")
         _path_of_executed_file = os.getcwd()
         _file_directory = os.path.join(os.getcwd(), *obj.get("file_directory").split("\\"))
-        _file_names = obj.get("file_names")
+        _file_names = obj.get("file_names") if obj.get("file_names") is not None else [obj.get("file_name")]
         _encoding = replace_undefined_value(obj.get("encoding"), "utf-8")
         _seperator = replace_undefined_value(obj.get("seperator"), ",")
+        _decimal = replace_undefined_value(obj.get("decimal"), ".")
         _labels = obj.get("labels")
         _true_values = obj.get("true_values")
         _false_values = obj.get("false_values")
-        _add_log = replace_undefined_value(obj.get("get_log"), True)
-        _add_event_index = replace_undefined_value(obj.get("add_event_index"), True)
-        _samples = create_list(Sample, obj.get("samples"))
+        _add_log = replace_undefined_value(obj.get("add_log"), False)
+        _add_event_index = replace_undefined_value(obj.get("add_event_index"), False)
+
+        _samples_obj = obj.get("samples") if obj.get("samples") is not None else obj.get("sample")
+        if len(_file_names) == 1:  # single file name is defined
+            _samples = create_list(Sample, _samples_obj, _file_names[0])
+        else:
+            _samples = create_list(Sample, _samples_obj)
+
         _samples = {sample.file_name: sample for sample in _samples}
         _attributes = create_list(Attribute, obj.get("attributes"))
-        return DataStructure(_include, _name, _file_directory, _file_names, _encoding, _seperator,
+        return DataStructure(_include, _name, _file_directory, _file_names, _encoding, _seperator, _decimal,
                              _labels, _true_values, _false_values, _add_log, _add_event_index,
                              _samples, _attributes)
 
@@ -196,6 +208,7 @@ class DataStructure:
         for attribute in self.attributes:
             # add column names to the required columns
             required_columns.update([x.name for x in attribute.columns])
+            required_columns.update([x.name for x in attribute.na_rep_columns])
 
         return list(required_columns)
 
@@ -296,6 +309,7 @@ class DataStructure:
                 df_log = DataStructure.replace_nan_values_based_on_na_rep_value(df_log, attribute)
             if attribute.mandatory:
                 df_log = DataStructure.replace_nan_values_with_unknown(df_log, attribute)
+
             df_log = DataStructure.combine_attribute_columns(df_log, attribute)
 
         return df_log
@@ -307,10 +321,17 @@ class DataStructure:
         true_values = self.true_values
         false_values = self.false_values
 
-        df_log: DataFrame = pd.read_csv(os.path.join(input_path, file_name), keep_default_na=True,
-                                        usecols=required_columns, dtype=dtypes, true_values=true_values,
-                                        false_values=false_values, sep=self.seperator,
-                                        encoding=self.encoding)
+        if file_name.endswith('.csv'):
+            df_log: DataFrame = pd.read_csv(os.path.join(input_path, file_name), keep_default_na=True,
+                                            usecols=required_columns, dtype=dtypes, true_values=true_values,
+                                            false_values=false_values, sep=self.seperator, decimal=self.decimal,
+                                            encoding=self.encoding)
+        else:
+            raise TypeError(f"The file extension of {file_name} is not implemented. Use .csv.")
+
+        # drop all columns with only nan values
+        df_log = df_log.dropna(how='all', axis=1)  # drop all columns in which all values are nan (empty)
+        df_log = df_log.dropna(how='all')  # drop all columns in which all values are nan (empty)
 
         if use_sample and self.is_event_data():
             df_log = self.create_sample(file_name, df_log)
@@ -330,6 +351,30 @@ class DataStructure:
 
         if self.add_event_index:
             df_log["idx"] = df_log.reset_index().index
+
+        return df_log
+
+    def read_data_set(self, input_path, file_name, use_sample, store_preprocessed_file=True,
+                      use_preprocessed_file=False):
+
+        preprocessed_file_directory = os.path.join(input_path, "preprocessed_files")
+        # change extension from csv to pkl and add sample in case of sample
+        preprocessed_file_name = f"{file_name[:-4]}_sample.pkl" if use_sample else f"{file_name[:-4]}.pkl"
+        preprocessed_file_path = os.path.join(preprocessed_file_directory, preprocessed_file_name)
+        preprocessed_file_is_used = False
+        if not use_preprocessed_file:
+            df_log = self.prepare_event_data_sets(input_path, file_name, use_sample)
+        elif not os.path.exists(preprocessed_file_path):
+            warning_message = f"No preprocessed file {preprocessed_file_name} found, preprocessed the file instead"
+            warnings.warn(warning_message)
+            df_log = self.prepare_event_data_sets(input_path, file_name, use_sample)
+        else:  # use_preprocessed_file and file exists
+            df_log = pd.read_pickle(preprocessed_file_path)
+            preprocessed_file_is_used = True
+
+        if store_preprocessed_file and not preprocessed_file_is_used:
+            os.makedirs(preprocessed_file_directory, exist_ok=True)
+            df_log.to_pickle(preprocessed_file_path)
 
         return df_log
 

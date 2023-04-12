@@ -18,13 +18,13 @@ import pandas as pd
 # ensure to allocate enough memory to your database: dbms.memory.heap.max_size=5G advised
 class EventKnowledgeGraph:
     def __init__(self, db_connection: DatabaseConnection, db_name: str, event_tables: ImportedDataStructures,
-                 batch_size: int = 5000, use_sample: bool = False,
+                 batch_size: int = 5000, use_sample: bool = False, use_preprocessed_files: bool = False,
                  semantic_header: SemanticHeader = None,
                  perf: Performance = None, custom_module_name=None):
         # classes responsible for executing queries
         self.ekg_management = DBManagement(db_connection=db_connection, db_name=db_name, perf=perf)
         self.data_importer = Importer(db_connection, data_structures=event_tables, batch_size=batch_size,
-                                      use_sample=use_sample, perf=perf)
+                                      use_sample=use_sample, use_preprocessed_files=use_preprocessed_files, perf=perf)
         self.ekg_builder = EKGUsingSemanticHeaderBuilder(db_connection=db_connection, semantic_header=semantic_header,
                                                          batch_size=batch_size, perf=perf)
         self.inference_engine = InferenceEngine(db_connection=db_connection, perf=perf)

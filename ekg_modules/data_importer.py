@@ -11,13 +11,14 @@ import pandas as pd
 
 class Importer:
     def __init__(self, db_connection: DatabaseConnection, data_structures: ImportedDataStructures, batch_size: int,
-                 use_sample: bool = False,
+                 use_sample: bool = False, use_preprocessed_files: bool = False,
                  perf: Performance = None):
         self.connection = db_connection
         self.structures = data_structures.structures
 
         self.batch_size = batch_size
         self.use_sample = use_sample
+        self.use_preprocessed_files = use_preprocessed_files
         self.perf = perf
 
     def _write_message_to_performance(self, message: str):
@@ -31,7 +32,8 @@ class Importer:
             file_directory = structure.file_directory
             for file_name in structure.file_names:
                 # read and import the events
-                df_log = structure.prepare_event_data_sets(file_directory, file_name, self.use_sample)
+                df_log = structure.read_data_set(file_directory, file_name, use_sample=self.use_sample,
+                                                 use_preprocessed_file=self.use_preprocessed_files)
                 df_log["justImported"] = True
                 self._import_data_nodes_from_data(labels, df_log, file_name)
                 self._write_message_to_performance(f"Imported data from table {structure.name}: {file_name}")
@@ -54,7 +56,6 @@ class Importer:
 
             self._write_message_to_performance(
                 f"Finalized the import from table {structure.name}: {file_name}")
-
 
     def _reformat_timestamps(self, structure):
         datetime_formats = structure.get_datetime_formats()
