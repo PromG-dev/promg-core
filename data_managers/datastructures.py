@@ -170,7 +170,7 @@ class DataStructure:
         _true_values = obj.get("true_values")
         _false_values = obj.get("false_values")
         _add_log = replace_undefined_value(obj.get("add_log"), False)
-        _add_event_index = replace_undefined_value(obj.get("add_event_index"), False)
+        _add_event_index = replace_undefined_value(obj.get("add_event_index"), True)
 
         _samples_obj = obj.get("samples") if obj.get("samples") is not None else obj.get("sample")
         if len(_file_names) == 1:  # single file name is defined
