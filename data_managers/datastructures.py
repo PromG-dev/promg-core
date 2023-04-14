@@ -287,7 +287,6 @@ class DataStructure:
             df_log[attribute_name] = df_log[column.name]
             if column.range_start is not None or column.range_end is not None:
                 df_log[attribute_name] = df_log[attribute_name].str[column.range_start:column.range_end]
-                df_log[attribute_name] = pd.to_numeric(df_log[attribute_name], errors='ignore')
         return df_log
 
     @staticmethod
@@ -359,7 +358,8 @@ class DataStructure:
 
         preprocessed_file_directory = os.path.join(input_path, "preprocessed_files")
         # change extension from csv to pkl and add sample in case of sample
-        preprocessed_file_name = f"{file_name[:-4]}_sample.pkl" if use_sample else f"{file_name[:-4]}.pkl"
+        sample_is_used = use_sample and len(self.samples) > 0
+        preprocessed_file_name = f"{file_name[:-4]}_sample.pkl" if sample_is_used else f"{file_name[:-4]}.pkl"
         preprocessed_file_path = os.path.join(preprocessed_file_directory, preprocessed_file_name)
         preprocessed_file_is_used = False
         if not use_preprocessed_file:

@@ -6,7 +6,7 @@ from typing import List, Any, Optional, Union
 from dataclasses import dataclass
 
 from .interpreters import Interpreter
-from ..utilities.auxiliary_functions import replace_undefined_value, create_list
+from ..utilities.auxiliary_functions import replace_undefined_value, create_list, get_id_attribute_from_label
 import re
 
 
@@ -157,6 +157,11 @@ class RelationConstructorByNodes(ABC):
                                           foreign_key=_foreign_key, primary_key=_primary_key,
                                           reversed=_reversed, qi=interpreter.relation_constructor_by_nodes_qi)
 
+    def get_id_attribute_from_from_node(self):
+        return get_id_attribute_from_label(self.from_node_label)
+
+    def get_id_attribute_from_to_node(self):
+        return get_id_attribute_from_label(self.to_node_label)
 
 @dataclass
 class RelationConstructorByRelations(ABC):
@@ -199,6 +204,12 @@ class RelationConstructorByRelations(ABC):
 
     def get_to_node_label(self):
         return self.consequent.to_node.node_label
+
+    def get_id_attribute_from_from_node(self):
+        return get_id_attribute_from_label(self.from_node_label)
+
+    def get_id_attribute_from_to_node(self):
+        return get_id_attribute_from_label(self.to_node_label)
 
     def get_antecedent_query(self):
         return self.qi.get_antecedent_query(antecedents=self.antecedents)

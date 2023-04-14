@@ -275,13 +275,9 @@ class CypherQueryLibrary:
         from_node_name = relation_constructor.get_from_node_name()
         to_node_name = relation_constructor.get_to_node_name()
 
-        from_node_id = relation_constructor.get_from_node_label()
-        first_lower_case = re.search("[a-z]", from_node_id).start()
-        from_node_id = from_node_id[:first_lower_case].lower() + from_node_id[first_lower_case:] + "Id"
+        from_node_id = relation_constructor.get_id_attribute_from_from_node()
 
-        to_node_id = relation_constructor.get_to_node_label()
-        first_lower_case = re.search("[a-z]", to_node_id).start()
-        to_node_id = to_node_id[:first_lower_case].lower() + to_node_id[first_lower_case:] + "Id"
+        to_node_id = relation_constructor.get_id_attribute_from_to_node()
 
         properties = f'{{type:"Rel", {from_node_id}: {from_node_name}.ID, {to_node_id}: {to_node_name}.ID}}' \
             if relation.include_properties else ""
@@ -310,7 +306,9 @@ class CypherQueryLibrary:
         relation_type = relation.type
         relation_constructor = relation.constructed_by
         entity_label_from_node = relation_constructor.from_node_label
+        from_node_property_id = relation_constructor.get_id_attribute_from_from_node()
         entity_label_to_node = relation_constructor.to_node_label
+        to_node_property_id = relation_constructor.get_id_attribute_from_to_node()
         foreign_key = relation_constructor.foreign_key
         _reversed = relation_constructor.reversed
         arrow_left = "<-" if _reversed else "-"
@@ -325,8 +323,8 @@ class CypherQueryLibrary:
                 MATCH (to:{entity_label_to_node} {{{primary_key}:tf.id}})
                 RETURN distinct to, _from',
                 'MERGE (_from) {arrow_left} [:{relation_type.upper()} {{type:"Rel",
-                    {entity_label_from_node.lower()}Id: _from.ID,
-                    {entity_label_to_node.lower()}Id: to.{primary_key}                                              
+                    {from_node_property_id}: _from.ID,
+                    {to_node_property_id}: to.{primary_key}                                              
                                                     }}] {arrow_right} (to)',
                 {{batchSize: {batch_size}}})
                 '''
