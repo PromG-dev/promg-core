@@ -221,6 +221,7 @@ class CypherQueryLibrary:
         composed_primary_id_query = entity.get_composed_primary_id()
         attribute_properties_with_statement = entity.get_entity_attributes()
         entity_attributes = entity.get_entity_attributes_as_node_properties()
+        entity_attributes = "," + entity_attributes if entity_attributes != "" else entity_attributes
 
         entity_type = entity.type
         entity_labels_string = entity.get_label_string()
@@ -232,7 +233,7 @@ class CypherQueryLibrary:
                     MERGE (en:{entity_labels_string}
                             {{ID:id, 
                             uID:"{entity_type}_"+toString(id),                    
-                            entityType:"{entity_type}",
+                            entityType:"{entity_type}"
                             {entity_attributes}}})
                     '''
 

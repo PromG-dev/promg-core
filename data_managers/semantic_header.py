@@ -372,7 +372,11 @@ class Entity(ABC):
         # entity attributes may have primary keys (or not)
         _entity_attributes = replace_undefined_value(obj.get("entity_attributes"), [])
         # create a list of all entity attributes
-        _all_entity_attributes = list(set(_entity_attributes + _primary_keys))
+        if len(_primary_keys) > 1: # more than 1 primary key, also store the primary keys separately
+            _all_entity_attributes = list(set(_entity_attributes + _primary_keys))
+        else:
+            # remove the primary keys from the entity attributes
+            _all_entity_attributes = list(set(_entity_attributes).difference(set(_primary_keys)))
         # remove the primary keys
         _entity_attributes_wo_primary_keys = [attr for attr in _all_entity_attributes if attr not in _primary_keys]
 

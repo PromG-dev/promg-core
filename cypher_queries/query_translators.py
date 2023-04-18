@@ -19,8 +19,11 @@ class ClassCypher:
 
         # create a combined id in string format
         _id = "+".join([f"{key}" for key in class_identifiers])
-        # add to the keys
-        required_keys = [_id] + class_identifiers
+        # add class_identifiers to the keys if there are multiple
+        if len(class_identifiers) > 1:
+            required_keys = [_id] + class_identifiers
+        else:
+            required_keys = [_id]
 
         node_properties = ', '.join([f"{_id}: {key}" for _id, key in zip(ids, required_keys)])
         node_properties += f", classType: '{_id}'"  # save ID also as string that captures the type
@@ -29,6 +32,8 @@ class ClassCypher:
 
     @staticmethod
     def get_link_condition(class_identifiers, class_node_name="c", event_node_name="e"):
+        if len(class_identifiers) == 1:
+            return f"{class_node_name}.cID = {event_node_name}.{class_identifiers[0]}"
         return ' AND '.join([f"{class_node_name}.{key} = {event_node_name}.{key}" for key in class_identifiers])
 
     @staticmethod
