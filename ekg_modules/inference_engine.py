@@ -27,5 +27,5 @@ class InferenceEngine:
     def infer_items_propagate_downwards_one_level(self, entity):
         self.connection.exec_query(cql.get_query_infer_items_propagate_downwards_one_level, **{"entity": entity})
 
-    def add_entity_to_event(self, entity):
-        self.connection.exec_query(cql.add_entity_to_event, **{"entity": entity})
+    def add_entity_as_event_attribute(self, entity):
+        self.connection.exec_query(cql.add_entity_as_event_attribute, **{"entity": entity})

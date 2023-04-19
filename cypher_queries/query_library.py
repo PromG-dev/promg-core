@@ -762,7 +762,7 @@ class CypherQueryLibrary:
         return Query(query_string=query_str, kwargs={})
 
     @staticmethod
-    def add_entity_to_event(entity: Entity) -> Query:
+    def add_entity_as_event_attribute(entity: Entity) -> Query:
         query_str = '''
             MATCH (e:Event) - [:CORR] -> (n:$entity)
             WITH e, collect(n.ID) as related_entities_collection
