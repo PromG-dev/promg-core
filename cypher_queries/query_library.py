@@ -4,13 +4,9 @@ import re
 
 from ..data_managers.datastructures import DataStructure
 from ..data_managers.semantic_header import Class, Entity, Relation
+from ..database_managers.db_connection import Query
 from string import Template
 
-
-@dataclass
-class Query:
-    query_string: str
-    kwargs: Optional[Dict[str, any]]
 
 
 class CypherQueryLibrary:
@@ -153,7 +149,7 @@ class CypherQueryLibrary:
         @return: None
         """
         offset = datetime_object.timezone_offset
-        offset = f'{attribute}+"{offset}"' if offset != "" else offset
+        offset = f'{attribute}+"{offset}"' if offset != "" else attribute
 
         # language=SQL
         query_str = '''
