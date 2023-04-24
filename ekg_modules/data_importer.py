@@ -62,10 +62,17 @@ class Importer:
         for attribute, datetime_format in datetime_formats.items():
             if datetime_format.is_epoch:
                 self.connection.exec_query(CypherQueryLibrary.get_convert_epoch_to_timestamp,
-                                           **{"attribute": attribute, "datetime_object": datetime_format})
+                                           **{
+                                               "attribute": attribute,
+                                               "datetime_object": datetime_format,
+                                               "batch_size": self.batch_size
+                                           })
 
             self.connection.exec_query(CypherQueryLibrary.get_make_timestamp_date_query,
-                                       **{"attribute": attribute, "datetime_object": datetime_format})
+                                       **{
+                                           "attribute": attribute, "datetime_object": datetime_format,
+                                           "batch_size": self.batch_size
+                                       })
 
     def _merge_nodes(self, structure):
         self.connection.exec_query(CypherQueryLibrary.merge_same_nodes,
@@ -81,7 +88,8 @@ class Importer:
     def _finalize_import(self, labels):
         # finalize the import
         self.connection.exec_query(CypherQueryLibrary.get_finalize_import_events_query,
-                                   **{"labels": labels})
+                                   **{"labels": labels,
+                                      "batch_size": self.batch_size})
 
     def _import_data_nodes_from_data(self, labels, df_log, file_name):
         # start with batch 0 and increment until everything is imported
