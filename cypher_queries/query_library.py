@@ -4,7 +4,6 @@ from ..data_managers.datastructures import DataStructure
 from ..data_managers.semantic_header import Class, Entity, Relation
 from string import Template
 from ..database_managers.db_connection import Query
-import py2neo.cypher.lexer
 
 
 class CypherQueryLibrary:
