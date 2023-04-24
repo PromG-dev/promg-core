@@ -1,9 +1,16 @@
+from dataclasses import dataclass
 from typing import Dict, Optional, Any, List
+import re
 
 from ..data_managers.datastructures import DataStructure
 from ..data_managers.semantic_header import Class, Entity, Relation
 from string import Template
-from ..database_managers.db_connection import Query
+
+
+@dataclass
+class Query:
+    query_string: str
+    kwargs: Optional[Dict[str, any]]
 
 
 class CypherQueryLibrary:
@@ -897,7 +904,7 @@ class CypherQueryLibrary:
                      })
 
     @staticmethod
-    def add_entity_to_event(entity: Entity) -> Query:
+    def add_entity_as_event_attribute(entity: Entity) -> Query:
         # language=sql
         query_str = '''
             MATCH (e:Event) - [:CORR] -> (n:$entity)
