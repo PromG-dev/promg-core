@@ -406,6 +406,9 @@ class Entity(ABC):
     def get_label_string(self):
         return self.qi.get_label_string(self.labels)
 
+    def get_labels(self):
+        return ["Entity"] + self.labels
+
     def get_df_label(self):
         return self.qi.get_df_label(self.include_label_in_df, self.type)
 
