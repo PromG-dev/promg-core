@@ -278,7 +278,7 @@ class CypherQueryLibrary:
                     MERGE (en:$entity_labels_string
                           {ID:id, 
                            uID:'$entity_type'+'_'+toString(id),                    
-                           entityType:'$entity_type',
+                           entityType:'$entity_type'
                            $entity_attributes })
                     '''
 

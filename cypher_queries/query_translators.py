@@ -89,7 +89,7 @@ class EntityCypher:
 
     @staticmethod
     def get_entity_attributes_as_node_properties(all_entity_attributes):
-        return ',\n'.join([f"{key}: {key}" for key in all_entity_attributes])
+        return ',' + ',\n'.join([f"{key}: {key}" for key in all_entity_attributes])
 
     @staticmethod
     def get_primary_key_existing_condition(primary_keys, node_name: str = "e"):

@@ -424,7 +424,10 @@ class Entity(ABC):
                                              node_name)
 
     def get_entity_attributes_as_node_properties(self):
-        return self.qi.get_entity_attributes_as_node_properties(self.all_entity_attributes)
+        if len(self.all_entity_attributes) > 0:
+            return self.qi.get_entity_attributes_as_node_properties(self.all_entity_attributes)
+        else:
+            return ""
 
     def get_primary_key_existing_condition(self, node_name: str = "e"):
         return self.qi.get_primary_key_existing_conditionge(self.primary_keys, node_name)
