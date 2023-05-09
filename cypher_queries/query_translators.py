@@ -38,7 +38,7 @@ class ClassCypher:
 
     @staticmethod
     def get_class_label(class_identifiers):
-        return "Class_".join([f"{key}" for key in class_identifiers])
+        return f"Class_" + "_".join([f"{key}" for key in class_identifiers])
 
 
 class LogCypher:
