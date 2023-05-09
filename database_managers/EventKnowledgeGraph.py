@@ -410,7 +410,7 @@ class EventKnowledgeGraph:
             raise ValueError(f"{entity_type} is not defined in semantic header")
         self.ekg_analysis.create_df_process_model(entity, classifiers)
 
-    def do_custom_query(self, query_name: str, **kwargs: Optional[Dict[str, any]]) -> None:
+    def do_custom_query(self, query_name: str, **kwargs: Optional[Dict[str, any]]) -> any:
         r"""
         Pass on the custom query to the custom module with optional key words arguments
 
@@ -424,4 +424,4 @@ class EventKnowledgeGraph:
         """
         if self.custom_module is None:
             raise ValueError("No custom module has been defined")
-        self.custom_module.do_custom_query(query_name, **kwargs)
+        return self.custom_module.do_custom_query(query_name, **kwargs)
