@@ -130,7 +130,8 @@ class DataStructure:
                  encoding: str, seperator: str, decimal: str,
                  labels: List[str], true_values: List[str], false_values: List[str],
                  add_log: bool, add_event_index: bool,
-                 samples: Dict[str, Sample], attributes: List[Attribute]):
+                 samples: Dict[str, Sample], attributes: Dict[str, Attribute],
+                 split_combined_events: bool):
         self.include = include
         self.name = name
         self.file_directory = file_directory
@@ -145,9 +146,15 @@ class DataStructure:
         self.add_event_index = add_event_index
         self.samples = samples
         self.attributes = attributes
+        self.split_combined_events = split_combined_events
 
     def is_event_data(self):
         return "Event" in self.labels
+
+    def contains_composed_events(self):
+        contains_composed_events = "startTimestamp" in self.get_datetime_formats() \
+                                   or "completeTimestamp" in self.get_datetime_formats()
+        return self.is_event_data() and contains_composed_events
 
     @staticmethod
     def from_dict(obj: Any) -> Optional['DataStructure']:
@@ -180,12 +187,14 @@ class DataStructure:
 
         _samples = {sample.file_name: sample for sample in _samples}
         _attributes = create_list(Attribute, obj.get("attributes"))
+        _attributes = {attribute.name: attribute for attribute in _attributes}
+        _split_combined_events = replace_undefined_value(obj.get("split_combined_events"), False)
         return DataStructure(_include, _name, _file_directory, _file_names, _encoding, _seperator, _decimal,
                              _labels, _true_values, _false_values, _add_log, _add_event_index,
-                             _samples, _attributes)
+                             _samples, _attributes, _split_combined_events)
 
     def get_primary_keys(self):
-        return [attribute.name for attribute in self.attributes if attribute.is_primary_key]
+        return [attribute_name for attribute_name, attribute in self.attributes.items() if attribute.is_primary_key]
 
     def get_primary_keys_as_attributes(self):
         # TODO move to query interpreter
@@ -199,11 +208,11 @@ class DataStructure:
         return ":".join(self.labels)
 
     def get_foreign_keys(self):
-        return [attribute.name for attribute in self.attributes if attribute.is_foreign_key]
+        return [attribute_name for attribute_name, attribute in self.attributes.items() if attribute.is_foreign_key]
 
     def get_dtype_dict(self):
         dtypes = {}
-        for attribute in self.attributes:
+        for attribute in self.attributes.values():
             for column in attribute.columns:
                 if column.dtype is not None:
                     if column.name not in dtypes:
@@ -216,7 +225,7 @@ class DataStructure:
 
     def get_required_columns(self):
         required_columns = set()
-        for attribute in self.attributes:
+        for attribute in self.attributes.values():
             # add column names to the required columns
             required_columns.update([x.name for x in attribute.columns])
             required_columns.update([x.name for x in attribute.na_rep_columns])
@@ -310,7 +319,7 @@ class DataStructure:
 
     def preprocess_according_to_attributes(self, df_log):
         # loop over all attributes and check if they should be created, renamed or imputed
-        for attribute in self.attributes:
+        for attribute in self.attributes.values():
             df_log = DataStructure.create_attribute_columns(df_log, attribute)
             df_log = DataStructure.replace_with_nan(df_log, attribute)
             if len(attribute.na_rep_columns) > 0:  # impute values in case of missing values
@@ -323,6 +332,60 @@ class DataStructure:
             df_log = DataStructure.combine_attribute_columns(df_log, attribute)
 
         return df_log
+
+    def split_df_log_into_combined_events(self, df_log: DataFrame):
+        df_log["idx"] = df_log.reset_index().index
+        if "timestamp" in self.attributes:
+            raise ImportError(
+                "Combined events cannot be split since an attribute with name timestamp is already defined")
+
+        if "startTimestamp" in self.attributes and "completeTimestamp" in self.attributes:
+            df_log_start = df_log.drop(columns=["completeTimestamp"])
+            df_log_start["lifecycle"] = "start"
+            df_log_start = df_log_start.rename(columns={"startTimestamp": "timestamp"})
+
+            df_log_end = df_log.drop(columns=["startTimestamp"])
+            df_log_end["lifecycle"] = "complete"
+            df_log_end = df_log_end.rename(columns={"completeTimestamp": "timestamp"})
+
+            df_log = pd.concat([df_log_start, df_log_end])
+        elif "startTimestamp" in self.attributes:
+            df_log["lifecycle"] = "start"
+            df_log = df_log.rename(columns={"startTimestamp": "timestamp"})
+        elif "completeTimestamp" in self.attributes:
+            df_log["lifecycle"] = "complete"
+            df_log = df_log.rename(columns={"completeTimestamp": "timestamp"})
+
+        df_log = df_log.sort_values(by=["timestamp", "idx"])
+        df_log = df_log.drop(columns=["idx"])
+        return df_log
+
+    def update_attributes(self):
+        if "startTimestamp" in self.attributes and "completeTimestamp" in self.attributes:
+            start_dt_format = self.get_datetime_formats()["startTimestamp"].format
+            complete_dt_format = self.get_datetime_formats()["completeTimestamp"].format
+            if start_dt_format != complete_dt_format:
+                raise ValueError("startTimestamp and completeTimestamp have a different format")
+
+            start_attribute = self.attributes["startTimestamp"]
+            start_attribute.name = "timestamp"
+            self.attributes["timestamp"] = start_attribute
+            del self.attributes["startTimestamp"]
+            del self.attributes["completeTimestamp"]
+
+
+        elif "startTimestamp" in self.attributes:
+            start_attribute = self.attributes["startTimestamp"]
+            start_attribute.name = "timestamp"
+
+            self.attributes["timestamp"] = start_attribute
+            del self.attributes["startTimestamp"]
+        elif "completeTimestamp" in self.attributes:
+            complete_attribute = self.attributes["completeTimestamp"]
+            complete_attribute.name = "timestamp"
+
+            self.attributes["timestamp"] = complete_attribute
+            del self.attributes["completeTimestamp"]
 
     def prepare_event_data_sets(self, input_path, file_name, use_sample):
         dtypes = self.get_dtype_dict()
@@ -350,11 +413,15 @@ class DataStructure:
 
         # all columns have been renamed to or constructed with the name attribute,
         # hence only keep those that match with a name attribute
-        required_attributes = list([f"{attribute.name}_attribute" for attribute in self.attributes])
-        required_attributes_mapping = {f"{attribute.name}_attribute": f"{attribute.name}" for attribute in
-                                       self.attributes}
+        required_attributes = list([f"{attribute_name}_attribute" for attribute_name in self.attributes.keys()])
+        required_attributes_mapping = {f"{attribute_name}_attribute": f"{attribute_name}" for attribute_name in
+                                       self.attributes.keys()}
         df_log = df_log[required_attributes]
         df_log = df_log.rename(columns=required_attributes_mapping)
+
+        if self.split_combined_events:
+            df_log = self.split_df_log_into_combined_events(df_log)
+            self.update_attributes()
 
         if self.add_log:
             df_log["log"] = file_name
@@ -392,18 +459,18 @@ class DataStructure:
     def get_datetime_formats(self) -> Dict[str, DatetimeObject]:
         datetime_formats = {}
 
-        for attribute in self.attributes:
+        for attribute_name, attribute in self.attributes.items():
             if attribute.is_datetime:
-                datetime_formats[attribute.name] = attribute.datetime_object
+                datetime_formats[attribute_name] = attribute.datetime_object
 
         return datetime_formats
 
     def get_attribute_value_pairs_filtered(self, exclude: bool = True) -> Dict[str, List[str]]:
         attribute_value_pairs = {}
 
-        for attribute in self.attributes:
+        for attribute_name, attribute in self.attributes.items():
             if attribute.use_filter:
-                attribute_value_pairs[attribute.name] \
+                attribute_value_pairs[attribute_name] \
                     = attribute.filter_exclude_values if exclude else attribute.filter_include_values
 
         return attribute_value_pairs
