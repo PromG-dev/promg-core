@@ -81,7 +81,7 @@ class Importer:
     def _filter_nodes(self, structure):
         for boolean in (True, False):
             attribute_values_pairs_filtered = structure.get_attribute_value_pairs_filtered(exclude=boolean)
-            for name, values in attribute_values_pairs_filtered:
+            for name, values in attribute_values_pairs_filtered.items():
                 self.connection.exec_query(CypherQueryLibrary.get_filter_events_by_property_query,
                                            **{"prop": name, "values": values, "exclude": boolean})
 
