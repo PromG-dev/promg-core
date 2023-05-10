@@ -7,6 +7,45 @@ Property Graph data model of graph databases.
 All scripts and queries are licensed under LGPL v3.0, see LICENSE.
 Copyright information is provided within each Project.
 
+## Requirements
+This repository should be used as a submodule in another project to build an event knowledge graph.
+To add the submodule to your project, run the following command in the root folder of your project.
+`git submodule https://github.com/Ava-S/ekg_creator` 
+
+For more information about submodule, have a look at [Git submodules](https://www.atlassian.com/git/tutorials/git-submodule).
+For example projects that use this repository, have a look at [EKG BPI Challenges](https://github.com/Ava-S/ekg_bpi_challenges), [EKG Inferring missing identifiers](https://github.com/Ava-S/ekg_inference) and [EKG for AutoTwin EU GA n. 101092021.](https://github.com/Ava-S/ekg_autotwin)
+
+Furthermore, we assume the following packages/databases to be installed.
+
+### Neo4j
+Install the neo4j-python-driver
+
+`pip install neo4j`
+OR
+`conda install -c conda-forge neo4j-python-driver`
+
+Install [Neo4j](https://neo4j.com/download/):
+
+- Use the [Neo4j Desktop](https://neo4j.com/download-center/#desktop)  (recommended), or
+- [Neo4j Community Server](https://neo4j.com/download-center/#community)
+
+### Other packages
+- `numpy`
+- `pandas`
+- `tabulate`
+- `tqdm`
+
+## Get started
+
+### Create a new graph database
+
+- The scripts in this release assume password "12345678".
+- The scripts assume the server to be available at the default URL `bolt://localhost:7687`
+  - You can modify this also in the script.
+- ensure to allocate enough memory to your database, advised: `dbms.memory.heap.max_size=5G`
+- the script expects the `Neo4j APOC library` to be installed as a plugin, see https://neo4j.com/labs/apoc/
+
+
 ## Projects
 
 The following projects are part of this repository
