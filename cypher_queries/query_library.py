@@ -4,13 +4,9 @@ import re
 
 from ..data_managers.datastructures import DataStructure
 from ..data_managers.semantic_header import Class, Entity, Relation
+from ..database_managers.db_connection import Query
 from string import Template
 
-
-@dataclass
-class Query:
-    query_string: str
-    kwargs: Optional[Dict[str, any]]
 
 
 class CypherQueryLibrary:
@@ -22,6 +18,7 @@ class CypherQueryLibrary:
         If not in entity type, add it as property to the label
         @param label: str, label that should be created in the DF
         @param properties:
+        @param option_event_type_in_label
         @return:
         """
         if properties is None:
@@ -54,48 +51,72 @@ class CypherQueryLibrary:
     @staticmethod
     def get_all_rel_types_query() -> Query:
         # find all relations and return the distinct types
-        q_request_rel_types = '''
-                    MATCH () - [rel] - () return DISTINCT type(rel) as rel_type
-                    '''
-        return Query(query_string=q_request_rel_types, kwargs={})
+
+        # language=SQL
+        query_str = '''
+            MATCH () - [rel] - () RETURN DISTINCT type(rel) AS rel_type
+        '''
+
+        return Query(query_str=query_str,
+                     template_string_parameters={},
+                     parameters={})
 
     @staticmethod
     def get_all_node_labels() -> Query:
         # find all nodes and return the distinct labels
-        q_request_node_labels = '''
-                    MATCH (n) return DISTINCT labels(n) as label
-                    '''
-        return Query(query_string=q_request_node_labels, kwargs={})
+
+        # language=SQL
+        query_str = '''
+            MATCH (n) RETURN DISTINCT labels(n) AS label
+        '''
+
+        return Query(query_str=query_str,
+                     template_string_parameters={},
+                     parameters={})
 
     @staticmethod
     def get_clear_db_query(db_name) -> Query:
-        q_replace_database = f'''
-                        CREATE OR REPLACE DATABASE {db_name}
-                        WAIT
-                    '''
 
-        return Query(query_string=q_replace_database, kwargs={"database": "system"})
+        # language=SQL
+        query_str = '''
+            CREATE OR REPLACE DATABASE $db_name
+            WAIT
+        '''
+
+        return Query(query_str=query_str, database="system", template_string_parameters={"db_name": db_name})
 
     @staticmethod
     def get_constraint_unique_event_id_query() -> Query:
-        query_constraint_unique_event_id = f'''
-                        CREATE CONSTRAINT unique_event_ids IF NOT EXISTS 
-                        FOR (e:Event) REQUIRE e.ID IS UNIQUE'''
-        return Query(query_string=query_constraint_unique_event_id, kwargs={})
+        # language=SQL
+        query_str = '''
+            CREATE CONSTRAINT unique_event_ids IF NOT EXISTS 
+            FOR (e:Event) REQUIRE e.ID IS UNIQUE
+        '''
+        return Query(query_str=query_str,
+                     template_string_parameters={},
+                     parameters={})
 
     @staticmethod
     def get_constraint_unique_entity_uid_query() -> Query:
-        query_constraint_unique_entity_uid = f'''
-                                CREATE CONSTRAINT unique_entity_ids IF NOT EXISTS 
-                                FOR (en:Entity) REQUIRE en.uID IS UNIQUE'''
-        return Query(query_string=query_constraint_unique_entity_uid, kwargs={})
+        # language=SQL
+        query_str = '''
+            CREATE CONSTRAINT unique_entity_ids IF NOT EXISTS 
+            FOR (en:Entity) REQUIRE en.uID IS UNIQUE
+        '''
+        return Query(query_str=query_str,
+                     template_string_parameters={},
+                     parameters={})
 
     @staticmethod
     def get_constraint_unique_log_id_query() -> Query:
-        query_constraint_unique_log_id = f'''
-                                CREATE CONSTRAINT unique_entity_ids IF NOT EXISTS 
-                                FOR (l:Log) REQUIRE l.ID IS UNIQUE'''
-        return Query(query_string=query_constraint_unique_log_id, kwargs={})
+        # language=SQL
+        query_str = '''
+            CREATE CONSTRAINT unique_entity_ids IF NOT EXISTS 
+            FOR (l:Log) REQUIRE l.ID IS UNIQUE
+        '''
+        return Query(query_str=query_str,
+                     template_string_parameters={},
+                     parameters={})
 
     @staticmethod
     def get_create_events_batch_query(batch: List[Dict[str, str]], labels: List[str]) -> Query:
@@ -110,246 +131,294 @@ class CypherQueryLibrary:
         # $batch is a variable we can add in tx.run, this allows us to use string properties
         # (keys in our dictionary are string)
         # return is required when using call and yield
-        q_create_events_batch = f'''
+
+        # language=SQL
+        query_str = '''
                 UNWIND $batch AS row
-                CALL apoc.create.node({labels}, row) YIELD node
+                CALL apoc.create.node($labels, row) YIELD node
                 RETURN count(*)
             '''
 
-        return Query(query_string=q_create_events_batch, kwargs={"batch": batch})
+        return Query(query_str=query_str, parameters={"labels": labels, "batch": batch})
 
     @staticmethod
-    def get_make_timestamp_date_query(attribute, datetime_object) -> Query:
+    def get_make_timestamp_date_query(attribute, datetime_object, batch_size) -> Query:
         """
         Convert the strings of the timestamp to the datetime as used in cypher
         Remove the str_timestamp property
         @return: None
         """
         offset = datetime_object.timezone_offset
-        offset = f"+'{offset}'" if offset != "" else offset
+        offset = f'{attribute}+"{offset}"' if offset != "" else attribute
 
-        q_make_timestamp = f'''
+        # language=SQL
+        query_str = '''
             CALL apoc.periodic.iterate(
-            "MATCH (e:Event) WHERE e.{attribute} IS NOT NULL AND e.justImported = True 
-            WITH e, e.{attribute}{offset} as timezone_dt
-            WITH e, datetime(apoc.date.convertFormat(timezone_dt, '{datetime_object.format}', 
-                '{datetime_object.convert_to}')) as converted
-            RETURN e, converted",
-            "SET e.{attribute} = converted",
-            {{batchSize:10000, parallel:false}})
+            'MATCH (e:Event) WHERE e.$attribute IS NOT NULL AND e.justImported = True 
+            WITH e, e.$offset as timezone_dt
+            WITH e, datetime(apoc.date.convertFormat(timezone_dt, "$datetime_object_format", 
+                "$datetime_object_convert_to")) as converted
+            RETURN e, converted',
+            'SET e.$attribute = converted',
+            {batchSize:$batch_size, parallel:false})
         '''
 
-        return Query(query_string=q_make_timestamp, kwargs={})
+        return Query(query_str=query_str,
+                     template_string_parameters={
+                         "datetime_object_format": datetime_object.format,
+                         "datetime_object_convert_to": datetime_object.convert_to,
+                         "batch_size": batch_size,
+                         "attribute": attribute,
+                         "offset": offset
+                     })
 
     @staticmethod
-    def get_convert_epoch_to_timestamp(attribute, datetime_object):
-        unit = datetime_object.unit
-        offset = datetime_object.timezone_offset
-        offset = f"+'{offset}'" if offset != "" else offset
+    def get_convert_epoch_to_timestamp(attribute, datetime_object, batch_size):
 
-        q_convert_epoch_to_timestamp = f'''
-                                    CALL apoc.periodic.iterate(
-                                    "MATCH (e:Event) WHERE e.{attribute} IS NOT NULL AND e.justImported = True 
-                                    WITH e, e.{attribute} as timezone_dt
-                                    WITH e, apoc.date.format(timezone_dt, '{unit}', 
-                                        '{datetime_object.format}') as converted
-                                    RETURN e, converted",
-                                    "SET e.{attribute} = converted",
-                                    {{batchSize:10000, parallel:false}})
-                                '''
-        return Query(query_string=q_convert_epoch_to_timestamp, kwargs={})
+        # language=SQL
+        query_str = '''
+            CALL apoc.periodic.iterate(
+            'MATCH (e:Event) WHERE e.$attribute IS NOT NULL AND e.justImported = True 
+            WITH e, e.$attribute as timezone_dt
+            WITH e, apoc.date.format(timezone_dt, $unit, 
+                $dt_format) as converted
+            RETURN e, converted',
+            'SET e.$attribute = converted',
+            {batchSize:$batch_size, parallel:false, 
+            params: {unit: $unit,
+                    dt_format: $datetime_object_format}})
+        '''
+
+        return Query(query_str=query_str,
+                     template_string_parameters={"attribute": attribute},
+                     parameters={
+                         "batch_size": batch_size,
+                         "unit": datetime_object.unit,
+                         "datetime_object_format": datetime_object.format
+                     })
 
     @staticmethod
-    def get_finalize_import_events_query(labels) -> Query:
+    def get_finalize_import_events_query(labels, batch_size) -> Query:
         labels = ":".join(labels)
-        q_set_just_imported_to_false = f'''
+        # language=SQL
+        query_str = '''
         CALL apoc.periodic.iterate(
-            "MATCH (e:{labels}) WHERE e.justImported = True 
-            RETURN e",
-            "REMOVE e.justImported",
-            {{batchSize:10000, parallel:false}})
+            'MATCH (e:$labels) 
+            WHERE e.justImported = True 
+            RETURN e',
+            'REMOVE e.justImported',
+            {batchSize:$batch_size, parallel:false})
         '''
 
-        return Query(query_string=q_set_just_imported_to_false, kwargs={})
+        return Query(query_str=query_str,
+                     template_string_parameters={"labels": labels},
+                     parameters={"batch_size": batch_size})
 
     @staticmethod
     def get_filter_events_by_property_query(prop: str, values: Optional[List[str]] = None, exclude=True) -> Query:
         if values is None:  # match all events that have a specific property
             negation = "NOT" if exclude else ""
             # query to delete all events and its relationship with property
-            q_filter_events = f"MATCH (e:Event {{e.justImported: True}}) " \
-                              f"WHERE e.{prop} IS {negation} NULL " \
-                              f"DETACH DELETE e"
+            # language=SQL
+            query_str = '''
+                MATCH (e:Event {justImported: True})
+                WHERE e.$prop IS $negation NULL
+                DETACH DELETE e
+                '''
+            template_string_parameters = {"prop": prop, "negation": negation}
         else:  # match all events with specific property and value
             negation = "" if exclude else "NOT"
             # match all e and delete them and its relationship
-            q_filter_events = f"MATCH (e:Event {{e.justImported: True}})" \
-                              f"WHERE {negation} e.{prop} in {values}" \
-                              f"DETACH DELETE e"
+            # language=SQL
+            query_str = '''
+                MATCH (e:Event {justImported: true})
+                WHERE $negation e.$prop IN $values
+                DETACH DELETE e
+            '''
+            template_string_parameters = {"prop": prop, "negation": negation, "values": values}
 
         # execute query
-        return Query(query_string=q_filter_events, kwargs={})
+        return Query(query_str=query_str,
+                     template_string_parameters=template_string_parameters)
 
     @staticmethod
     def get_create_log_query() -> Query:
-        q_create_log = f'''
-                            MATCH (e:Event) WHERE e.log IS NOT NULL AND e.log <> "nan"
-                            WITH e.log AS log
-                            MERGE (:Log {{ID:log}})
-                        '''
-        return Query(query_string=q_create_log, kwargs={})
+        # language=SQL
+        query_str = ''' 
+            MATCH (e:Event) WHERE e.log IS NOT NULL AND e.log <> "nan"
+            WITH e.log AS log
+            MERGE (:Log {ID:log})
+        '''
+        return Query(query_str=query_str)
 
     @staticmethod
     def get_link_events_to_log_query(batch_size) -> Query:
-        q_link_events_to_log = f'''
-                                CALL apoc.periodic.iterate(
-                                    'MATCH (l:Log) 
-                                    MATCH (e:Event {{log: l.ID}})
-                                    RETURN e, l', 
-                                    'MERGE (l)-[:HAS]->(e)',
-                                    {{batchSize:{batch_size}}})
-                                '''
-        return Query(query_string=q_link_events_to_log, kwargs={})
+        # language=SQL
+        query_str = '''
+            CALL apoc.periodic.iterate(
+                'MATCH (l:Log) 
+                MATCH (e:Event {log: l.ID})
+                RETURN e, l', 
+                'MERGE (l)-[:HAS]->(e)',
+                {batchSize:$batch_size})
+        '''
+        return Query(query_str=query_str,
+                     parameters={"batch_size": batch_size})
 
     @staticmethod
     def get_create_entity_query(entity: Entity) -> Query:
         # find events that contain the entity as property and not nan
         # save the value of the entity property as id and also whether it is a virtual entity
         # create a new entity node if it not exists yet with properties
-
-        conditions = entity.get_where_condition()
-        composed_primary_id_query = entity.get_composed_primary_id()
-        attribute_properties_with_statement = entity.get_entity_attributes()
-        entity_attributes = entity.get_entity_attributes_as_node_properties()
-
-        entity_type = entity.type
-        entity_labels_string = entity.get_label_string()
-
-        q_create_entity = f'''
-                    MATCH (e:{entity.constructed_by.node_label}) WHERE {conditions}
-                    WITH {composed_primary_id_query} AS id, {attribute_properties_with_statement}
-                    WHERE id <> "Unknown"
-                    MERGE (en:{entity_labels_string}
-                            {{ID:id, 
-                            uID:"{entity_type}_"+toString(id),                    
-                            entityType:"{entity_type}",
-                            {entity_attributes}}})
+        # language=SQL
+        query_str = '''
+                    MATCH (e:$labels) WHERE $conditions
+                    WITH  $composed_primary_id_query AS id, $attribute_properties_with_statement
+                    WHERE id <> 'Unknown'
+                    MERGE (en:$entity_labels_string
+                          {ID:id, 
+                           uID:'$entity_type'+'_'+toString(id),                    
+                           entityType:'$entity_type'
+                           $entity_attributes })
                     '''
 
-        return Query(query_string=q_create_entity, kwargs={})
+        return Query(query_str=query_str,
+                     template_string_parameters={
+                         "labels": entity.constructed_by.node_label,
+                         "conditions": entity.get_where_condition(),
+                         "composed_primary_id_query": entity.get_composed_primary_id(),
+                         "attribute_properties_with_statement": entity.get_entity_attributes(),
+                         "entity_labels_string": entity.get_label_string(),
+                         "entity_attributes": entity.get_entity_attributes_as_node_properties(),
+                         "entity_type": entity.type
+                     })
 
     @staticmethod
     def get_correlate_events_to_entity_query(entity: Entity, batch_size: int) -> Query:
         # correlate events that contain a reference from an entity to that entity node
-        entity_labels_string = entity.get_label_string()
-        conditions = entity.get_where_condition_correlation()
 
-        q_correlate = f'''
+        # language=SQL
+        query_str = f'''
             CALL apoc.periodic.iterate(
                 '
-                MATCH (n:{entity_labels_string})
-                MATCH (e:Event) WHERE {conditions}
+                MATCH (n:$entity_labels_string)
+                MATCH (e:Event) WHERE $conditions
                 RETURN e, n',
                 'MERGE (e)-[:CORR]->(n)',
                 {{batchSize: {batch_size}}})
                 '''
 
-        return Query(query_string=q_correlate, kwargs={})
+        return Query(query_str=query_str,
+                     template_string_parameters={
+                         "entity_labels_string": entity.get_label_string(),
+                         "conditions": entity.get_where_condition_correlation()
+                     })
 
     @staticmethod
     def get_correlate_events_to_derived_entity_query(derived_entity: str) -> Query:
         # correlate events that are related to an entity which is reified into a new entity to the new reified entity
-        q_correlate = f'''
-            MATCH (e:Event) -[:CORR]-> (n:Entity) <-[:REIFIED ]- (r:Entity {{entityType:"{derived_entity}"}})
-            MATCH (e:Event) -[:CORR]-> (n:Entity) <-[:REIFIED ]- (r:Entity {{entityType:"{derived_entity}"}})
+
+        # language=sql
+        query_str = '''
+            MATCH (e:Event) -[:CORR]-> (n:Entity) <-[:REIFIED ]- (r:Entity {entityType:$derived_entity})
+            MATCH (e:Event) -[:CORR]-> (n:Entity) <-[:REIFIED ]- (r:Entity {entityType:$derived_entity})
             MERGE (e)-[:CORR]->(r)'''
 
-        return Query(query_string=q_correlate, kwargs={})
+        query_str = Template(query_str).substitute(derived_entity=derived_entity)
+
+        return Query(query_str=query_str,
+                     parameters={"derived_entity": derived_entity})
 
     @staticmethod
     def get_create_relation_by_relations_query(relation: Relation, batch_size: int):
-        relation_constructor = relation.constructed_by
-        relation_type = relation.type
+        # language=SQL
+        query_str = '''
+            CALL apoc.periodic.iterate(
+            '$antecedents_query                        
+            RETURN distinct $from_node, $to_node',
+            'MERGE ($from_node) - [:$type $properties] -> ($to_node)',                        
+            {batchSize: $batch_size})
+        '''
 
-        antecedents_query = relation_constructor.get_antecedent_query()
+        relation_constructor = relation.constructed_by
         from_node_name = relation_constructor.get_from_node_name()
         to_node_name = relation_constructor.get_to_node_name()
-
-        from_node_id = relation_constructor.get_from_node_label()
-        first_lower_case = re.search("[a-z]", from_node_id).start()
-        from_node_id = from_node_id[:first_lower_case].lower() + from_node_id[first_lower_case:] + "Id"
-
-        to_node_id = relation_constructor.get_to_node_label()
-        first_lower_case = re.search("[a-z]", to_node_id).start()
-        to_node_id = to_node_id[:first_lower_case].lower() + to_node_id[first_lower_case:] + "Id"
+        from_node_id = relation_constructor.get_id_attribute_from_from_node()
+        to_node_id = relation_constructor.get_id_attribute_from_to_node()
 
         properties = f'{{type:"Rel", {from_node_id}: {from_node_name}.ID, {to_node_id}: {to_node_name}.ID}}' \
             if relation.include_properties else ""
 
-        query_str = '''
-                        CALL apoc.periodic.iterate(
-                        '
-                        $antecedents_query
-                        RETURN distinct $from_node, $to_node',
-                        'MERGE ($from_node) - [:$type $properties] -> ($to_node)',
-                        {batchSize: $batch_size})
-                        '''
-
-        query_str = Template(query_str).substitute(antecedents_query=antecedents_query, from_node=from_node_name,
-                                                   to_node=to_node_name,
-                                                   type=relation_type,
-                                                   properties=properties,
-                                                   batch_size=batch_size)
-
-        return Query(query_string=query_str, kwargs={})
+        return Query(query_str=query_str,
+                     template_string_parameters={
+                         "antecedents_query": relation_constructor.get_antecedent_query(),
+                         "from_node": from_node_name,
+                         "to_node": to_node_name,
+                         "type": relation.type,
+                         "properties": properties,
+                         "batch_size": batch_size
+                     })
 
     @staticmethod
     def get_create_entity_relationships_query(relation: Relation, batch_size: int) -> Query:
         # find events that are related to different entities of which one event also has a reference to the other entity
         # create a relation between these two entities
-        relation_type = relation.type
-        relation_constructor = relation.constructed_by
-        entity_label_from_node = relation_constructor.from_node_label
-        entity_label_to_node = relation_constructor.to_node_label
-        foreign_key = relation_constructor.foreign_key
-        _reversed = relation_constructor.reversed
-        arrow_left = "<-" if _reversed else "-"
-        arrow_right = "-" if _reversed else "->"
 
-        primary_key = relation.constructed_by.primary_key
-
-        q_create_relation = f'''
+        # language=sql
+        query_str = '''
                 CALL apoc.periodic.iterate(
                 '
-                MATCH (tf:ForeignKey {{type:"{foreign_key}"}}) - [:KEY_{entity_label_from_node.upper()}] -> (_from:
-                {entity_label_from_node})
-                MATCH (to:{entity_label_to_node} {{{primary_key}:tf.id}})
+                MATCH (tf:ForeignKey {type:"$foreign_key"}) - [:$key_type] -> (_from:$entity_label_from_node)
+                MATCH (to:$entity_label_to_node {$primary_key:tf.id})
                 RETURN distinct to, _from',
-                'MERGE (_from) {arrow_left} [:{relation_type.upper()} {{type:"Rel",
-                    {entity_label_from_node.lower()}Id: _from.ID,
-                    {entity_label_to_node.lower()}Id: to.{primary_key}                                              
-                                                    }}] {arrow_right} (to)',
-                {{batchSize: {batch_size}}})
+                'MERGE (_from) 
+                    $arrow_left [:$relation_type 
+                        {type:"Rel",
+                        $from_node_property_id: _from.ID,
+                        $to_node_property_id: to.$primary_key
+                    }] $arrow_right (to)',
+                {batchSize: $batch_size})
                 '''
 
-        return Query(query_string=q_create_relation, kwargs={})
+        relation_constructor = relation.constructed_by
+        _reversed = relation_constructor.reversed
+
+        return Query(query_str=query_str,
+                     template_string_parameters={
+                         "key_type": f"KEY_{relation_constructor.from_node_label.upper()}",
+                         "entity_label_from_node": relation_constructor.from_node_label,
+                         "entity_label_to_node": relation_constructor.to_node_label,
+                         "primary_key": relation.constructed_by.primary_key,
+                         "arrow_left": "<-" if _reversed else "-",
+                         "arrow_right": "-" if _reversed else "->",
+                         "relation_type": relation.type.upper(),
+                         "from_node_property_id": relation_constructor.get_id_attribute_from_from_node(),
+                         "to_node_property_id": relation_constructor.get_id_attribute_from_to_node(),
+                         "foreign_key": relation_constructor.foreign_key,
+                         "batch_size": batch_size,
+                     })
 
     @staticmethod
     def create_foreign_key_relation(relation: Relation) -> Query:
         # find events that are related to different entities of which one event also has a reference to the other entity
         # create a relation between these two entities
-        entity_label_from_node = relation.constructed_by.from_node_label
-        foreign_key = relation.constructed_by.foreign_key
 
-        q_create_relation = f'''
-            MATCH (_from:{entity_label_from_node})
-            WITH _from, _from.{foreign_key} as foreign_keys
+        # language=sql
+        query_str = '''
+            MATCH (_from:$entity_label_from_node_label)
+            WITH _from, _from.$foreign_key as foreign_keys
             UNWIND foreign_keys as foreign_key
-            MERGE (_from) <- [:KEY_{entity_label_from_node.upper()}] - (tf:ForeignKey 
-                {{id:foreign_key, type:'{foreign_key}'}})
+            MERGE (_from) <- [:$key_type] - (tf:ForeignKey 
+                {id:foreign_key, type:'$foreign_key'})
             '''
 
-        return Query(query_string=q_create_relation, kwargs={})
+        return Query(query_str=query_str,
+                     template_string_parameters={
+                         "entity_label_from_node_label": relation.constructed_by.from_node_label,
+                         "key_type": f"KEY_{relation.constructed_by.from_node_label.upper()}",
+                         "foreign_key": relation.constructed_by.foreign_key
+                     },
+                     parameters={})
 
     @staticmethod
     def merge_foreign_key_nodes(relation: Relation) -> Query:
@@ -357,77 +426,90 @@ class CypherQueryLibrary:
         # create a relation between these two entities
         foreign_key = relation.constructed_by.foreign_key
 
-        q_create_relation = f'''
-            MATCH (tf:ForeignKey {{type:'{foreign_key}'}})
+        # language=sql
+        query_str = '''
+            MATCH (tf:ForeignKey {type:$foreign_key})
             WITH tf.id as id, collect(tf) as same_nodes
-            CALL apoc.refactor.mergeNodes(same_nodes, {{properties:"discard"}})
+            CALL apoc.refactor.mergeNodes(same_nodes, {properties:'discard'})
             YIELD node
             RETURN node
             '''
 
-        return Query(query_string=q_create_relation, kwargs={})
+        return Query(query_str=query_str,
+                     parameters={"foreign_key": foreign_key})
 
     @staticmethod
     def get_delete_foreign_nodes_query(relation: Relation) -> Query:
         foreign_key = relation.constructed_by.foreign_key
 
-        q_string = f'''
-                    MATCH (tf:ForeignKey {{type:'{foreign_key}'}})
+        # language=sql
+        query_str = '''
+                    MATCH (tf:ForeignKey {type:$foreign_key})
                     DETACH DELETE tf
                     '''
 
-        return Query(query_string=q_string, kwargs={})
+        return Query(query_str=query_str,
+                     parameters={"foreign_key": foreign_key})
 
     @staticmethod
     def get_create_entities_by_relations_query(entity: Entity) -> Query:
-
-        conditions = entity.get_where_condition("r")
-        composed_primary_id_query = entity.get_composed_primary_id("r")
-        separate_primary_id_query = entity.get_entity_attributes("r")
-        primary_key_properties = entity.get_entity_attributes_as_node_properties()
-
-        entity_type = entity.type
-        entity_labels_string = entity.get_label_string()
-
-        q_create_entity = f'''
-                    MATCH (n1) - [r:{entity.constructed_by.get_relation_type()}] -> (n2) WHERE {conditions}
-                    WITH {composed_primary_id_query} AS id, {separate_primary_id_query}
-                    MERGE (en:{entity_labels_string}
-                            {{ID:id, 
-                            uID:"{entity_type}_"+toString(id),                    
-                            entityType:"{entity_type}",
-                            {primary_key_properties}}})
+        # language=sql
+        query_str = '''
+                    MATCH (n1) - [r:$rel_type] -> (n2) WHERE $conditions
+                    WITH $composed_primary_id_query AS id, $separate_primary_id_query
+                    MERGE (en:$entity_labels_string
+                            {ID:id, 
+                            uID:'$entity_type' + '_'+ toString(id),                    
+                            entityType:"$entity_type"
+                            $primary_key_properties})
                     '''
 
-        return Query(query_string=q_create_entity, kwargs={})
+        return Query(query_str=query_str,
+                     template_string_parameters={
+                         "rel_type": entity.constructed_by.get_relation_type(),
+                         "conditions": entity.get_where_condition("r"),
+                         "composed_primary_id_query": entity.get_composed_primary_id("r"),
+                         "separate_primary_id_query": entity.get_entity_attributes("r"),
+                         "entity_labels_string": entity.get_label_string(),
+                         "entity_type": entity.type,
+                         "primary_key_properties": entity.get_entity_attributes_as_node_properties()
+                     })
 
     @staticmethod
     def get_add_reified_relation_query(entity: Entity, batch_size: int):
-        conditions = entity.get_where_condition("r")
-        composed_primary_id_query = entity.get_composed_primary_id("r")
-        entity_labels_string = entity.get_label_string()
 
-        q_correlate_entities = f'''
+        # language=sql
+        query_str = '''
             CALL apoc.periodic.iterate(
-                'MATCH (n1) - [r:{entity.constructed_by.get_relation_type()}] -> (n2) WHERE {conditions}
-                WITH n1, n2, {composed_primary_id_query} AS id
-                MATCH (reified:{entity_labels_string}) WHERE id = reified.ID
+                'MATCH (n1) - [r:$rel_type] -> (n2) WHERE $conditions
+                WITH n1, n2, $composed_primary_id_query AS id
+                MATCH (reified:$entity_labels_string) WHERE id = reified.ID
                 RETURN n1, n2, reified',
                 'MERGE (n1) <-[:REIFIED ] - (reified) -[:REIFIED ]-> (n2)',
-                {{batchSize: {batch_size}}})
+                {batchSize: $batch_size})
 
         '''
 
-        return Query(query_string=q_correlate_entities, kwargs={})
+        return Query(query_str=query_str,
+                     template_string_parameters={
+                         "rel_type": entity.constructed_by.get_relation_type(),
+                         "conditions": entity.get_where_condition("r"),
+                         "composed_primary_id_query": entity.get_composed_primary_id("r"),
+                         "entity_labels_string": entity.get_label_string(),
+                         "batch_size": batch_size
+                     })
 
     @staticmethod
     def get_correlate_events_to_reification_query(reified_entity: Entity):
-        reified_entity_labels = reified_entity.get_label_string()
-        q_correlate = f'''
-                                MATCH (e:Event) -[:CORR]-> (n:Entity) <-[:REIFIED ]- (r:Entity:{reified_entity_labels})
-                                MATCH (e:Event) -[:CORR]-> (n:Entity) <-[:REIFIED ]- (r:Entity:{reified_entity_labels})
-                                MERGE (e)-[:CORR]->(r)'''
-        return Query(query_string=q_correlate, kwargs={})
+        # language=sql
+        query_str = f'''
+            MATCH (e:Event) -[:CORR]-> (n:Entity) <-[:REIFIED ]- (r:Entity:$reified_entity_labels)
+            MATCH (e:Event) -[:CORR]-> (n:Entity) <-[:REIFIED ]- (r:Entity:$reified_entity_labels)
+            MERGE (e)-[:CORR]->(r)
+        '''
+
+        return Query(query_str=query_str,
+                     template_string_parameters={"reified_entity_labels": reified_entity.get_label_string()})
 
     @staticmethod
     def get_create_directly_follows_query(entity: Entity, batch_size) -> Query:
@@ -436,55 +518,68 @@ class CypherQueryLibrary:
         # collect the sorted nodes as a list
         # unwind the list from 0 to the one-to-last node
         # find neighbouring nodes and add an edge between
-        entity_type = entity.type
-        entity_labels_string = entity.get_label_string()
 
-        df_entity_string = entity.get_df_label()
-
-        q_create_df = f'''
+        # language=sql
+        query_str = '''
          CALL apoc.periodic.iterate(
-            'MATCH (n:{entity_labels_string}) <-[:CORR]- (e)
+            'MATCH (n:$entity_labels_string) <-[:CORR]- (e)
             WITH n , e as nodes ORDER BY e.timestamp, ID(e)
             WITH n , collect (nodes) as nodeList
             UNWIND range(0,size(nodeList)-2) AS i
             WITH n , nodeList[i] as first, nodeList[i+1] as second
             RETURN first, second',
-            'MERGE (first) -[df:{df_entity_string} {{entityType: "{entity_type}"}}]->(second)
+            'MERGE (first) -[df:$df_entity {entityType: "$entity_type"}]->(second)
              SET df.type = "DF"
             ',
-            {{batchSize: {batch_size}}})
+            {batchSize: $batch_size})
         '''
 
-        return Query(query_string=q_create_df, kwargs={})
+        return Query(query_str=query_str,
+                     template_string_parameters={
+                         "entity_labels_string": entity.get_label_string(),
+                         "df_entity": entity.get_df_label(),
+                         "entity_type": entity.type,
+                         "batch_size": batch_size
+                     })
 
     @staticmethod
     def get_merge_duplicate_df_entity_query(entity: Entity) -> Query:
-        q_merge_duplicate_rel = f'''
-                    MATCH (n1:Event)-[r:{entity.get_df_label()} {{entityType: "{entity.type}"}}]->(n2:Event)
+
+        # language=sql
+        query_str = '''
+                    MATCH (n1:Event)-[r:$df_entity {entityType: '$entity_type'}]->(n2:Event)
                     WITH n1, n2, collect(r) AS rels
                     WHERE size(rels) > 1
                     // only include this and the next line if you want to remove the existing relationships
                     UNWIND rels AS r 
                     DELETE r
-                    MERGE (n1)-[:{entity.get_df_label()} {{entityType: "{entity.type}", Count:size(rels), 
-                    type:"DF"}}]->(n2)
+                    MERGE (n1)
+                        -[:$df_entity {entityType: '$entity_type', count:size(rels), type: 'DF'}]->
+                          (n2)
                 '''
-        return Query(query_string=q_merge_duplicate_rel, kwargs={})
+        return Query(query_str=query_str,
+                     template_string_parameters={
+                         "entity_type": entity.type,
+                         "df_entity": entity.get_df_label()
+                     })
 
     @staticmethod
     def delete_parallel_directly_follows_derived(reified_entity: Entity, original_entity: Entity):
-        reified_entity_type = reified_entity.type
-        df_reified_entity = reified_entity.get_df_label()
 
-        original_entity_type = original_entity.type
-        df_original_entity = original_entity.get_df_label()
-
-        q_delete_df = f'''
-            MATCH (e1:Event) -[df:{df_reified_entity} {{entityType: "{reified_entity_type}"}}]-> (e2:Event)
-            WHERE (e1:Event) -[:{df_original_entity} {{entityType: "{original_entity_type}"}}]-> (e2:Event)
+        # language=sql
+        query_str = '''
+            MATCH (e1:Event) -[df:$df_reified_entity {entityType: "$reified_entity_type"}]-> (e2:Event)
+            WHERE (e1:Event) -[:$df_original_entity {entityType: "$original_entity_type"}]-> (e2:Event)
             DELETE df'''
 
-        return Query(query_string=q_delete_df, kwargs={})
+        return Query(query_str=query_str,
+                     template_string_parameters={
+                         "df_reified_entity": reified_entity.get_df_label(),
+                         "df_original_entity": original_entity.get_df_label(),
+                         "reified_entity_type": reified_entity.type,
+                         "original_entity_type": original_entity.type
+                     },
+                     parameters={})
 
     @staticmethod
     def get_aggregate_df_relations_query(entity: Entity,
@@ -493,183 +588,207 @@ class CypherQueryLibrary:
                                          relative_df_threshold: float = 0,
                                          exclude_self_loops=True) -> Query:
 
+        # add relations between classes when desired
+        if df_threshold == 0 and relative_df_threshold == 0:
+            # corresponds to aggregate_df_relations &  aggregate_df_relations_for_entities in graphdb-event-logs
+            # aggregate only for a specific entity type and event classifier
+
+            # language=sql
+            query_str = '''
+                            MATCH 
+                            (c1:Class) <-[:OBSERVED]-(e1:Event) 
+                                -[df:$df_label {entityType: '$entity_type'}]-> 
+                            (e2:Event) -[:OBSERVED]-> (c2:Class)
+                            MATCH (e1) -[:CORR] -> (n) <-[:CORR]- (e2)
+                            WHERE n.entityType = df.entityType AND 
+                                c1.classType = c2.classType $classifier_condition $classifier_self_loops
+                            WITH n.entityType as EType,c1,count(df) AS df_freq,c2
+                            MERGE 
+                            (c1) 
+                                -[rel2:$dfc_label {entityType: '$entity_type', type:'DF_C', classType: c1.classType}]-> 
+                            (c2) 
+                            ON CREATE SET rel2.count=df_freq'''
+        else:
+            # aggregate only for a specific entity type and event classifier
+            # include only edges with a minimum threshold, drop weak edges (similar to heuristics miner)
+
+            # language=sql
+            query_str = '''
+                            MATCH 
+                            (c1:Class) 
+                                <-[:OBSERVED]-
+                            (e1:Event) 
+                                -[df:$df_label {entityType: '$entity_type'}]-> 
+                            (e2:Event) -[:OBSERVED]-> (c2:Class)
+                            MATCH (e1) -[:CORR] -> (n) <-[:CORR]- (e2)
+                            WHERE n.entityType = df.entityType 
+                                AND c1.classType = c2.classType $classifier_condition $classifier_self_loops
+                            WITH n.entityType as entityType,c1,count(df) AS df_freq,c2
+                            WHERE df_freq > $df_threshold
+                            OPTIONAL MATCH (c2:Class) <-[:OBSERVED]- (e2b:Event) -[df2:DF]-> 
+                                (e1b:Event) -[:OBSERVED]-> (c1:Class)
+                            WITH entityType as EType,c1,df_freq,count(df2) AS df_freq2,c2
+                            WHERE (df_freq*$relative_df_threshold > df_freq2)
+                            MERGE 
+                            (c1) 
+                                -[rel2:$dfc_label {entityType: '$entity_type', type:'DF_C', classType: c1.classType}]-> 
+                            (c2) 
+                            ON CREATE SET rel2.count=df_freq'''
+
         classifier_condition = ""
         if classifiers is not None:
             classifier_string = "_".join(classifiers)
             classifier_condition = f"AND c1.classType = '{classifier_string}'"
 
-        df_label = entity.get_df_label()
-        entity_type = entity.type
-        dfc_label = CypherQueryLibrary.get_dfc_label(entity_type, include_label_in_c_df)
-
-        classifier_self_loops = "AND c1 <> c2" if exclude_self_loops else ""
-
-        # add relations between classes when desired
-        if df_threshold == 0 and relative_df_threshold == 0:
-            # corresponds to aggregate_df_relations &  aggregate_df_relations_for_entities in graphdb-event-logs
-            # aggregate only for a specific entity type and event classifier
-            q_create_dfc = f'''
-                            MATCH (c1:Class) <-[:OBSERVED]- (e1:Event) -[df:{df_label} {{entityType: '
-                            {entity_type}'}}]-> 
-                                (e2:Event) -[:OBSERVED]-> (c2:Class)
-                            MATCH (e1) -[:CORR] -> (n) <-[:CORR]- (e2)
-                            WHERE n.entityType = df.entityType AND 
-                                c1.classType = c2.classType {classifier_condition} {classifier_self_loops}
-                            WITH n.entityType as EType,c1,count(df) AS df_freq,c2
-                            MERGE (c1) -[rel2:{dfc_label} {{entityType: '{entity_type}', type:"DF_C", classType: 
-                            c1.classType}}]-> (c2) 
-                            ON CREATE SET rel2.count=df_freq'''
-            return Query(query_string=q_create_dfc, kwargs={})
-        else:
-            # aggregate only for a specific entity type and event classifier
-            # include only edges with a minimum threshold, drop weak edges (similar to heuristics miner)
-            q_create_dfc = f'''
-                            MATCH (c1:Class) <-[:OBSERVED]- (e1:Event) -[df:{df_label} {{entityType: '
-                            {entity_type}'}}]-> 
-                                (e2:Event) -[:OBSERVED]-> (c2:Class)
-                            MATCH (e1) -[:CORR] -> (n) <-[:CORR]- (e2)
-                            WHERE n.entityType = df.entityType 
-                                AND c1.classType = c2.classType {classifier_condition} {classifier_self_loops}
-                            WITH n.entityType as entityType,c1,count(df) AS df_freq,c2
-                            WHERE df_freq > {df_threshold}
-                            OPTIONAL MATCH (c2:Class) <-[:OBSERVED]- (e2b:Event) -[df2:DF]-> 
-                                (e1b:Event) -[:OBSERVED]-> (c1:Class)
-                            WITH entityType as EType,c1,df_freq,count(df2) AS df_freq2,c2
-                            WHERE (df_freq*{relative_df_threshold} > df_freq2)
-                            MERGE (c1) -[rel2:{dfc_label} {{entityType: '{entity_type}', type:"DF_C", classType: 
-                            c1.classType}}]-> (c2) 
-                            ON CREATE SET rel2.count=df_freq'''
-            return Query(query_string=q_create_dfc, kwargs={})
+        return Query(query_str=query_str,
+                     template_string_parameters={
+                         "df_label": entity.get_df_label(),
+                         "entity_type": entity.type,
+                         "classifier_condition": classifier_condition,
+                         "classifier_self_loops": "AND c1 <> c2" if exclude_self_loops else "",
+                         "dfc_label": CypherQueryLibrary.get_dfc_label(entity.type, include_label_in_c_df),
+                         "df_threshold": df_threshold,
+                         "relative_df_threshold": relative_df_threshold
+                     })
 
     @staticmethod
     def get_create_class_query(_class: Class) -> Query:
-        # make sure first element of id list is cID
-        label = _class.label
-
-        group_by = _class.get_group_by_statement(node_name="e")
-        where_condition_not_null = _class.get_condition(node_name="e")
-        class_properties = _class.get_class_properties()
-        class_label = _class.get_class_label()
 
         # create new class nodes for event nodes that match the condition
-        q_create_ec = f'''
-                    MATCH (e:{label})
-                    WHERE {where_condition_not_null}
-                    WITH {group_by}
-                    MERGE (c:Class:Class_{class_label} {{ {class_properties} }})'''
+        # language=sql
+        query_str = '''
+                    MATCH (e:$label)
+                    WHERE $where_condition_not_null
+                    WITH $group_by
+                    MERGE (c:Class:$class_label {$class_properties})'''
 
-        return Query(query_string=q_create_ec, kwargs={})
+        return Query(query_str=query_str,
+                     template_string_parameters={
+                         "label": _class.label,
+                         "where_condition_not_null": _class.get_condition(node_name="e"),
+                         "group_by": _class.get_group_by_statement(node_name="e"),
+                         "class_label": _class.get_class_label(),
+                         "class_properties": _class.get_class_properties()
+                     })
 
     @staticmethod
     def get_link_event_to_class_query(_class: Class, batch_size: int) -> Query:
         # Create :OBSERVED relation between the class and events
-        class_label = _class.get_class_label()
-        where_link_condition = _class.get_link_condition(class_node_name="c", event_node_name="e")
 
-        q_link_event_to_class = f'''
-                CALL apoc.periodic.iterate(
-                    'MATCH (c:Class_{class_label})
-                    MATCH (e:Event) WHERE {where_link_condition}
-                    RETURN e, c',
-                    'MERGE (e) -[:OBSERVED]-> (c)',
-                    {{batchSize: {batch_size}}})                
-                '''
+        # language=SQL
+        query_str = '''
+            CALL apoc.periodic.iterate(
+                'MATCH (c:$class_label)                    
+                 MATCH (e:Event) WHERE $where_link_condition                    
+                 RETURN e, c',
+                'MERGE (e) -[:OBSERVED]-> (c)',
+                {batchSize: $batch_size})                
+            '''
 
-        return Query(query_string=q_link_event_to_class, kwargs={})
+        return Query(query_str=query_str,
+                     template_string_parameters={
+                         "class_label": _class.get_class_label(),
+                         "where_link_condition": _class.get_link_condition(class_node_name="c", event_node_name="e"),
+                         "batch_size": batch_size
+                     })
 
     @staticmethod
     def get_node_count_query() -> Query:
-        query_count_nodes = """
-                        // List all node types and counts
-                            MATCH (n) 
-                            WITH n, CASE labels(n)[0]
-                                WHEN 'Event' THEN 0
-                                WHEN 'Entity' THEN 1
-                                WHEN 'Class' THEN 2
-                                WHEN 'Log' THEN 3
-                                ELSE 4
-                            END as sortOrder
-                            WITH  labels(n)[0] as label,  count(n) as numberOfNodes,sortOrder
-                            RETURN label,  numberOfNodes ORDER BY sortOrder
-                    """
+        # language=SQL
+        query_str = '''
+            // List all node types and counts
+            MATCH (n) 
+            WITH n, CASE labels(n)[0]
+                WHEN 'Event' THEN 0
+                WHEN 'Entity' THEN 1
+                WHEN 'Class' THEN 2
+                WHEN 'Log' THEN 3
+                ELSE 4
+            END AS sortOrder
+            WITH  labels(n)[0] AS label,  count(n) AS numberOfNodes,sortOrder
+            RETURN label,  numberOfNodes ORDER BY sortOrder
+        '''
 
-        return Query(query_string=query_count_nodes, kwargs={})
+        return Query(query_str=query_str)
 
     @staticmethod
     def get_edge_count_query() -> Query:
-        query_count_relations = """
-                // List all agg rel types and counts
-                MATCH () - [r] -> ()
-                WHERE r.type is NOT NULL
-                WITH r, CASE toUpper(r.type)
-                  WHEN 'REL' THEN 0
-                  WHEN 'DF' THEN 1
-                  ELSE 2
-                END as sortOrder
-                WITH toUpper(r.type) as aggType, count(r) as aggNumberOfRelations, sortOrder
-                RETURN aggType, aggNumberOfRelations ORDER BY sortOrder
-            """
+        # language=SQL
+        query_str = '''
+            // List all agg rel types and counts
+            MATCH () - [r] -> ()
+            WHERE r.type is NOT NULL
+            WITH r, CASE toUpper(r.type)
+              WHEN 'REL' THEN 0
+              WHEN 'DF' THEN 1
+              ELSE 2
+            END as sortOrder
+            WITH toUpper(r.type) as aggType, count(r) as aggNumberOfRelations, sortOrder
+            RETURN aggType, aggNumberOfRelations ORDER BY sortOrder
+        '''
 
-        return Query(query_string=query_count_relations, kwargs={})
+        return Query(query_str=query_str)
 
     @staticmethod
     def get_aggregated_edge_count_query() -> Query:
-        query_count_relations = """
-                // List all rel types and counts
-                MATCH () - [r] -> ()
-                // WHERE r.type is  NULL
-                WITH r, CASE Type(r)
-                  WHEN 'CORR' THEN 0
-                  WHEN 'OBSERVED' THEN 1
-                  WHEN 'HAS' THEN 2
-                  ELSE 3
-                END as sortOrder
+        # language=SQL
+        query_str = '''
+            // List all rel types and counts
+            MATCH () - [r] -> ()
+            // WHERE r.type is  NULL
+            WITH r, CASE Type(r)
+              WHEN 'CORR' THEN 0
+              WHEN 'OBSERVED' THEN 1
+              WHEN 'HAS' THEN 2
+              ELSE 3
+            END as sortOrder
+            WITH Type(r) as type, count(r) as numberOfRelations, sortOrder
+            RETURN type, numberOfRelations ORDER BY sortOrder
+        '''
 
-                WITH Type(r) as type, count(r) as numberOfRelations, sortOrder
-                RETURN type, numberOfRelations ORDER BY sortOrder
-            """
-
-        return Query(query_string=query_count_relations, kwargs={})
+        return Query(query_str=query_str)
 
     @staticmethod
     def get_event_log(entity: Entity, additional_event_attributes):
-        attributes_query = ",".join(f"e.{attribute} as {attribute}" for attribute in additional_event_attributes)
-        attributes_query = f", {attributes_query}"
-        query = '''
+
+        query_str = '''
             MATCH (e:Event) - [:CORR] -> (n:$entity_label)
             RETURN n.ID as caseId, e.activity as activity, e.timestamp as timestamp $extra_attributes
             ORDER BY n.ID, e.timestamp
         '''
 
-        query_str = Template(query).substitute(entity_label=entity.get_label_string(),
-                                               extra_attributes=attributes_query)
-        return Query(query_string=query_str, kwargs={})
+        attributes_query = ",".join(f"e.{attribute} as {attribute}" for attribute in additional_event_attributes)
+        return Query(query_str=query_str,
+                     template_string_parameters={
+                         "entity_label": entity.get_label_string(),
+                         "extra_attributes": f", {attributes_query}"
+                     })
 
     @staticmethod
     def merge_same_nodes(data_structure: DataStructure):
+        # language=sql
         query_str = '''
             MATCH (n:$labels)
             WITH $primary_keys, collect(n) as nodes
             CALL apoc.refactor.mergeNodes(nodes, {
-                properties:"combine"})
+                properties:'combine'})
             YIELD node
             RETURN node
         '''
 
-        labels = ":".join(data_structure.labels)
-        primary_keys = data_structure.get_primary_keys()
-        primary_key_with = [f"n.{primary_key} as {primary_key}" for primary_key in primary_keys]
-        primary_key_string = ", ".join(primary_key_with)
-
-        query_str = Template(query_str).substitute(labels=labels, primary_keys=primary_key_string)
-
-        return Query(query_string=query_str, kwargs={})
+        return Query(query_str=query_str,
+                     template_string_parameters={
+                         "labels": data_structure.get_label_string(),
+                         "primary_keys": data_structure.get_primary_keys_as_attributes()
+                     })
 
     @staticmethod
     def add_attributes_to_classifier(relation, label, properties, copy_as):
+        # TODO align with relation and entity
         if copy_as is None:
             copy_as = properties
 
+        # language=sql
         query_str = '''
                     MATCH (c:Class) - [:$relation] - (n:$label)
                     SET $properties
@@ -677,12 +796,16 @@ class CypherQueryLibrary:
         properties = [f"c.{copy} = n.{property}" for (property, copy) in zip(properties, copy_as)]
         properties = ",".join(properties)
 
-        query_str = Template(query_str).substitute(relation=relation, label=label, properties=properties)
-
-        return Query(query_string=query_str, kwargs={})
+        return Query(query_str=query_str,
+                     template_string_parameters={
+                         "relation": relation,
+                         "label": label,
+                         "properties": properties
+                     })
 
     @staticmethod
     def get_query_infer_items_propagate_upwards_multiple_levels(entity: Entity, is_load=True) -> Query:
+        # language=sql
         query_str = '''
             MATCH (f2:Event) - [:CORR] -> (n:$entity)
             MATCH (f2) - [:CORR] ->  (equipment:Equipment)
@@ -690,7 +813,7 @@ class CypherQueryLibrary:
             WITH f2, k, equipment, n
             CALL {WITH f2, k, equipment
                 MATCH (f0:Event) - [:OBSERVED] -> (c0: Class)
-                MATCH (c0) - [:IS] -> (a0:Activity {type: "physical", subtype: "$subtype", entity: "$entity"})  
+                MATCH (c0) - [:IS] -> (a0:Activity {type: 'physical', subtype: '$subtype', entity: '$entity'})  
                 MATCH (c0) - [:AT] -> (k)
                 MATCH (f0) - [:CORR] ->  (equipment)
                 WHERE f0.timestamp $comparison f2.timestamp
@@ -700,14 +823,14 @@ class CypherQueryLibrary:
             MERGE (f0_first) - [:CORR] -> (n)
             '''
 
-        subtype = "load" if is_load else "unload"
-        order_type = "DESC" if is_load else ""
-        comparison = "<=" if is_load else ">="
-        query_str = Template(query_str).substitute(entity=entity.type, entity_id=entity.get_primary_keys()[0],
-                                                   subtype=subtype, comparison=comparison,
-                                                   order_type=order_type)
-
-        return Query(query_string=query_str, kwargs={})
+        return Query(query_str=query_str,
+                     template_string_parameters={
+                         "entity": entity.type,
+                         "entity_id": entity.get_primary_keys()[0],
+                         "subtype": "load" if is_load else "unload",
+                         "comparison": "<=" if is_load else ">=",
+                         "order_type": "DESC" if is_load else ""
+                     })
 
     @staticmethod
     def get_query_infer_items_propagate_downwards_multiple_level_w_batching(entity: Entity,
@@ -740,20 +863,22 @@ class CypherQueryLibrary:
         query_str = Template(query_str).substitute(entity=entity.type, entity_id=entity.get_primary_keys()[0],
                                                    relative_position=relative_position.type)
 
-        return Query(query_string=query_str, kwargs={})
+        return Query(query_str=query_str,
+                     template_string_parameters={},
+                     parameters={})
 
     @staticmethod
     def get_query_infer_items_propagate_downwards_one_level(entity: Entity) -> Query:
+        # language=sql
         query_str = '''
                     MATCH (f1 :Event) - [:CORR] -> (equipment :Equipment)
                     MATCH (f1) - [:OBSERVED] -> (c1:Class) -[:AT]-> (l:Location)
-                    // ensure f2 should have operated on the required by checking that the activity operates on that 
-                    // entity
+                    // ensure f2 should have operated on the required by checking that the activity operates on that  entity
                     MATCH (c1) - [:IS] -> (a1:Activity {entity: "$entity"}) 
                     WITH f1, equipment, l
                     CALL {WITH f1, equipment, l
                         MATCH (f0: Event)-[:OBSERVED]->(c0:Class) - [:IS] 
-                            -> (:Activity {type:"physical", subtype: "load", entity:"$entity"})
+                            -> (:Activity {type:'physical', subtype: 'load', entity:'$entity'})
                         MATCH (c0) - [:AT] -> (l)
                         MATCH (f0)-[:CORR]->(equipment)
                         WHERE f0.timestamp <= f1.timestamp
@@ -769,12 +894,15 @@ class CypherQueryLibrary:
                     )
                     '''
 
-        query_str = Template(query_str).substitute(entity=entity.type, entity_id=entity.get_primary_keys()[0])
-
-        return Query(query_string=query_str, kwargs={})
+        return Query(query_str=query_str,
+                     template_string_parameters={
+                         "entity": entity.type,
+                         "entity_id": entity.get_primary_keys()[0]
+                     })
 
     @staticmethod
-    def add_entity_to_event(entity: Entity) -> Query:
+    def add_entity_as_event_attribute(entity: Entity) -> Query:
+        # language=sql
         query_str = '''
             MATCH (e:Event) - [:CORR] -> (n:$entity)
             WITH e, collect(n.ID) as related_entities_collection
@@ -790,15 +918,24 @@ class CypherQueryLibrary:
 
         query_str = Template(query_str).substitute(entity=entity.type, entity_id=entity.get_primary_keys()[0])
 
-        return Query(query_string=query_str, kwargs={})
+        return Query(query_str=query_str,
+                     template_string_parameters={
+                         "entity": entity.type,
+                         "entity_id": entity.get_primary_keys()[0]
+                     })
 
     @staticmethod
     def match_entity_with_batch_position(entity: Entity, relative_position: Entity):
+        # language=sql
         query_str = '''
                 MATCH (e:Event) - [:CORR] -> (b:Box)
                 MATCH (e) - [:CORR] -> (bp:$relative_position)
                 MERGE (b:Box) - [:AT_POS] -> (bp:$relative_position)
             '''
 
-        query_str = Template(query_str).substitute(entity=entity.type, relative_position=relative_position.type)
-        return Query(query_string=query_str, kwargs={})
+        query_str = Template(query_str).substitute(entity=entity.type)
+        return Query(query_str=query_str,
+                     template_string_parameters={
+                         "entity": entity.type,
+                         "relative_position": relative_position.type
+                     })

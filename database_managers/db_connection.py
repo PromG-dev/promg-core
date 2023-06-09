@@ -1,7 +1,19 @@
+from string import Template
 from typing import Optional, List, Dict, Any
 
 import neo4j
 from neo4j import GraphDatabase
+
+
+class Query:
+    def __init__(self, query_str: str, database: str = None, parameters: Optional[Dict[str, any]] = None,
+                 template_string_parameters: Optional[Dict[str, any]] = None):
+        if template_string_parameters is not None:
+            self.query_string = Template(query_str).safe_substitute(template_string_parameters)
+        else:
+            self.query_string = query_str
+        self.kwargs = parameters
+        self.database = database
 
 
 class DatabaseConnection(object):
@@ -25,8 +37,11 @@ class DatabaseConnection(object):
         result = function(**kwargs)
         query = result.query_string
         kwargs = result.kwargs
+        database = result.database
+        if kwargs is None:
+            kwargs = {}  # replace None value by an emtpy dictionary
 
-        return self._exec_query(query, **kwargs)
+        return self._exec_query(query, database, **kwargs)
 
     def _exec_query(self, query: str, database: str = None, **kwargs) -> Optional[List[Dict[str, Any]]]:
         """

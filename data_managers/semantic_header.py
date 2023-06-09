@@ -6,7 +6,7 @@ from typing import List, Any, Optional, Union
 from dataclasses import dataclass
 
 from .interpreters import Interpreter
-from ..utilities.auxiliary_functions import replace_undefined_value, create_list
+from ..utilities.auxiliary_functions import replace_undefined_value, create_list, get_id_attribute_from_label
 import re
 
 
@@ -157,6 +157,11 @@ class RelationConstructorByNodes(ABC):
                                           foreign_key=_foreign_key, primary_key=_primary_key,
                                           reversed=_reversed, qi=interpreter.relation_constructor_by_nodes_qi)
 
+    def get_id_attribute_from_from_node(self):
+        return get_id_attribute_from_label(self.from_node_label)
+
+    def get_id_attribute_from_to_node(self):
+        return get_id_attribute_from_label(self.to_node_label)
 
 @dataclass
 class RelationConstructorByRelations(ABC):
@@ -199,6 +204,12 @@ class RelationConstructorByRelations(ABC):
 
     def get_to_node_label(self):
         return self.consequent.to_node.node_label
+
+    def get_id_attribute_from_from_node(self):
+        return get_id_attribute_from_label(self.from_node_label)
+
+    def get_id_attribute_from_to_node(self):
+        return get_id_attribute_from_label(self.to_node_label)
 
     def get_antecedent_query(self):
         return self.qi.get_antecedent_query(antecedents=self.antecedents)
@@ -372,7 +383,11 @@ class Entity(ABC):
         # entity attributes may have primary keys (or not)
         _entity_attributes = replace_undefined_value(obj.get("entity_attributes"), [])
         # create a list of all entity attributes
-        _all_entity_attributes = list(set(_entity_attributes + _primary_keys))
+        if len(_primary_keys) > 1: # more than 1 primary key, also store the primary keys separately
+            _all_entity_attributes = list(set(_entity_attributes + _primary_keys))
+        else:
+            # remove the primary keys from the entity attributes
+            _all_entity_attributes = list(set(_entity_attributes).difference(set(_primary_keys)))
         # remove the primary keys
         _entity_attributes_wo_primary_keys = [attr for attr in _all_entity_attributes if attr not in _primary_keys]
 
@@ -395,6 +410,9 @@ class Entity(ABC):
     def get_label_string(self):
         return self.qi.get_label_string(self.labels)
 
+    def get_labels(self):
+        return ["Entity"] + self.labels
+
     def get_df_label(self):
         return self.qi.get_df_label(self.include_label_in_df, self.type)
 
@@ -406,7 +424,10 @@ class Entity(ABC):
                                              node_name)
 
     def get_entity_attributes_as_node_properties(self):
-        return self.qi.get_entity_attributes_as_node_properties(self.all_entity_attributes)
+        if len(self.all_entity_attributes) > 0:
+            return self.qi.get_entity_attributes_as_node_properties(self.all_entity_attributes)
+        else:
+            return ""
 
     def get_primary_key_existing_condition(self, node_name: str = "e"):
         return self.qi.get_primary_key_existing_conditionge(self.primary_keys, node_name)
