@@ -321,7 +321,8 @@ class CypherQueryLibrary:
         q_create_relation = f'''
                 CALL apoc.periodic.iterate(
                 '
-                MATCH (tf:ForeignKey {{type:"{foreign_key}"}}) - [:KEY_{entity_label_from_node.upper()}] -> (_from:{entity_label_from_node})
+                MATCH (tf:ForeignKey {{type:"{foreign_key}"}}) - [:KEY_{entity_label_from_node.upper()}] -> (_from:
+                {entity_label_from_node})
                 MATCH (to:{entity_label_to_node} {{{primary_key}:tf.id}})
                 RETURN distinct to, _from',
                 'MERGE (_from) {arrow_left} [:{relation_type.upper()} {{type:"Rel",
@@ -465,7 +466,8 @@ class CypherQueryLibrary:
                     // only include this and the next line if you want to remove the existing relationships
                     UNWIND rels AS r 
                     DELETE r
-                    MERGE (n1)-[:{entity.get_df_label()} {{entityType: "{entity.type}", Count:size(rels), type:"DF"}}]->(n2)
+                    MERGE (n1)-[:{entity.get_df_label()} {{entityType: "{entity.type}", Count:size(rels), 
+                    type:"DF"}}]->(n2)
                 '''
         return Query(query_string=q_merge_duplicate_rel, kwargs={})
 
@@ -507,20 +509,23 @@ class CypherQueryLibrary:
             # corresponds to aggregate_df_relations &  aggregate_df_relations_for_entities in graphdb-event-logs
             # aggregate only for a specific entity type and event classifier
             q_create_dfc = f'''
-                            MATCH (c1:Class) <-[:OBSERVED]- (e1:Event) -[df:{df_label} {{entityType: '{entity_type}'}}]-> 
+                            MATCH (c1:Class) <-[:OBSERVED]- (e1:Event) -[df:{df_label} {{entityType: '
+                            {entity_type}'}}]-> 
                                 (e2:Event) -[:OBSERVED]-> (c2:Class)
                             MATCH (e1) -[:CORR] -> (n) <-[:CORR]- (e2)
                             WHERE n.entityType = df.entityType AND 
                                 c1.classType = c2.classType {classifier_condition} {classifier_self_loops}
                             WITH n.entityType as EType,c1,count(df) AS df_freq,c2
-                            MERGE (c1) -[rel2:{dfc_label} {{entityType: '{entity_type}', type:"DF_C", classType: c1.classType}}]-> (c2) 
+                            MERGE (c1) -[rel2:{dfc_label} {{entityType: '{entity_type}', type:"DF_C", classType: 
+                            c1.classType}}]-> (c2) 
                             ON CREATE SET rel2.count=df_freq'''
             return Query(query_string=q_create_dfc, kwargs={})
         else:
             # aggregate only for a specific entity type and event classifier
             # include only edges with a minimum threshold, drop weak edges (similar to heuristics miner)
             q_create_dfc = f'''
-                            MATCH (c1:Class) <-[:OBSERVED]- (e1:Event) -[df:{df_label} {{entityType: '{entity_type}'}}]-> 
+                            MATCH (c1:Class) <-[:OBSERVED]- (e1:Event) -[df:{df_label} {{entityType: '
+                            {entity_type}'}}]-> 
                                 (e2:Event) -[:OBSERVED]-> (c2:Class)
                             MATCH (e1) -[:CORR] -> (n) <-[:CORR]- (e2)
                             WHERE n.entityType = df.entityType 
@@ -531,7 +536,8 @@ class CypherQueryLibrary:
                                 (e1b:Event) -[:OBSERVED]-> (c1:Class)
                             WITH entityType as EType,c1,df_freq,count(df2) AS df_freq2,c2
                             WHERE (df_freq*{relative_df_threshold} > df_freq2)
-                            MERGE (c1) -[rel2:{dfc_label} {{entityType: '{entity_type}', type:"DF_C", classType: c1.classType}}]-> (c2) 
+                            MERGE (c1) -[rel2:{dfc_label} {{entityType: '{entity_type}', type:"DF_C", classType: 
+                            c1.classType}}]-> (c2) 
                             ON CREATE SET rel2.count=df_freq'''
             return Query(query_string=q_create_dfc, kwargs={})
 
@@ -704,9 +710,10 @@ class CypherQueryLibrary:
         return Query(query_string=query_str, kwargs={})
 
     @staticmethod
-    def get_query_infer_items_propagate_downwards_multiple_level_w_batching(entity: Entity) -> Query:
+    def get_query_infer_items_propagate_downwards_multiple_level_w_batching(entity: Entity,
+                                                                            relative_position: Entity) -> Query:
         query_str = '''
-            MATCH (f2:Event) - [:CORR] -> (bp:BatchPosition)
+            MATCH (f2:Event) - [:CORR] -> (bp:$relative_position)
             MATCH (f2) - [:CORR] -> (equipment :Equipment)
             MATCH (f2) - [:OBSERVED] -> (c2:Class) -[:AT]-> (l:Location) - [:PART_OF*0..] -> (k:Location) 
             // ensure f2 should have operated on the required by checking that the activity operates on that entity
@@ -730,7 +737,8 @@ class CypherQueryLibrary:
             )
         '''
 
-        query_str = Template(query_str).substitute(entity=entity.type, entity_id=entity.get_primary_keys()[0])
+        query_str = Template(query_str).substitute(entity=entity.type, entity_id=entity.get_primary_keys()[0],
+                                                   relative_position=relative_position.type)
 
         return Query(query_string=query_str, kwargs={})
 
@@ -739,7 +747,8 @@ class CypherQueryLibrary:
         query_str = '''
                     MATCH (f1 :Event) - [:CORR] -> (equipment :Equipment)
                     MATCH (f1) - [:OBSERVED] -> (c1:Class) -[:AT]-> (l:Location)
-                    // ensure f2 should have operated on the required by checking that the activity operates on that entity
+                    // ensure f2 should have operated on the required by checking that the activity operates on that 
+                    // entity
                     MATCH (c1) - [:IS] -> (a1:Activity {entity: "$entity"}) 
                     WITH f1, equipment, l
                     CALL {WITH f1, equipment, l
@@ -784,12 +793,12 @@ class CypherQueryLibrary:
         return Query(query_string=query_str, kwargs={})
 
     @staticmethod
-    def match_entity_with_batch_position(entity: Entity):
+    def match_entity_with_batch_position(entity: Entity, relative_position: Entity):
         query_str = '''
                 MATCH (e:Event) - [:CORR] -> (b:Box)
-                MATCH (e) - [:CORR] -> (bp:BatchPosition)
-                MERGE (b:Box) - [:AT_POS] -> (bp:BatchPosition)
+                MATCH (e) - [:CORR] -> (bp:$relative_position)
+                MERGE (b:Box) - [:AT_POS] -> (bp:$relative_position)
             '''
 
-        query_str = Template(query_str).substitute(entity=entity.type)
+        query_str = Template(query_str).substitute(entity=entity.type, relative_position=relative_position.type)
         return Query(query_string=query_str, kwargs={})
