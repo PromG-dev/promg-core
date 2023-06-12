@@ -26,16 +26,16 @@ class Importer:
             self.perf.finished_step(activity=message)
 
     def import_data(self) -> None:
-        # Cypher does not recognize pd date times, therefore we convert the date times to the correct string format
         for structure in self.structures:
             labels = structure.labels
             file_directory = structure.file_directory
+            # read in all file names that match this structure
             for file_name in structure.file_names:
-                # read and import the events
+                # read and import the nodes
                 df_log = structure.read_data_set(file_directory, file_name, use_sample=self.use_sample,
                                                  use_preprocessed_file=self.use_preprocessed_files)
                 df_log["justImported"] = True
-                self._import_data_nodes_from_data(labels, df_log, file_name)
+                self._import_nodes_from_data(labels, df_log, file_name)
                 self._write_message_to_performance(f"Imported data from table {structure.name}: {file_name}")
 
             if structure.is_event_data():
@@ -44,15 +44,16 @@ class Importer:
                 self._write_message_to_performance(
                     f"Reformatted timestamps from events from event table {structure.name}: {file_name}")
             else:
+                # non event nodes may need to get merged depending on their primary key
                 self._merge_nodes(structure)
                 self._write_message_to_performance(
                     f"Similar nodes from table {structure.name}: {file_name} are merged")
 
-            self._filter_nodes(structure=structure)
+            self._filter_nodes(structure=structure) # filter nodes according to the structure
             self._write_message_to_performance(
                 f"Filtered the nodes from table {structure.name}: {file_name}")
 
-            self._finalize_import(labels=labels)
+            self._finalize_import(labels=labels) # removes temporary properties
 
             self._write_message_to_performance(
                 f"Finalized the import from table {structure.name}: {file_name}")
@@ -91,7 +92,7 @@ class Importer:
                                    **{"labels": labels,
                                       "batch_size": self.batch_size})
 
-    def _import_data_nodes_from_data(self, labels, df_log, file_name):
+    def _import_nodes_from_data(self, labels, df_log, file_name):
         # start with batch 0 and increment until everything is imported
         batch = 0
         print("\n")
@@ -105,7 +106,7 @@ class Importer:
                                   for m in
                                   df_log[batch * self.batch_size:(batch + 1) * self.batch_size].to_dict(
                                       orient='records')]
-            self.connection.exec_query(CypherQueryLibrary.get_create_events_batch_query,
+            self.connection.exec_query(CypherQueryLibrary.get_create_nodes_by_importing_batch_query,
                                        **{"batch": batch_without_nans, "labels": labels})
 
             pbar.update(1)

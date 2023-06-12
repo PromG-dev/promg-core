@@ -16,13 +16,14 @@ class InferenceEngine:
                                       "is_load": is_load})
         self._write_message_to_performance("Batch items are inferred")
 
-    def match_entity_with_batch_position(self, entity):
-        self.connection.exec_query(cql.match_entity_with_batch_position, **{"entity": entity})
+    def match_entity_with_batch_position(self, entity, relative_position):
+        self.connection.exec_query(cql.match_entity_with_batch_position, **{"entity": entity,
+                                                                            "relative_position": relative_position})
         self._write_message_to_performance("Entities are matched with batch position")
 
-    def infer_items_propagate_downwards_multiple_level_w_batching(self, entity):
+    def infer_items_propagate_downwards_multiple_level_w_batching(self, entity, relative_position):
         self.connection.exec_query(cql.get_query_infer_items_propagate_downwards_multiple_level_w_batching,
-                                   **{"entity": entity})
+                                   **{"entity": entity, "relative_position": relative_position})
 
     def infer_items_propagate_downwards_one_level(self, entity):
         self.connection.exec_query(cql.get_query_infer_items_propagate_downwards_one_level, **{"entity": entity})

@@ -319,20 +319,23 @@ class EventKnowledgeGraph:
             raise ValueError(f"{entity_type} is not defined in semantic header")
         self.inference_engine.add_entity_as_event_attribute(entity)
 
-    def match_entity_with_batch_position(self, entity_type: str) -> None:
+    def match_entity_with_batch_position(self, entity_type: str, relative_position_type: str) -> None:
         """
         Pass on method to inference_engine to infer the batch position of a specific entity
 
         :param entity_type: The type of the entity
         :type entity_type: str
+        :param relative_position_type: The type of the relative position
+        :type relative_position_type: str
         :return: None
 
         :raise ValueError: when the entity has not been defined
         """
         entity = self.semantic_header.get_entity(entity_type)
+        relative_position = self.semantic_header.get_entity(relative_position_type)
         if entity is None:
             raise ValueError(f"{entity_type} is not defined in semantic header")
-        self.inference_engine.match_entity_with_batch_position(entity)
+        self.inference_engine.match_entity_with_batch_position(entity, relative_position)
         self.add_entity_to_event(entity_type=entity_type)
 
     # rule B
@@ -374,20 +377,23 @@ class EventKnowledgeGraph:
         self.add_entity_to_event(entity_type=entity_type)
 
     # rule D
-    def infer_items_propagate_downwards_multiple_level_w_batching(self, entity_type: str) -> None:
+    def infer_items_propagate_downwards_multiple_level_w_batching(self, entity_type: str, relative_position_type: str,) -> None:
         """
         Pass on method to inference_engine to infer items while propagating downwards multiple levels with batching
 
         :param entity_type: The type of the entity
         :type entity_type: str
+        :param relative_position_type: The type of the relative position
+        :type relative_position_type: str
         :return: None
 
         :raise ValueError: when the entity has not been defined in semantic header
         """
         entity = self.semantic_header.get_entity(entity_type)
+        relative_position = self.semantic_header.get_entity(relative_position_type)
         if entity_type is None:
             raise ValueError(f"{entity_type} is not defined in semantic header")
-        self.inference_engine.infer_items_propagate_downwards_multiple_level_w_batching(entity)
+        self.inference_engine.infer_items_propagate_downwards_multiple_level_w_batching(entity, relative_position)
         self.add_entity_to_event(entity_type=entity_type)
 
     # endregion
