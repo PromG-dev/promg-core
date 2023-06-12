@@ -13,7 +13,9 @@ import re
 @dataclass
 class Class:
     label: str
+    aggregate_from_nodes: str
     class_identifiers: List[str]
+    include_identifier_in_label: bool
     ids: List[str]
     qi: Any
 
@@ -22,10 +24,13 @@ class Class:
         if obj is None:
             return None
         _label = obj.get("label")
+        _aggregate_from_nodes = obj.get("aggregate_from_nodes")
         _class_identifiers = obj.get("class_identifiers")
+        _include_identifier_in_label = replace_undefined_value(obj.get("include_identifier_in_label"), False)
         _ids = obj.get("ids")
         _query_interpreter = interpreter.class_qi
-        return Class(_label, _class_identifiers, _ids, _query_interpreter)
+        return Class(_label, _aggregate_from_nodes, _class_identifiers, _include_identifier_in_label, _ids,
+                     _query_interpreter)
 
     def get_condition(self, node_name="e"):
         return self.qi.get_condition(class_identifiers=self.class_identifiers, node_name=node_name)
@@ -43,7 +48,8 @@ class Class:
                                           event_node_name=event_node_name)
 
     def get_class_label(self):
-        return self.qi.get_class_label(class_identifiers=self.class_identifiers)
+        return self.qi.get_class_label(class_label=self.label, class_identifiers=self.class_identifiers,
+                                       include_identifier_in_label=self.include_identifier_in_label)
 
 
 @dataclass
@@ -66,24 +72,43 @@ class Condition:
 
 @dataclass()
 class Node(ABC):
-    node_name: str
-    node_label: str
+    name: str
+    label: str
     properties: List[Any]
+    where_condition: str
     qi: Any
 
     @staticmethod
     def from_string(node_description: str, interpreter: Interpreter) -> Optional["Node"]:
         # we expect a node to be described in (node_name:Node_label)
-        node_description = re.sub(r"[() ]", "", node_description)
-        node_components = node_description.split(":")
-        node_name = node_components[0]
-        node_label = ""
+        node_description = re.sub(r"[()]", "", node_description)
+        node_components = node_description.split(":", 1)
+        name = node_components[0]
+        label = ""
+        where_condition = ""
+        properties = []
         if len(node_components) > 1:
-            node_label = node_components[1]
-        return Node(node_name=node_name, node_label=node_label, properties=[], qi=interpreter.nodes_qi)
+            node_labels_prop_where = node_components[1]
+            node_labels_prop_where = node_labels_prop_where.replace("'", "\"")
+            if "WHERE" in node_labels_prop_where:
+                label = node_labels_prop_where.split(" WHERE ")[0]
+                where_condition = node_labels_prop_where.split(" WHERE ")[1]
+            elif "{" in node_labels_prop_where:
+                label = node_labels_prop_where.split(" {")[0]
+                properties = node_labels_prop_where.split(" {")[1]
+                properties = properties.replace("}", "")
+                properties = properties.split(",")
+            else:
+                label = node_labels_prop_where
 
-    def get_node_pattern(self):
-        return self.qi.get_node_pattern(self.node_label, self.node_name)
+        return Node(name=name, label=label, properties=properties,
+                    where_condition=where_condition, qi=interpreter.nodes_qi)
+
+    def get_pattern(self):
+        return self.qi.get_node_pattern(self.label, self.name, self.properties, self.where_condition)
+
+    def __repr__(self):
+        return self.get_pattern()
 
 
 @dataclass()
@@ -128,10 +153,13 @@ class Relationship(ABC):
                             from_node=_from_node, to_node=_to_node, properties=[], has_direction=_has_direction,
                             qi=interpreter.relationship_qi)
 
-    def get_relationship_pattern(self):
+    def get_pattern(self):
         return self.qi.get_relationship_pattern(from_node=self.from_node, to_node=self.to_node,
                                                 relation_name=self.relation_name, relation_type=self.relation_type,
                                                 has_direction=self.has_direction)
+
+    def __repr__(self):
+        return self.get_pattern()
 
 
 @dataclass
@@ -163,6 +191,16 @@ class RelationConstructorByNodes(ABC):
     def get_id_attribute_from_to_node(self):
         return get_id_attribute_from_label(self.to_node_label)
 
+
+class RelationshipOrNode(ABC):
+    @staticmethod
+    def from_string(relation_description: str, interpreter: Interpreter) -> Union["Relationship", "Node"]:
+        if "-" in relation_description:
+            return Relationship.from_string(relation_description, interpreter)
+        else:
+            return Node.from_string(relation_description, interpreter)
+
+
 @dataclass
 class RelationConstructorByRelations(ABC):
     antecedents: List[Relationship]
@@ -179,13 +217,13 @@ class RelationConstructorByRelations(ABC):
         if obj is None:
             return None
 
-        _antecedents = [Relationship.from_string(y, interpreter) for y in obj.get("antecedents")]
+        _antecedents = [RelationshipOrNode.from_string(y, interpreter) for y in obj.get("antecedents")]
         _consequent = Relationship.from_string(obj.get("consequent"), interpreter)
 
-        _from_node_name = _consequent.from_node.node_name
-        _to_node_name = _consequent.to_node.node_name
-        _from_node_label = _consequent.from_node.node_label
-        _to_node_label = _consequent.to_node.node_label
+        _from_node_name = _consequent.from_node.name
+        _to_node_name = _consequent.to_node.name
+        _from_node_label = _consequent.from_node.label
+        _to_node_label = _consequent.to_node.label
 
         return RelationConstructorByRelations(antecedents=_antecedents, consequent=_consequent,
                                               from_node_name=_from_node_name,
@@ -194,16 +232,16 @@ class RelationConstructorByRelations(ABC):
                                               qi=interpreter.relation_constructor_by_relations_qi)
 
     def get_from_node_name(self):
-        return self.consequent.from_node.node_name
+        return self.consequent.from_node.name
 
     def get_to_node_name(self):
-        return self.consequent.to_node.node_name
+        return self.consequent.to_node.name
 
     def get_from_node_label(self):
-        return self.consequent.from_node.node_label
+        return self.consequent.from_node.label
 
     def get_to_node_label(self):
-        return self.consequent.to_node.node_label
+        return self.consequent.to_node.label
 
     def get_id_attribute_from_from_node(self):
         return get_id_attribute_from_label(self.from_node_label)
@@ -383,7 +421,7 @@ class Entity(ABC):
         # entity attributes may have primary keys (or not)
         _entity_attributes = replace_undefined_value(obj.get("entity_attributes"), [])
         # create a list of all entity attributes
-        if len(_primary_keys) > 1: # more than 1 primary key, also store the primary keys separately
+        if len(_primary_keys) > 1:  # more than 1 primary key, also store the primary keys separately
             _all_entity_attributes = list(set(_entity_attributes + _primary_keys))
         else:
             # remove the primary keys from the entity attributes
@@ -512,12 +550,12 @@ class SemanticHeader(ABC):
 
     def get_relations_derived_from_nodes(self):
         return [relation for relation in self.relations if
-                                         relation.constructor_type == "RelationConstructorByNodes"]
+                relation.constructor_type == "RelationConstructorByNodes"]
 
     def get_relations_derived_from_relations(self):
         return [relation for relation in self.relations if
-                                             "RelationConstructorByRelations" in relation.constructor_type]
+                "RelationConstructorByRelations" in relation.constructor_type]
 
     def get_relations_derived_from_query(self):
         return [relation for relation in self.relations if
-                                         relation.constructor_type == "RelationConstructorByQuery"]
+                relation.constructor_type == "RelationConstructorByQuery"]

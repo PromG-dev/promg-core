@@ -426,8 +426,8 @@ class DataStructure:
         if self.add_log:
             df_log["log"] = file_name
 
-        if self.add_event_index:
-            df_log["idx"] = df_log.reset_index().index
+        # if self.add_event_index:
+        #     df_log["idx"] = df_log.reset_index().index
 
         return df_log
 
