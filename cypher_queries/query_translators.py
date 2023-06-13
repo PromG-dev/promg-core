@@ -1,4 +1,6 @@
 from string import Template
+from typing import List, Union
+
 
 class ClassCypher:
     @staticmethod
@@ -14,8 +16,8 @@ class ClassCypher:
     @staticmethod
     def get_class_properties(class_identifiers) -> str:
         ids = class_identifiers
-        if "cID" not in ids:
-            ids = ["cID"] + ids
+        if "name" not in ids:
+            ids = ["name"] + ids
 
         # create a combined id in string format
         _id = "+".join([f"{key}" for key in class_identifiers])
@@ -26,19 +28,22 @@ class ClassCypher:
             required_keys = [_id]
 
         node_properties = ', '.join([f"{_id}: {key}" for _id, key in zip(ids, required_keys)])
-        node_properties += f", classType: '{_id}'"  # save ID also as string that captures the type
+        node_properties += f", aggregationType: '{_id}'"  # save ID also as string that captures the type
 
         return node_properties
 
     @staticmethod
     def get_link_condition(class_identifiers, class_node_name="c", event_node_name="e"):
         if len(class_identifiers) == 1:
-            return f"{class_node_name}.cID = {event_node_name}.{class_identifiers[0]}"
+            return f"{class_node_name}.name = {event_node_name}.{class_identifiers[0]}"
         return ' AND '.join([f"{class_node_name}.{key} = {event_node_name}.{key}" for key in class_identifiers])
 
     @staticmethod
-    def get_class_label(class_identifiers):
-        return "Class_".join([f"{key}" for key in class_identifiers])
+    def get_class_label(class_label, class_identifiers, include_identifier_in_label):
+        if len(class_identifiers) > 0 and include_identifier_in_label:
+            return f"{class_label}:{class_label}_" + "_".join([f"{key}" for key in class_identifiers])
+        else:
+            return class_label
 
 
 class LogCypher:
@@ -144,9 +149,15 @@ class RelationConstructorByNodesCypher:
 
 class RelationConstructorByRelationsCypher:
     @staticmethod
-    def get_antecedent_query(antecedents):
-        antecedents_query = [f"MATCH {antecedent.get_relationship_pattern()}" for antecedent in antecedents]
+    def get_antecedent_query(antecedents: List[Union["Relationship", "Node"]]):
+        from ekg_creator.data_managers.semantic_header import Relationship
+        from ekg_creator.data_managers.semantic_header import Node
+        if not all(isinstance(x, (Relationship, Node)) for x in antecedents):
+            raise TypeError("Antecedents are not of type Relationship or Node")
+
+        antecedents_query = [f"MATCH {antecedent.get_pattern()}" for antecedent in antecedents]
         antecedents_query = "\n".join(antecedents_query)
+
         return antecedents_query
 
 
@@ -169,8 +180,8 @@ class EntityConstructorByNodesCypher:
 class RelationshipCypher:
     @staticmethod
     def get_relationship_pattern(from_node, to_node, relation_name, relation_type, has_direction):
-        from_node_pattern = from_node.get_node_pattern()
-        to_node_pattern = to_node.get_node_pattern()
+        from_node_pattern = from_node.get_pattern()
+        to_node_pattern = to_node.get_pattern()
         if relation_type != "":
             relationship_pattern = "$from_node - [$relation_name:$relation_type] -> $to_node" if has_direction \
                 else "$from_node - [$relation_name:$relation_type] - $to_node"
@@ -189,12 +200,26 @@ class RelationshipCypher:
 
 class NodesCypher:
     @staticmethod
-    def get_node_pattern(node_label, node_name):
-        if node_label != "":
-            node_pattern = "($node_name: $node_label)"
-            node_pattern = Template(node_pattern).substitute(node_name=node_name,
-                                                             node_label=node_label)
+    def get_node_pattern(label, name, properties, where_condition):
+        if label != "":
+            node_pattern_str = "$node_name: $node_label"
+            node_pattern = Template(node_pattern_str).substitute(node_name=name,
+                                                                 node_label=label)
         else:
-            node_pattern = "($node_name)"
-            node_pattern = Template(node_pattern).substitute(node_name=node_name)
+            node_pattern_str = "$node_name"
+            node_pattern = Template(node_pattern_str).substitute(node_name=name)
+
+        if len(properties) > 0:
+            properties_string = ",".join(properties)
+            node_pattern_str = "($node_pattern {$properties})"
+            node_pattern = Template(node_pattern_str).substitute(node_pattern=node_pattern,
+                                                                 properties=properties_string)
+        elif where_condition != "":
+            node_pattern_str = "($node_pattern WHERE $where_condition)"
+            node_pattern = Template(node_pattern_str).substitute(node_pattern=node_pattern,
+                                                                 where_condition=where_condition)
+        else:
+            node_pattern_str = "($node_pattern)"
+            node_pattern = Template(node_pattern_str).substitute(node_pattern=node_pattern)
+
         return node_pattern
