@@ -271,25 +271,15 @@ class CypherQueryLibrary:
         # create a new entity node if it not exists yet with properties
         # language=SQL
         query_str = '''
-                    MATCH ($node) WHERE $conditions
-                    WITH  $composed_primary_id_query AS id, $attribute_properties_with_statement
-                    WHERE id <> 'Unknown'
-                    MERGE (en:$entity_labels_string
-                          {ID:id, 
-                           uID:'$entity_type'+'_'+toString(id),                    
-                           entityType:'$entity_type'
-                           $entity_attributes })
-                    '''
-
+                            MATCH ($node) WHERE $conditions
+                            MERGE ($result_node)
+                            '''
+        constructor_node_name = entity.constructed_by.node.name
         return Query(query_str=query_str,
                      template_string_parameters={
-                         "node": entity.constructed_by.node.get_pattern(name="e"),
-                         "conditions": entity.get_where_condition(node_name="e"),
-                         "composed_primary_id_query": entity.get_composed_primary_id(),
-                         "attribute_properties_with_statement": entity.get_entity_attributes(),
-                         "entity_labels_string": entity.get_label_string(),
-                         "entity_attributes": entity.get_entity_attributes_as_node_properties(),
-                         "entity_type": entity.type
+                         "node": entity.constructed_by.node.get_pattern(),
+                         "conditions": entity.get_where_condition(constructor_node_name),
+                         "result_node": entity.result.get_pattern()
                      })
 
     @staticmethod
@@ -455,8 +445,10 @@ class CypherQueryLibrary:
 
         return Query(query_str=query_str,
                      template_string_parameters={
-                         "from_node_labels": entity.constructed_by.relation.from_node.get_label_str(),
-                         "to_node_labels": entity.constructed_by.relation.to_node.get_label_str(),
+                         "from_node_labels": entity.constructed_by.relation.from_node.get_label_str(
+                             include_first_colon=True),
+                         "to_node_labels": entity.constructed_by.relation.to_node.get_label_str(
+                             include_first_colon=True),
                          "rel_type": entity.constructed_by.get_relation_type(),
                          "entity_labels_string": entity.get_label_string()
                      })
@@ -875,12 +867,12 @@ class CypherQueryLibrary:
             SET e.$entity_id = related_entities
         '''
 
-        query_str = Template(query_str).substitute(entity=entity.type, entity_id=entity.get_primary_keys()[0])
+        query_str = Template(query_str).substitute(entity=entity.type, entity_id=entity.get_keys()[0])
 
         return Query(query_str=query_str,
                      template_string_parameters={
                          "entity": entity.type,
-                         "entity_id": entity.get_primary_keys()[0]
+                         "entity_id": entity.get_keys()[0]
                      })
 
     @staticmethod

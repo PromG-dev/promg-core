@@ -71,6 +71,36 @@ class Condition:
         return Condition(_attribute, _include_values, query_interpreter)
 
 
+@dataclass
+class Property:
+    attribute: str
+    value: str
+    ref_node: Optional[str]
+    ref_attribute: Optional[str]
+
+    @staticmethod
+    def from_string(property_description):
+        if property_description is None:
+            return None
+        components = property_description.split(":")
+        attribute = components[0]
+        value = components[1]
+        attribute = attribute.strip()
+        value = value.strip()
+
+        ref_node = None
+        ref_attribute = None
+        if "." in value:
+            components = value.split(".")
+            ref_node = components[0]
+            ref_attribute = components[1]
+
+        return Property(attribute=attribute, value=value, ref_node=ref_node, ref_attribute=ref_attribute)
+
+    def get_pattern(self):
+        return f"{self.attribute}: {self.value}"
+
+
 @dataclass()
 class Node(ABC):
     name: str
@@ -80,6 +110,8 @@ class Node(ABC):
 
     @staticmethod
     def from_string(node_description: str) -> Optional["Node"]:
+        if node_description is None:
+            return None
         # we expect a node to be described in (node_name:Node_label)
         node_description = re.sub(r"[()]", "", node_description)
         node_components = node_description.split(":", 1)
@@ -98,6 +130,7 @@ class Node(ABC):
                 properties = node_labels_prop_where.split(" {")[1]
                 properties = properties.replace("}", "")
                 properties = properties.split(",")
+                properties = [Property.from_string(prop) for prop in properties]
             else:
                 labels = node_labels_prop_where
 
@@ -108,7 +141,7 @@ class Node(ABC):
 
     def get_pattern(self, name: Optional[str] = None, with_brackets=False):
 
-        node_pattern_str = "$node_name $node_label"
+        node_pattern_str = "$node_name:$node_label"
         if name is None:
             node_pattern = Template(node_pattern_str).substitute(node_name=self.name,
                                                                  node_label=self.get_label_str())
@@ -117,7 +150,7 @@ class Node(ABC):
                                                                  node_label=self.get_label_str())
 
         if len(self.properties) > 0:
-            properties_string = ",".join(self.properties)
+            properties_string = ",".join([prop.get_pattern() for prop in self.properties])
             node_pattern_str = "$node_pattern {$properties}"
             node_pattern = Template(node_pattern_str).substitute(node_pattern=node_pattern,
                                                                  properties=properties_string)
@@ -132,9 +165,9 @@ class Node(ABC):
 
         return node_pattern
 
-    def get_label_str(self):
+    def get_label_str(self, include_first_colon=False):
         if len(self.labels) > 0:
-            return ":" + ":".join(self.labels)
+            return ":"*include_first_colon + ":".join(self.labels)
         return ""
 
     def __repr__(self):
@@ -394,10 +427,11 @@ class EntityConstructorByQuery(ABC):
 
 @dataclass
 class Entity(ABC):
+    type: str
     include: bool
     constructed_by: Union[EntityConstructorByNode, EntityConstructorByRelation, EntityConstructorByQuery]
     constructor_type: str
-    type: str
+    result: Node
     labels: List[str]
     primary_keys: List[str]
     all_entity_attributes: List[str]
@@ -409,22 +443,10 @@ class Entity(ABC):
     delete_parallel_df: bool
     qi: Any
 
-    def get_primary_keys(self):
-        return self.primary_keys
-
-    @staticmethod
-    def determine_labels(labels: List[str], _type: str) -> List[str]:
-        if "Entity" in labels:
-            labels.remove("Entity")
-
-        if _type not in labels:
-            labels.insert(0, _type)
-
-        return labels
-
     @staticmethod
     def from_dict(obj: Any, interpreter: Interpreter) -> Optional["Entity"]:
 
+        _type = obj.get("type")
         if obj is None:
             return None
         _include = replace_undefined_value(obj.get("include"), True)
@@ -440,18 +462,19 @@ class Entity(ABC):
                                                                  interpreter=interpreter)
 
         _constructor_type = _constructed_by.__class__.__name__
-        _type = obj.get("type")
+        _result = Node.from_string(obj.get("result"))
         _labels = replace_undefined_value(obj.get("labels"), [])
-        _labels = Entity.determine_labels(_labels, _type)
         _primary_keys = obj.get("primary_keys")
         # entity attributes may have primary keys (or not)
         _entity_attributes = replace_undefined_value(obj.get("entity_attributes"), [])
         # create a list of all entity attributes
-        if len(_primary_keys) > 1:  # more than 1 primary key, also store the primary keys separately
-            _all_entity_attributes = list(set(_entity_attributes + _primary_keys))
-        else:
-            # remove the primary keys from the entity attributes
-            _all_entity_attributes = list(set(_entity_attributes).difference(set(_primary_keys)))
+        _all_entity_attributes = []
+        if _primary_keys is not None:
+            if len(_primary_keys) > 1:  # more than 1 primary key, also store the primary keys separately
+                _all_entity_attributes = list(set(_entity_attributes + _primary_keys))
+            else:
+                # remove the primary keys from the entity attributes
+                _all_entity_attributes = list(set(_entity_attributes).difference(set(_primary_keys)))
         # remove the primary keys
         _entity_attributes_wo_primary_keys = [attr for attr in _all_entity_attributes if attr not in _primary_keys]
 
@@ -469,9 +492,12 @@ class Entity(ABC):
                       corr=_corr, df=_df, include_label_in_df=_include_label_in_df,
                       merge_duplicate_df=_merge_duplicate_df,
                       delete_parallel_df=_delete_parallel_df,
-                      qi=interpreter.entity_qi)
+                      qi=interpreter.entity_qi,
+                      result=_result)
 
     def get_label_string(self):
+        if self.result is not None:
+            return self.result.get_label_str()
         return self.qi.get_label_string(self.labels)
 
     def get_labels(self):
@@ -481,6 +507,8 @@ class Entity(ABC):
         return self.qi.get_df_label(self.include_label_in_df, self.type)
 
     def get_composed_primary_id(self, node_name: str = "e"):
+        if self.result is not None:
+            return "+\"-\"+".join([f"{node_name}.{key}" for key in self.get_keys()])
         return "+\"-\"+".join([f"{node_name}.{key}" for key in self.primary_keys])
 
     def get_entity_attributes(self, node_name: str = "e"):
@@ -493,8 +521,12 @@ class Entity(ABC):
         else:
             return ""
 
-    def get_primary_key_existing_condition(self, node_name: str = "e"):
-        return self.qi.get_primary_key_existing_conditionge(self.primary_keys, node_name)
+    def get_keys(self):
+        keys = []
+        for prop in self.result.properties:
+            key = prop.ref_attribute
+            keys.append(key)
+        return keys
 
     def create_conditions(self, node_name):
         condition_list = []
@@ -506,14 +538,16 @@ class Entity(ABC):
         condition_string = " AND ".join(condition_list)
         return condition_string
 
-    def get_primary_key_existing_condition(self, node_name: str = "e"):
-        return " AND ".join(
-            [f'''{node_name}.{key} IS NOT NULL AND {node_name}.{key} <> "nan" AND {node_name}.{key}<> "None"''' for key
-             in self.primary_keys])
-
     def get_where_condition(self, node_name: str = "e"):
-        primary_key_existing_condition = self.get_primary_key_existing_condition(node_name)
-        return primary_key_existing_condition
+        if self.result is not None:
+            return " AND ".join(
+                [f'''{node_name}.{key} IS NOT NULL AND {node_name}.{key} <> "Unknown"''' for key
+                 in self.get_keys()])
+        else:
+
+            return " AND ".join(
+                [f'''{node_name}.{key} IS NOT NULL AND {node_name}.{key} <> "Unknown"''' for key
+                 in self.primary_keys])
 
     def get_where_condition_correlation(self, node_name: str = "e", node_name_id: str = "n"):
         primary_key_condition = f"{self.get_composed_primary_id(node_name)} = {node_name_id}.ID"
