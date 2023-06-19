@@ -8,7 +8,6 @@ from ..database_managers.db_connection import Query
 from string import Template
 
 
-
 class CypherQueryLibrary:
 
     @staticmethod
@@ -272,7 +271,7 @@ class CypherQueryLibrary:
         # create a new entity node if it not exists yet with properties
         # language=SQL
         query_str = '''
-                    MATCH (e:$labels) WHERE $conditions
+                    MATCH ($node) WHERE $conditions
                     WITH  $composed_primary_id_query AS id, $attribute_properties_with_statement
                     WHERE id <> 'Unknown'
                     MERGE (en:$entity_labels_string
@@ -284,8 +283,8 @@ class CypherQueryLibrary:
 
         return Query(query_str=query_str,
                      template_string_parameters={
-                         "labels": entity.constructed_by.node_label,
-                         "conditions": entity.get_where_condition(),
+                         "node": entity.constructed_by.node.get_pattern(name="e"),
+                         "conditions": entity.get_where_condition(node_name="e"),
                          "composed_primary_id_query": entity.get_composed_primary_id(),
                          "attribute_properties_with_statement": entity.get_entity_attributes(),
                          "entity_labels_string": entity.get_label_string(),
@@ -302,7 +301,7 @@ class CypherQueryLibrary:
             CALL apoc.periodic.iterate(
                 '
                 MATCH (n:$entity_labels_string)
-                MATCH (e:Event) WHERE $conditions
+                MATCH ($from_node) WHERE $conditions
                 RETURN e, n',
                 'MERGE (e)-[:CORR]->(n)',
                 {{batchSize: {batch_size}}})
@@ -311,7 +310,8 @@ class CypherQueryLibrary:
         return Query(query_str=query_str,
                      template_string_parameters={
                          "entity_labels_string": entity.get_label_string(),
-                         "conditions": entity.get_where_condition_correlation()
+                         "from_node": entity.constructed_by.node.get_pattern("e"),
+                         "conditions": entity.get_where_condition_correlation(node_name="e")
                      })
 
     @staticmethod
@@ -367,8 +367,8 @@ class CypherQueryLibrary:
         query_str = '''
                 CALL apoc.periodic.iterate(
                 '
-                MATCH (tf:ForeignKey {type:"$foreign_key"}) - [:$key_type] -> (_from:$entity_label_from_node)
-                MATCH (to:$entity_label_to_node {$primary_key:tf.id})
+                MATCH (tf:ForeignKey {type:"$foreign_key"}) - [:$key_type] -> (_from: $entity_labels_from_node)
+                MATCH (to:$entity_labels_to_node {$primary_key:tf.id})
                 RETURN distinct to, _from',
                 'MERGE (_from) 
                     $arrow_left [:$relation_type] $arrow_right (to)',
@@ -381,8 +381,8 @@ class CypherQueryLibrary:
         return Query(query_str=query_str,
                      template_string_parameters={
                          "key_type": f"KEY_{relation_constructor.from_node_label.upper()}",
-                         "entity_label_from_node": relation_constructor.from_node_label,
-                         "entity_label_to_node": relation_constructor.to_node_label,
+                         "entity_labels_from_node": relation_constructor.from_node_label,
+                         "entity_labels_to_node": relation_constructor.to_node_label,
                          "primary_key": relation.constructed_by.primary_key,
                          "arrow_left": "<-" if _reversed else "-",
                          "arrow_right": "-" if _reversed else "->",
@@ -400,7 +400,7 @@ class CypherQueryLibrary:
 
         # language=sql
         query_str = '''
-            MATCH (_from:$entity_label_from_node_label)
+            MATCH (_from:$entity_labels_from_node_label)
             WITH _from, _from.$foreign_key as foreign_keys
             UNWIND foreign_keys as foreign_key
             MERGE (_from) <- [:$key_type] - (tf:ForeignKey 
@@ -409,11 +409,10 @@ class CypherQueryLibrary:
 
         return Query(query_str=query_str,
                      template_string_parameters={
-                         "entity_label_from_node_label": relation.constructed_by.from_node_label,
+                         "entity_labels_from_node_label": relation.constructed_by.from_node_label,
                          "key_type": f"KEY_{relation.constructed_by.from_node_label.upper()}",
                          "foreign_key": relation.constructed_by.foreign_key
-                     },
-                     parameters={})
+                     })
 
     @staticmethod
     def merge_foreign_key_nodes(relation: Relation) -> Query:
@@ -450,48 +449,16 @@ class CypherQueryLibrary:
     def get_create_entities_by_relations_query(entity: Entity) -> Query:
         # language=sql
         query_str = '''
-                    MATCH (n1) - [r:$rel_type] -> (n2) WHERE $conditions
-                    WITH $composed_primary_id_query AS id, $separate_primary_id_query
-                    MERGE (en:$entity_labels_string
-                            {ID:id, 
-                            uID:'$entity_type' + '_'+ toString(id),                    
-                            entityType:"$entity_type"
-                            $primary_key_properties})
+                    MATCH (n1 $from_node_labels) - [r:$rel_type] -> (n2 $to_node_labels)
+                    MERGE (n1) <- [:REIFIED] - (en:$entity_labels_string) - [:REIFIED] -> (n2)
                     '''
 
         return Query(query_str=query_str,
                      template_string_parameters={
+                         "from_node_labels": entity.constructed_by.relation.from_node.get_label_str(),
+                         "to_node_labels": entity.constructed_by.relation.to_node.get_label_str(),
                          "rel_type": entity.constructed_by.get_relation_type(),
-                         "conditions": entity.get_where_condition("r"),
-                         "composed_primary_id_query": entity.get_composed_primary_id("r"),
-                         "separate_primary_id_query": entity.get_entity_attributes("r"),
-                         "entity_labels_string": entity.get_label_string(),
-                         "entity_type": entity.type,
-                         "primary_key_properties": entity.get_entity_attributes_as_node_properties()
-                     })
-
-    @staticmethod
-    def get_add_reified_relation_query(entity: Entity, batch_size: int):
-
-        # language=sql
-        query_str = '''
-            CALL apoc.periodic.iterate(
-                'MATCH (n1) - [r:$rel_type] -> (n2) WHERE $conditions
-                WITH n1, n2, $composed_primary_id_query AS id
-                MATCH (reified:$entity_labels_string) WHERE id = reified.ID
-                RETURN n1, n2, reified',
-                'MERGE (n1) <-[:REIFIED ] - (reified) -[:REIFIED ]-> (n2)',
-                {batchSize: $batch_size})
-
-        '''
-
-        return Query(query_str=query_str,
-                     template_string_parameters={
-                         "rel_type": entity.constructed_by.get_relation_type(),
-                         "conditions": entity.get_where_condition("r"),
-                         "composed_primary_id_query": entity.get_composed_primary_id("r"),
-                         "entity_labels_string": entity.get_label_string(),
-                         "batch_size": batch_size
+                         "entity_labels_string": entity.get_label_string()
                      })
 
     @staticmethod
@@ -857,7 +824,7 @@ class CypherQueryLibrary:
         return Query(query_str=query_str,
                      template_string_parameters={
                          "entity": entity.type,
-                         "relative_position":relative_position.type
+                         "relative_position": relative_position.type
                      })
 
     @staticmethod
@@ -866,7 +833,8 @@ class CypherQueryLibrary:
         query_str = '''
                     MATCH (f1 :Event) - [:CORR] -> (equipment :Equipment)
                     MATCH (f1) - [:OBSERVED] -> (a1:Activity) -[:AT]-> (l:Location)
-                    // ensure f2 should have operated on the required by checking that the activity operates on that  entity
+                    // ensure f2 should have operated on the required by checking that the activity operates on that  
+                    entity
                     MATCH (a1) - -> (:EntityType {name: '$entity'}) 
                     WITH f1, equipment, l
                     CALL {WITH f1, equipment, l

@@ -1,7 +1,7 @@
 from ..cypher_queries.query_translators import ClassCypher, ConditionCypher, EntityCypher, \
     RelationConstructorByNodesCypher, RelationCypher, RelationConstructorByRelationsCypher, \
     RelationConstructorByQueryCypher, EntityConstructorByQueryCypher, EntityConstructorByRelationCypher, \
-    EntityConstructorByNodesCypher, RelationshipCypher, NodesCypher, LogCypher
+    EntityConstructorByNodesCypher, LogCypher
 
 
 class Interpreter:
@@ -34,6 +34,4 @@ class Interpreter:
             self.entity_constructor_by_query_qi = EntityConstructorByQueryCypher
             self.entity_constructor_by_relation_qi = EntityConstructorByRelationCypher
             self.entity_constructor_by_nodes_qi = EntityConstructorByNodesCypher
-            self.relationship_qi = RelationshipCypher
-            self.nodes_qi = NodesCypher
             self.log_qi = LogCypher

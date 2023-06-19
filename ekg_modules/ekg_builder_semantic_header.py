@@ -30,23 +30,23 @@ class EKGUsingSemanticHeaderBuilder:
 
     def create_entities(self, entity_types: Optional[List[str]]) -> None:
         if entity_types is None:
-            entity_types = [entity.constructed_by.node_label for entity in
+            entity_types = [entity.type for entity in
                             self.semantic_header.get_entities_constructed_by_nodes()]
         entity: Entity
         for entity in self.semantic_header.get_entities_constructed_by_nodes():
-            if entity.constructed_by.node_label in entity_types:
+            if entity.type in entity_types:
                 self.connection.exec_query(CypherQueryLibrary.get_create_entity_query, **{"entity": entity})
                 self._write_message_to_performance(f"Entity (:{entity.get_label_string()}) node created")
 
     def correlate_events_to_entities(self, entity_types: Optional[List[str]]) -> None:
         if entity_types is None:
-            entity_types = [entity.constructed_by.node_label for entity in
+            entity_types = [entity.type for entity in
                             self.semantic_header.get_entities_constructed_by_nodes()]
 
         # correlate events that contain a reference from an entity to that entity node
         entity: Entity
         for entity in self.semantic_header.get_entities_constructed_by_nodes():
-            if entity.corr and entity.constructed_by.node_label in entity_types:
+            if entity.corr and entity.type in entity_types:
                 # find events that contain the entity as property and not nan
                 # save the value of the entity property as id and also whether it is a virtual entity
                 # create a new entity node if it not exists yet with properties
@@ -70,7 +70,7 @@ class EKGUsingSemanticHeaderBuilder:
                 self.delete_foreign_nodes(relation)
 
                 self._write_message_to_performance(
-                    message=f"Relation (:{relation.constructed_by.from_node_label}) - [:{relation.type}] -> "
+                    message=f"Relation ({relation.constructed_by.from_node_label}) - [:{relation.type}] -> "
                             f"(:{relation.constructed_by.to_node_label}) done")
 
 
@@ -112,9 +112,6 @@ class EKGUsingSemanticHeaderBuilder:
             if entity.include and entity.type in entity_types:
                 self.connection.exec_query(CypherQueryLibrary.get_create_entities_by_relations_query,
                                            **{"entity": entity})
-
-                self.connection.exec_query(CypherQueryLibrary.get_add_reified_relation_query,
-                                           **{"entity": entity, "batch_size": self.batch_size})
                 self._write_message_to_performance(
                     message=f"Relation [:{entity.type.upper()}] reified as "
                             f"(:Entity:{entity.get_label_string()}) node")

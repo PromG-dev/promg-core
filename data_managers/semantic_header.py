@@ -1,6 +1,7 @@
 import json
 from abc import ABC
 from pathlib import Path
+from string import Template
 from typing import List, Any, Optional, Union
 
 from dataclasses import dataclass
@@ -73,42 +74,71 @@ class Condition:
 @dataclass()
 class Node(ABC):
     name: str
-    label: str
+    labels: List[str]
     properties: List[Any]
     where_condition: str
-    qi: Any
 
     @staticmethod
-    def from_string(node_description: str, interpreter: Interpreter) -> Optional["Node"]:
+    def from_string(node_description: str) -> Optional["Node"]:
         # we expect a node to be described in (node_name:Node_label)
         node_description = re.sub(r"[()]", "", node_description)
         node_components = node_description.split(":", 1)
         name = node_components[0]
-        label = ""
+        labels = ""
         where_condition = ""
         properties = []
         if len(node_components) > 1:
             node_labels_prop_where = node_components[1]
             node_labels_prop_where = node_labels_prop_where.replace("'", "\"")
             if "WHERE" in node_labels_prop_where:
-                label = node_labels_prop_where.split(" WHERE ")[0]
+                labels = node_labels_prop_where.split(" WHERE ")[0]
                 where_condition = node_labels_prop_where.split(" WHERE ")[1]
             elif "{" in node_labels_prop_where:
-                label = node_labels_prop_where.split(" {")[0]
+                labels = node_labels_prop_where.split(" {")[0]
                 properties = node_labels_prop_where.split(" {")[1]
                 properties = properties.replace("}", "")
                 properties = properties.split(",")
             else:
-                label = node_labels_prop_where
+                labels = node_labels_prop_where
 
-        return Node(name=name, label=label, properties=properties,
-                    where_condition=where_condition, qi=interpreter.nodes_qi)
+        labels = labels.split(":")
 
-    def get_pattern(self):
-        return self.qi.get_node_pattern(self.label, self.name, self.properties, self.where_condition)
+        return Node(name=name, labels=labels, properties=properties,
+                    where_condition=where_condition)
+
+    def get_pattern(self, name: Optional[str] = None, with_brackets=False):
+
+        node_pattern_str = "$node_name $node_label"
+        if name is None:
+            node_pattern = Template(node_pattern_str).substitute(node_name=self.name,
+                                                                 node_label=self.get_label_str())
+        else:
+            node_pattern = Template(node_pattern_str).substitute(node_name=name,
+                                                                 node_label=self.get_label_str())
+
+        if len(self.properties) > 0:
+            properties_string = ",".join(self.properties)
+            node_pattern_str = "$node_pattern {$properties}"
+            node_pattern = Template(node_pattern_str).substitute(node_pattern=node_pattern,
+                                                                 properties=properties_string)
+        elif self.where_condition != "":
+            node_pattern_str = "$node_pattern WHERE $where_condition"
+            node_pattern = Template(node_pattern_str).substitute(node_pattern=node_pattern,
+                                                                 where_condition=self.where_condition)
+
+        if with_brackets:
+            node_pattern_str = "($node_pattern)"
+            node_pattern = Template(node_pattern_str).substitute(node_pattern=node_pattern)
+
+        return node_pattern
+
+    def get_label_str(self):
+        if len(self.labels) > 0:
+            return ":" + ":".join(self.labels)
+        return ""
 
     def __repr__(self):
-        return self.get_pattern()
+        return self.get_pattern(with_brackets=True)
 
 
 @dataclass()
@@ -131,8 +161,8 @@ class Relationship(ABC):
             "undefined": {"has_direction": False, "from_node": 0, "to_node": 1}
         }
 
-        nodes = re.findall(r'\([^>]*\)', relation_description)
-        _relation_string = re.findall(r'\[[^>]*]', relation_description)[0]
+        nodes = re.findall(r'\([^<>]*\)', relation_description)
+        _relation_string = re.findall(r'\[[^<>]*]', relation_description)[0]
         _relation_string = re.sub(r"[\[\]]", "", _relation_string)
         _relation_components = _relation_string.split(":")
         _relation_name = _relation_components[0]
@@ -146,17 +176,30 @@ class Relationship(ABC):
             direction = "undefined"
 
         _has_direction = relation_directions[direction]["has_direction"]
-        _from_node = Node.from_string(nodes[relation_directions[direction]["from_node"]], interpreter)
-        _to_node = Node.from_string(nodes[relation_directions[direction]["to_node"]], interpreter)
+        _from_node = Node.from_string(nodes[relation_directions[direction]["from_node"]])
+        _to_node = Node.from_string(nodes[relation_directions[direction]["to_node"]])
 
         return Relationship(relation_name=_relation_name, relation_type=_relation_type,
                             from_node=_from_node, to_node=_to_node, properties=[], has_direction=_has_direction,
                             qi=interpreter.relationship_qi)
 
     def get_pattern(self):
-        return self.qi.get_relationship_pattern(from_node=self.from_node, to_node=self.to_node,
-                                                relation_name=self.relation_name, relation_type=self.relation_type,
-                                                has_direction=self.has_direction)
+        from_node_pattern = self.from_node.get_pattern()
+        to_node_pattern = self.to_node.get_pattern()
+        if self.relation_type != "":
+            relationship_pattern = "$from_node - [$relation_name:$relation_type] -> $to_node" if self.has_direction \
+                else "$from_node - [$relation_name:$relation_type] - $to_node"
+            relationship_pattern = Template(relationship_pattern).substitute(from_node=from_node_pattern,
+                                                                             to_node=to_node_pattern,
+                                                                             relation_name=self.relation_name,
+                                                                             relation_type=self.relation_type)
+        else:
+            relationship_pattern = "$from_node - [$relation_name] -> $to_node" if self.has_direction \
+                else "$from_node - [$relation_name] - $to_node"
+            relationship_pattern = Template(relationship_pattern).substitute(from_node=from_node_pattern,
+                                                                             to_node=to_node_pattern,
+                                                                             relation_name=self.relation_name)
+        return relationship_pattern
 
     def __repr__(self):
         return self.get_pattern()
@@ -205,10 +248,8 @@ class RelationshipOrNode(ABC):
 class RelationConstructorByRelations(ABC):
     antecedents: List[Relationship]
     consequent: Relationship
-    from_node_name: str
-    to_node_name: str
-    from_node_label: str
-    to_node_label: str
+    from_node: Node
+    to_node: Node
     qi: Any
 
     @staticmethod
@@ -220,15 +261,11 @@ class RelationConstructorByRelations(ABC):
         _antecedents = [RelationshipOrNode.from_string(y, interpreter) for y in obj.get("antecedents")]
         _consequent = Relationship.from_string(obj.get("consequent"), interpreter)
 
-        _from_node_name = _consequent.from_node.name
-        _to_node_name = _consequent.to_node.name
-        _from_node_label = _consequent.from_node.label
-        _to_node_label = _consequent.to_node.label
+        _from_node = _consequent.from_node
+        _to_node = _consequent.to_node
 
         return RelationConstructorByRelations(antecedents=_antecedents, consequent=_consequent,
-                                              from_node_name=_from_node_name,
-                                              to_node_name=_to_node_name, from_node_label=_from_node_label,
-                                              to_node_label=_to_node_label,
+                                              from_node=_from_node, to_node=_to_node,
                                               qi=interpreter.relation_constructor_by_relations_qi)
 
     def get_from_node_name(self):
@@ -237,17 +274,17 @@ class RelationConstructorByRelations(ABC):
     def get_to_node_name(self):
         return self.consequent.to_node.name
 
-    def get_from_node_label(self):
-        return self.consequent.from_node.label
+    def get_from_node_labels(self):
+        return self.consequent.from_node.labels
 
-    def get_to_node_label(self):
-        return self.consequent.to_node.label
+    def get_to_node_labels(self):
+        return self.consequent.to_node.labels
 
     def get_id_attribute_from_from_node(self):
-        return get_id_attribute_from_label(self.from_node_label)
+        return get_id_attribute_from_label(self.from_node.labels[-1])
 
     def get_id_attribute_from_to_node(self):
-        return get_id_attribute_from_label(self.to_node_label)
+        return get_id_attribute_from_label(self.to_node.labels[-1])
 
     def get_antecedent_query(self):
         return self.qi.get_antecedent_query(antecedents=self.antecedents)
@@ -306,20 +343,16 @@ class Relation(ABC):
 
 @dataclass
 class EntityConstructorByNode(ABC):
-    node_label: str
-    conditions: List[Condition]
-    qi: Any
+    node: Node
 
     @staticmethod
-    def from_dict(obj: Any, interpreter: Interpreter) -> Optional["EntityConstructorByNode"]:
+    def from_dict(obj: Any) -> Optional["EntityConstructorByNode"]:
         if obj is None:
             return None
 
-        _node_label = obj.get("node_label")
-        _conditions = create_list(Condition, obj.get("conditions"), interpreter.condition_qi)
+        node = Node.from_string(obj.get("node"))
 
-        return EntityConstructorByNode(node_label=_node_label, conditions=_conditions,
-                                       qi=interpreter.entity_constructor_by_nodes_qi)
+        return EntityConstructorByNode(node=node)
 
 
 @dataclass
@@ -389,13 +422,6 @@ class Entity(ABC):
 
         return labels
 
-    def get_properties(self):
-        properties = {}
-        for condition in self.constructed_by.conditions:
-            properties[condition.attribute] = condition.values
-
-        return properties
-
     @staticmethod
     def from_dict(obj: Any, interpreter: Interpreter) -> Optional["Entity"]:
 
@@ -405,7 +431,7 @@ class Entity(ABC):
         if not _include:
             return None
 
-        _constructed_by = EntityConstructorByNode.from_dict(obj.get("constructed_by_node"), interpreter=interpreter)
+        _constructed_by = EntityConstructorByNode.from_dict(obj.get("constructed_by_node"))
         if _constructed_by is None:
             _constructed_by = EntityConstructorByRelation.from_dict(obj.get("constructed_by_relation"),
                                                                     interpreter=interpreter)
@@ -455,7 +481,7 @@ class Entity(ABC):
         return self.qi.get_df_label(self.include_label_in_df, self.type)
 
     def get_composed_primary_id(self, node_name: str = "e"):
-        return self.qi.get_composed_primary_id(self.primary_keys, node_name)
+        return "+\"-\"+".join([f"{node_name}.{key}" for key in self.primary_keys])
 
     def get_entity_attributes(self, node_name: str = "e"):
         return self.qi.get_entity_attributes(self.primary_keys, self.entity_attributes_wo_primary_keys,
@@ -470,15 +496,29 @@ class Entity(ABC):
     def get_primary_key_existing_condition(self, node_name: str = "e"):
         return self.qi.get_primary_key_existing_conditionge(self.primary_keys, node_name)
 
-    def create_condition(self, name: str) -> str:
-        return self.qi.create_condition(self.constructed_by.conditions, name)
+    def create_conditions(self, node_name):
+        condition_list = []
+        for condition in self.conditions:
+            attribute_name = condition.attribute
+            include_values = condition.values
+            for value in include_values:
+                condition_list.append(f'''{node_name}.{attribute_name} = "{value}"''')
+        condition_string = " AND ".join(condition_list)
+        return condition_string
+
+    def get_primary_key_existing_condition(self, node_name: str = "e"):
+        return " AND ".join(
+            [f'''{node_name}.{key} IS NOT NULL AND {node_name}.{key} <> "nan" AND {node_name}.{key}<> "None"''' for key
+             in self.primary_keys])
 
     def get_where_condition(self, node_name: str = "e"):
-        return self.qi.get_where_condition(self.constructed_by.conditions, self.primary_keys, node_name)
+        primary_key_existing_condition = self.get_primary_key_existing_condition(node_name)
+        return primary_key_existing_condition
 
     def get_where_condition_correlation(self, node_name: str = "e", node_name_id: str = "n"):
-        return self.qi.get_where_condition_correlation(self.constructed_by.conditions, self.primary_keys,
-                                                       node_name, node_name_id)
+        primary_key_condition = f"{self.get_composed_primary_id(node_name)} = {node_name_id}.ID"
+        # extra_conditions = self.create_conditions(node_name)
+        return primary_key_condition
 
 
 @dataclass
