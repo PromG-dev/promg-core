@@ -134,31 +134,57 @@ class Node(ABC):
             else:
                 labels = node_labels_prop_where
 
+        labels = labels.strip()
         labels = labels.split(":")
 
         return Node(name=name, labels=labels, properties=properties,
                     where_condition=where_condition)
 
-    def get_pattern(self, name: Optional[str] = None, with_brackets=False):
+    def get_name(self, with_brackets=False):
+        if with_brackets:
+            return f"({self.name})"
+        else:
+            return self.name
 
-        node_pattern_str = "$node_name:$node_label"
+    def get_condition_string(self, with_brackets=False, with_where=False):
+        if len(self.properties) > 0:
+            return self._get_property_string(with_brackets)
+        elif self.where_condition != "":
+            return self._get_where_condition_string(with_where)
+        else:
+            return ""
+
+    def _get_property_string(self, with_brackets=False):
+        properties = ",".join([prop.get_pattern() for prop in self.properties])
+        if with_brackets:
+            property_string = "{$properties}"
+            properties = Template(property_string).substitute(properties=properties)
+        return properties
+
+    def _get_where_condition_string(self, with_where=False):
+        condition = self.where_condition
+        if with_where:
+            condition_string = "WHERE $where_condition"
+            condition = Template(condition_string).substitute(where_condition=condition)
+        return condition
+
+    def get_pattern(self, name: Optional[str] = None, with_brackets=False, with_properties=True):
+
+        node_pattern_str = "$node_name"
+        if self.get_label_str() != "":
+            node_pattern_str = "$node_name:$node_label"
+
         if name is None:
             node_pattern = Template(node_pattern_str).substitute(node_name=self.name,
                                                                  node_label=self.get_label_str())
         else:
             node_pattern = Template(node_pattern_str).substitute(node_name=name,
                                                                  node_label=self.get_label_str())
-
-        if len(self.properties) > 0:
-            properties_string = ",".join([prop.get_pattern() for prop in self.properties])
-            node_pattern_str = "$node_pattern {$properties}"
+        if with_properties:
+            node_pattern_str = "$node_pattern $condition_string"
             node_pattern = Template(node_pattern_str).substitute(node_pattern=node_pattern,
-                                                                 properties=properties_string)
-        elif self.where_condition != "":
-            node_pattern_str = "$node_pattern WHERE $where_condition"
-            node_pattern = Template(node_pattern_str).substitute(node_pattern=node_pattern,
-                                                                 where_condition=self.where_condition)
-
+                                                                 condition_string=self.get_condition_string(
+                                                                     with_brackets=True, with_where=True))
         if with_brackets:
             node_pattern_str = "($node_pattern)"
             node_pattern = Template(node_pattern_str).substitute(node_pattern=node_pattern)
@@ -167,7 +193,7 @@ class Node(ABC):
 
     def get_label_str(self, include_first_colon=False):
         if len(self.labels) > 0:
-            return ":"*include_first_colon + ":".join(self.labels)
+            return ":" * include_first_colon + ":".join(self.labels)
         return ""
 
     def __repr__(self):
@@ -180,13 +206,15 @@ class Relationship(ABC):
     relation_type: str
     from_node: Node
     to_node: Node
-    properties: List[Any]
+    properties: List[Property]
+    where_condition: str
     has_direction: bool
-    qi: Any
 
     @staticmethod
-    def from_string(relation_description: str,
-                    interpreter: Interpreter) -> Optional["Relationship"]:
+    def from_string(relation_description: str) -> Optional["Relationship"]:
+        if relation_description is None:
+            return None
+
         # we expect a node to be described in (node_name:Node_label)
         relation_directions = {
             "left-to-right": {"has_direction": True, "from_node": 0, "to_node": 1},
@@ -208,64 +236,68 @@ class Relationship(ABC):
         else:
             direction = "undefined"
 
+        # TODO, implement properties and where condition
+
         _has_direction = relation_directions[direction]["has_direction"]
         _from_node = Node.from_string(nodes[relation_directions[direction]["from_node"]])
         _to_node = Node.from_string(nodes[relation_directions[direction]["to_node"]])
 
         return Relationship(relation_name=_relation_name, relation_type=_relation_type,
-                            from_node=_from_node, to_node=_to_node, properties=[], has_direction=_has_direction,
-                            qi=interpreter.relationship_qi)
+                            from_node=_from_node, to_node=_to_node, properties=[], where_condition="",
+                            has_direction=_has_direction)
 
-    def get_pattern(self):
-        from_node_pattern = self.from_node.get_pattern()
-        to_node_pattern = self.to_node.get_pattern()
+    def get_pattern(self, name: Optional[str] = None, exclude_nodes=True, with_brackets=False):
+        rel_pattern_str = "$rel_name"
         if self.relation_type != "":
-            relationship_pattern = "$from_node - [$relation_name:$relation_type] -> $to_node" if self.has_direction \
-                else "$from_node - [$relation_name:$relation_type] - $to_node"
-            relationship_pattern = Template(relationship_pattern).substitute(from_node=from_node_pattern,
-                                                                             to_node=to_node_pattern,
-                                                                             relation_name=self.relation_name,
-                                                                             relation_type=self.relation_type)
+            rel_pattern_str = "$rel_name:$rel_type"
+
+        name = name if name is not None else self.relation_name
+        rel_pattern = Template(rel_pattern_str).substitute(rel_name=name,
+                                                           rel_type=self.relation_type)
+
+        if len(self.properties) > 0:
+            properties_string = ",".join([prop.get_pattern() for prop in self.properties])
+            rel_pattern_str = "$rel_pattern {$properties}"
+            rel_pattern = Template(rel_pattern_str).substitute(rel_pattern=rel_pattern,
+                                                               properties=properties_string)
+        elif self.where_condition != "":
+            rel_pattern_str = "$rel_pattern WHERE $where_condition"
+            rel_pattern = Template(rel_pattern_str).substitute(rel_pattern=rel_pattern,
+                                                               where_condition=self.where_condition)
+
+        if exclude_nodes:
+            if with_brackets:
+                rel_pattern_str = "[$rel_pattern]"
+                rel_pattern = Template(rel_pattern_str).substitute(rel_pattern=rel_pattern)
         else:
-            relationship_pattern = "$from_node - [$relation_name] -> $to_node" if self.has_direction \
-                else "$from_node - [$relation_name] - $to_node"
-            relationship_pattern = Template(relationship_pattern).substitute(from_node=from_node_pattern,
-                                                                             to_node=to_node_pattern,
-                                                                             relation_name=self.relation_name)
-        return relationship_pattern
+            from_node_pattern = self.from_node.get_pattern()
+            to_node_pattern = self.to_node.get_pattern()
+            rel_pattern_str = "($from_node) - [$rel_pattern] -> ($to_node)" if self.has_direction \
+                else "($from_node) - [$rel_pattern] - ($to_node)"
+            rel_pattern = Template(rel_pattern_str).substitute(from_node=from_node_pattern,
+                                                               to_node=to_node_pattern,
+                                                               rel_pattern=rel_pattern)
+
+        return rel_pattern
 
     def __repr__(self):
-        return self.get_pattern()
+        return self.get_pattern(exclude_nodes=False)
 
 
 @dataclass
 class RelationConstructorByNodes(ABC):
-    from_node_label: str
-    to_node_label: str
-    foreign_key: str
-    primary_key: str
-    reversed: bool
-    qi: Any
+    from_node: Node
+    to_node: Node
 
     @staticmethod
-    def from_dict(obj: Any, interpreter: Interpreter) -> Optional["RelationConstructorByNodes"]:
+    def from_dict(obj: Any) -> Optional["RelationConstructorByNodes"]:
         if obj is None:
             return None
 
-        _from_node_label = obj.get("from_node_label")
-        _to_node_label = obj.get("to_node_label")
-        _foreign_key = obj.get("foreign_key")
-        _primary_key = replace_undefined_value(obj.get("primary_key"), "ID")
-        _reversed = replace_undefined_value(obj.get("reversed"), False)
-        return RelationConstructorByNodes(from_node_label=_from_node_label, to_node_label=_to_node_label,
-                                          foreign_key=_foreign_key, primary_key=_primary_key,
-                                          reversed=_reversed, qi=interpreter.relation_constructor_by_nodes_qi)
+        _from_node = Node.from_string(obj.get("from_node"))
+        _to_node = Node.from_string(obj.get("to_node"))
 
-    def get_id_attribute_from_from_node(self):
-        return get_id_attribute_from_label(self.from_node_label)
-
-    def get_id_attribute_from_to_node(self):
-        return get_id_attribute_from_label(self.to_node_label)
+        return RelationConstructorByNodes(from_node=_from_node, to_node=_to_node)
 
 
 class RelationshipOrNode(ABC):
@@ -342,6 +374,7 @@ class RelationConstructorByQuery(ABC):
 class Relation(ABC):
     include: bool
     type: str
+    result: Relationship
     constructed_by: Union[RelationConstructorByNodes, RelationConstructorByRelations, RelationConstructorByQuery]
     constructor_type: str
     include_properties: bool
@@ -357,8 +390,7 @@ class Relation(ABC):
 
         _type = obj.get("type")
 
-        _constructed_by = RelationConstructorByNodes.from_dict(obj.get("constructed_by_nodes"),
-                                                               interpreter)
+        _constructed_by = RelationConstructorByNodes.from_dict(obj.get("constructed_by_nodes"))
         if _constructed_by is None:
             _constructed_by = RelationConstructorByRelations.from_dict(obj.get("constructed_by_relations"),
                                                                        interpreter)
@@ -367,84 +399,78 @@ class Relation(ABC):
 
         _constructor_type = _constructed_by.__class__.__name__
 
+        _result = Relationship.from_string(obj.get("result"))
+
+        if _constructed_by.from_node.name != _result.from_node.name:
+            raise ValueError(
+                "Name of the from_node in the constructed_by_nodes does not match the name of the from_node"
+                " in the result relationship")
+        if _constructed_by.to_node.name != _result.to_node.name:
+            raise ValueError(
+                "Name of the to_node in the constructed_by_nodes does not match the name of the to_node"
+                " in the result relationship")
+
         _include_properties = replace_undefined_value(obj.get("include_properties"), True)
 
         return Relation(_include, _type, constructed_by=_constructed_by, constructor_type=_constructor_type,
-                        include_properties=_include_properties,
+                        include_properties=_include_properties, result=_result,
                         qi=interpreter.relation_qi)
 
-
-@dataclass
-class EntityConstructorByNode(ABC):
-    node: Node
-
-    @staticmethod
-    def from_dict(obj: Any) -> Optional["EntityConstructorByNode"]:
-        if obj is None:
-            return None
-
-        node = Node.from_string(obj.get("node"))
-
-        return EntityConstructorByNode(node=node)
+    def get_conditioned_node(self):
+        if self.constructed_by.from_node.get_condition_string() != "":
+            return "from_node"
+        if self.constructed_by.to_node.get_condition_string() != "":
+            return "to_node"
+        else:
+            return "none"
 
 
 @dataclass
-class EntityConstructorByRelation(ABC):
-    relation: Relationship
-    conditions: List[Condition]
-    qi: Any
-
-    @staticmethod
-    def from_dict(obj: Any, interpreter: Interpreter = Interpreter) -> \
-            Optional["EntityConstructorByRelation"]:
-        if obj is None:
-            return None
-
-        _relation = Relationship.from_string(obj.get("relation_type"), interpreter)
-        _conditions = create_list(Condition, obj.get("conditions"), interpreter)
-
-        return EntityConstructorByRelation(relation=_relation, conditions=_conditions,
-                                           qi=interpreter.entity_constructor_by_relation_qi)
-
-    def get_relation_type(self):
-        return self.relation.relation_type
-
-
-@dataclass
-class EntityConstructorByQuery(ABC):
+class NodesConstructorByQuery(ABC):
     query: str
     qi: Any
 
     @staticmethod
-    def from_dict(obj: Any, interpreter: Interpreter) -> Optional["EntityConstructorByQuery"]:
+    def from_dict(obj: Any, interpreter: Interpreter) -> Optional["NodesConstructorByQuery"]:
         if obj is None:
             return None
 
         _query = obj.get("query")
 
-        return EntityConstructorByQuery(query=_query, qi=interpreter.entity_constructor_by_query_qi)
+        return NodesConstructorByQuery(query=_query, qi=interpreter.entity_constructor_by_query_qi)
 
 
-@dataclass
-class Entity(ABC):
-    type: str
-    include: bool
-    constructed_by: Union[EntityConstructorByNode, EntityConstructorByRelation, EntityConstructorByQuery]
-    constructor_type: str
-    result: Node
-    labels: List[str]
-    primary_keys: List[str]
-    all_entity_attributes: List[str]
-    entity_attributes_wo_primary_keys: List[str]
-    corr: bool
-    df: bool
-    include_label_in_df: bool
-    merge_duplicate_df: bool
-    delete_parallel_df: bool
-    qi: Any
+class ConstructedNodes:
+    def __init__(self, node_type: str, include: bool,
+                 constructed_by: Union[Node, Relationship, NodesConstructorByQuery],
+                 constructor_type: str, result: Node,
+                 model_reified_relations: bool,
+                 prevalence: bool,
+                 observed: bool,
+                 corr: bool,
+                 df: bool,
+                 include_label_in_df: bool,
+                 merge_duplicate_df: bool,
+                 delete_parallel_df: bool):
+        self.node_type = node_type
+        self.include = include
+        self.constructed_by = constructed_by
+        self.constructor_type = constructor_type
+        self.result = result
+        self.model_reified_relations = model_reified_relations
+        self.prevalence = prevalence
+        self.observed = observed
+        self.corr = corr
+        self.df = df
+        self.include_label_in_df = include_label_in_df
+        self.merge_duplicate_df = merge_duplicate_df
+        self.delete_parallel_df = delete_parallel_df
+
+    def __repr__(self):
+        return self.result.__repr__()
 
     @staticmethod
-    def from_dict(obj: Any, interpreter: Interpreter) -> Optional["Entity"]:
+    def from_dict(obj: Any, interpreter: Interpreter) -> Optional["ConstructedNodes"]:
 
         _type = obj.get("type")
         if obj is None:
@@ -453,31 +479,22 @@ class Entity(ABC):
         if not _include:
             return None
 
-        _constructed_by = EntityConstructorByNode.from_dict(obj.get("constructed_by_node"))
+        _result = Node.from_string(obj.get("result"))
+        _constructed_by = Node.from_string(obj.get("constructed_by_node"))
         if _constructed_by is None:
-            _constructed_by = EntityConstructorByRelation.from_dict(obj.get("constructed_by_relation"),
-                                                                    interpreter=interpreter)
+            _constructed_by = Relationship.from_string(obj.get("constructed_by_relation"))
         if _constructed_by is None:
-            _constructed_by = EntityConstructorByQuery.from_dict(obj.get("constructed_by_query"),
-                                                                 interpreter=interpreter)
+            _constructed_by = NodesConstructorByQuery.from_dict(obj.get("constructed_by_query"),
+                                                                interpreter=interpreter)
 
         _constructor_type = _constructed_by.__class__.__name__
-        _result = Node.from_string(obj.get("result"))
-        _labels = replace_undefined_value(obj.get("labels"), [])
-        _primary_keys = obj.get("primary_keys")
-        # entity attributes may have primary keys (or not)
-        _entity_attributes = replace_undefined_value(obj.get("entity_attributes"), [])
-        # create a list of all entity attributes
-        _all_entity_attributes = []
-        if _primary_keys is not None:
-            if len(_primary_keys) > 1:  # more than 1 primary key, also store the primary keys separately
-                _all_entity_attributes = list(set(_entity_attributes + _primary_keys))
-            else:
-                # remove the primary keys from the entity attributes
-                _all_entity_attributes = list(set(_entity_attributes).difference(set(_primary_keys)))
-        # remove the primary keys
-        _entity_attributes_wo_primary_keys = [attr for attr in _all_entity_attributes if attr not in _primary_keys]
+        _model_reified_relations = replace_undefined_value(obj.get("model_reified_relations"), False)
 
+        _prevalence = False
+        if _constructor_type == "Node":
+            _prevalence = "EventEntry" in _constructed_by.labels
+
+        _observed = _include and replace_undefined_value(obj.get("observed"), False)
         _corr = _include and replace_undefined_value(obj.get("corr"), False)
         _df = _corr and replace_undefined_value(obj.get("df"), False)
         _include_label_in_df = _df and replace_undefined_value(obj.get("include_label_in_df"), False)
@@ -485,41 +502,32 @@ class Entity(ABC):
 
         _delete_parallel_df = _df and obj.get("delete_parallel_df")
 
-        return Entity(include=_include, constructed_by=_constructed_by, constructor_type=_constructor_type,
-                      type=_type, labels=_labels, primary_keys=_primary_keys,
-                      all_entity_attributes=_all_entity_attributes,
-                      entity_attributes_wo_primary_keys=_entity_attributes_wo_primary_keys,
-                      corr=_corr, df=_df, include_label_in_df=_include_label_in_df,
-                      merge_duplicate_df=_merge_duplicate_df,
-                      delete_parallel_df=_delete_parallel_df,
-                      qi=interpreter.entity_qi,
-                      result=_result)
+        constructed_node = ConstructedNodes(include=_include, constructed_by=_constructed_by,
+                                            constructor_type=_constructor_type,
+                                            node_type=_type, prevalence=_prevalence, observed=_observed, corr=_corr,
+                                            df=_df,
+                                            include_label_in_df=_include_label_in_df,
+                                            merge_duplicate_df=_merge_duplicate_df,
+                                            delete_parallel_df=_delete_parallel_df,
+                                            result=_result, model_reified_relations=_model_reified_relations)
+
+        # TODO check whether names match
+        return constructed_node
 
     def get_label_string(self):
-        if self.result is not None:
-            return self.result.get_label_str()
-        return self.qi.get_label_string(self.labels)
+        return self.result.get_label_str()
 
     def get_labels(self):
-        return ["Entity"] + self.labels
+        return self.result.labels
 
     def get_df_label(self):
-        return self.qi.get_df_label(self.include_label_in_df, self.type)
+        if self.include_label_in_df:
+            return f'DF_{self.node_type.upper()}'
+        else:
+            return f'DF'
 
     def get_composed_primary_id(self, node_name: str = "e"):
-        if self.result is not None:
-            return "+\"-\"+".join([f"{node_name}.{key}" for key in self.get_keys()])
-        return "+\"-\"+".join([f"{node_name}.{key}" for key in self.primary_keys])
-
-    def get_entity_attributes(self, node_name: str = "e"):
-        return self.qi.get_entity_attributes(self.primary_keys, self.entity_attributes_wo_primary_keys,
-                                             node_name)
-
-    def get_entity_attributes_as_node_properties(self):
-        if len(self.all_entity_attributes) > 0:
-            return self.qi.get_entity_attributes_as_node_properties(self.all_entity_attributes)
-        else:
-            return ""
+        return "+\"-\"+".join([f"{node_name}.{key}" for key in self.get_keys()])
 
     def get_keys(self):
         keys = []
@@ -528,26 +536,10 @@ class Entity(ABC):
             keys.append(key)
         return keys
 
-    def create_conditions(self, node_name):
-        condition_list = []
-        for condition in self.conditions:
-            attribute_name = condition.attribute
-            include_values = condition.values
-            for value in include_values:
-                condition_list.append(f'''{node_name}.{attribute_name} = "{value}"''')
-        condition_string = " AND ".join(condition_list)
-        return condition_string
-
     def get_where_condition(self, node_name: str = "e"):
-        if self.result is not None:
-            return " AND ".join(
-                [f'''{node_name}.{key} IS NOT NULL AND {node_name}.{key} <> "Unknown"''' for key
-                 in self.get_keys()])
-        else:
-
-            return " AND ".join(
-                [f'''{node_name}.{key} IS NOT NULL AND {node_name}.{key} <> "Unknown"''' for key
-                 in self.primary_keys])
+        return " AND ".join(
+            [f'''{node_name}.{key} IS NOT NULL AND {node_name}.{key} <> "Unknown"''' for key
+             in self.get_keys()])
 
     def get_where_condition_correlation(self, node_name: str = "e", node_name_id: str = "n"):
         primary_key_condition = f"{self.get_composed_primary_id(node_name)} = {node_name_id}.ID"
@@ -574,7 +566,7 @@ class Log:
 
 class SemanticHeader(ABC):
     def __init__(self, name: str, version: str,
-                 entities: List[Entity], relations: List[Relation],
+                 entities: List[ConstructedNodes], relations: List[Relation],
                  classes: List[Class], log: Log):
         self.name = name
         self.version = version
@@ -583,9 +575,9 @@ class SemanticHeader(ABC):
         self.classes = classes
         self.log = log
 
-    def get_entity(self, entity_type) -> Optional[Entity]:
+    def get_entity(self, entity_type) -> Optional[ConstructedNodes]:
         for entity in self.entities:
-            if entity_type == entity.type:
+            if entity_type == entity.node_type:
                 return entity
         return None
 
@@ -595,7 +587,7 @@ class SemanticHeader(ABC):
             return None
         _name = obj.get("name")
         _version = obj.get("version")
-        _entities = create_list(Entity, obj.get("entities"), interpreter)
+        _entities = create_list(ConstructedNodes, obj.get("nodes"), interpreter)
         _relations = create_list(Relation, obj.get("relations"), interpreter)
         _classes = create_list(Class, obj.get("classes"), interpreter)
         _log = Log.from_dict(obj.get("log"), interpreter)
@@ -612,11 +604,11 @@ class SemanticHeader(ABC):
 
     def get_entities_constructed_by_nodes(self):
         return [entity for entity in self.entities if
-                entity.constructor_type == "EntityConstructorByNode"]
+                entity.constructor_type == "Node"]
 
     def get_entities_constructed_by_relations(self):
         return [entity for entity in self.entities if
-                entity.constructor_type == "EntityConstructorByRelation"]
+                entity.constructor_type == "Relationship"]
 
     def get_entities_constructed_by_query(self):
         return [entity for entity in self.entities if
