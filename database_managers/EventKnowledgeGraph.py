@@ -173,6 +173,7 @@ class EventKnowledgeGraph:
     # region EKG builder using semantic header
 
     def create_log(self) -> None:
+        # TODO Remove?
         """
         Pass on method to ekg_builder to create Log nodes and its relations as specified in the semantic header
         :return: None
@@ -180,32 +181,19 @@ class EventKnowledgeGraph:
         """
         self.ekg_builder.create_log()
 
-    def create_entities_by_nodes(self, entity_types: Optional[List[str]] = None) -> None:
+    def create_nodes_by_nodes(self, node_type: Optional[List[str]] = None) -> None:
         """
         Pass on method to ekg_builder to create relations between entities based on nodes as specified in the
         semantic header
 
-        :param entity_types: list of entity types that should be created based on nodes. In case of None,
+        :param node_type: list of entity types that should be created based on nodes. In case of None,
         all entities based on nodes are created as specified in the semantic header
-        :type entity_types: List[str], optional
+        :type node_type: List[str], optional
         :return: None
 
         """
 
-        self.ekg_builder.create_entities(entity_types)
-
-    def correlate_events_to_entities(self, entity_types: Optional[List[str]] = None) -> None:
-        """
-        Pass on method to ekg_builder to create relations between entities based on nodes as specified in the
-        semantic header
-
-        :param entity_types: list of entity types that should be correlated to events. In case of None, all relations
-        based on entities are correlated to events as specified in the semantic header
-        :type entity_types: List[str], optional
-        :return: None
-
-        """
-        self.ekg_builder.correlate_events_to_entities(entity_types)
+        self.ekg_builder.create_nodes_by_nodes(node_type)
 
     def create_entity_relations_using_nodes(self, relation_types: Optional[List[str]] = None) -> None:
         """
@@ -244,19 +232,6 @@ class EventKnowledgeGraph:
 
         """
         self.ekg_builder.create_entities_by_relations(entity_types)
-
-    def correlate_events_to_reification(self) -> None:
-        """
-        Pass on method to ekg_builder to correlate events to reified entities
-        #TODO rename reified entities
-
-        :param entity_types: list of entity types for which the DFs should be created. In case of None,
-        DFs are created for all EntityTypes as specified in the semantic header
-        :type entity_types: List[str], optional
-        :return: None
-
-        """
-        self.ekg_builder.correlate_events_to_reification()
 
     def create_df_edges(self, entity_types: Optional[List[str]] = None) -> None:
         """
