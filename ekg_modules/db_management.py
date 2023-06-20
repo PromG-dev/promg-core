@@ -2,7 +2,7 @@ from typing import List, Set, Optional, Dict
 
 
 from ..cypher_queries.query_library import CypherQueryLibrary as cql
-from ..data_managers.semantic_header import Entity
+from ..data_managers.semantic_header import ConstructedNodes
 from ..database_managers.db_connection import DatabaseConnection
 from ..utilities.performance_handling import Performance
 
@@ -81,7 +81,7 @@ class DBManagement:
             make_empty_list_if_none(agg_edge_count)
         return result
 
-    def get_event_log(self, entity: Entity, additional_event_attributes: List[str]):
+    def get_event_log(self, entity: ConstructedNodes, additional_event_attributes: List[str]):
         return self.connection.exec_query(cql.get_event_log,
                                             **{"entity": entity,
                                                "additional_event_attributes": additional_event_attributes})
