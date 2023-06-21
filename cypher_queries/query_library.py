@@ -3,7 +3,7 @@ from typing import Dict, Optional, Any, List
 import re
 
 from ..data_managers.datastructures import DataStructure
-from ..data_managers.semantic_header import Class, ConstructedNodes, Relation
+from ..data_managers.semantic_header import ConstructedNodes, Relation, NodeConstructor
 from ..database_managers.db_connection import Query
 from string import Template
 
@@ -265,43 +265,43 @@ class CypherQueryLibrary:
                      parameters={"batch_size": batch_size})
 
     @staticmethod
-    def get_create_node_by_node_query(node: ConstructedNodes) -> Query:
+    def get_create_node_by_record_constructor_query(node_constructor: NodeConstructor) -> Query:
         # find events that contain the entity as property and not nan
         # save the value of the entity property as id and also whether it is a virtual entity
         # create a new entity node if it not exists yet with properties
-        # language=SQL
-        if node.node_type != "Event":
+        if "Event" in node_constructor.get_labels():
+            # language=SQL
             query_str = '''
-                        MATCH ($node) WHERE $conditions
-                        MERGE ($result_node)
-                        '''
-        else:
-            query_str = '''
-                        MATCH ($node) WHERE $conditions
+                        MATCH ($record) WHERE $conditions
                         CREATE ($result_node)
                         '''
-        if node.prevalence:
-            query_str += '''MERGE ($node_name) <- [:PREVALENCE] - ($result_node_name)
+        else:
+            # language=SQL
+            query_str = '''
+                        MATCH ($record) WHERE $conditions
+                        MERGE ($result_node)
+                        '''
+        if node_constructor.infer_prevalence_record:
+            # language=SQL
+            query_str += '''MERGE (record) <- [:PREVALENCE] - ($result_node_name)
             '''
-        if node.corr:
+        if node_constructor.infer_corr_from_event_record:
             # language=SQL
-            query_str += '''WITH $node_name, $result_node_name
-                            MATCH (event:Event) - [:PREVALENCE] -> ($node_name) <- [:PREVALENCE] - ($result_node_name)
+            query_str += '''WITH record, $result_node_name
+                            MATCH (event:Event) - [:PREVALENCE] -> (record) <- [:PREVALENCE] - ($result_node_name)
                             MERGE (event) - [:CORR] -> ($result_node_name)'''
-        elif node.observed:
+        elif node_constructor.infer_observed:
             # language=SQL
-            query_str += '''WITH $node_name, $result_node_name
-                            MATCH (event:Event) - [:PREVALENCE] -> ($node_name) <- [:PREVALENCE] - ($result_node_name)
+            query_str += '''WITH record, $result_node_name
+                            MATCH (event:Event) - [:PREVALENCE] -> (record) <- [:PREVALENCE] - ($result_node_name)
                             MERGE (event) <- [:OBSERVED] - ($result_node_name)'''
 
-        constructor_node_name = node.constructed_by.name
         return Query(query_str=query_str,
                      template_string_parameters={
-                         "node": node.constructed_by.get_pattern(),
-                         "node_name": node.constructed_by.get_name(),
-                         "conditions": node.get_where_condition(constructor_node_name),
-                         "result_node": node.result.get_pattern(),
-                         "result_node_name": node.result.get_name(),
+                         "record": node_constructor.get_prevalent_record_pattern(node_name="record"),
+                         "conditions": node_constructor.get_where_condition(node_name="record"),
+                         "result_node": node_constructor.result.get_pattern(),
+                         "result_node_name": node_constructor.result.get_name(),
                      })
 
     @staticmethod
@@ -372,61 +372,41 @@ class CypherQueryLibrary:
     def get_create_relation_using_nodes_query(relation: Relation) -> Query:
         # find events that are related to different entities of which one event also has a reference to the other entity
         # create a relation between these two entities
-        if relation.get_conditioned_node() == 'to_node':
-            # language=sql
-            query_str = '''
-                MATCH ($from_node)
-                MATCH ($to_node) - [:PREVALENCE] -> ($condition_string)
-                MERGE ($from_node_name) -[$rel_pattern] - ($to_node_name)
-            '''
-            from_node = relation.constructed_by.from_node.get_pattern()
-            to_node = relation.constructed_by.to_node.get_pattern(with_properties=False)
-            condition_string = relation.constructed_by.to_node.get_condition_string(with_brackets=True,with_where=True)
 
-        elif relation.get_conditioned_node() == 'from_node':
-            query_str = '''
-                MATCH ($to_node)
-                MATCH ($from_node) - [:PREVALENCE] -> ($condition_string)
-                MERGE ($from_node_name) -[$rel_pattern] - ($to_node_name)
-            '''
-            from_node = relation.constructed_by.from_node.get_pattern(with_properties=False)
-            to_node = relation.constructed_by.to_node.get_pattern()
-            condition_string = relation.constructed_by.from_node.get_condition_string(with_brackets=True, with_where=True)
-
-        else:
-            query_str = '''
-                MATCH ($to_node)
-                MATCH ($from_node)
-                MERGE ($from_node_name) -[$rel_pattern] - ($to_node_name)
-            '''
-            condition_string = ""
-            from_node = relation.constructed_by.from_node.get_pattern()
-            to_node = relation.constructed_by.to_node.get_pattern()
+        query_str = '''
+                        MATCH ($from_node) - [:PREVALENCE] -> (r)
+                        MATCH ($to_node) - [:PREVALENCE] -> (r)
+                        MATCH ($record_node)
+                        MERGE ($from_node_name) -[$rel_pattern] -> ($to_node_name)
+                    '''
 
         return Query(query_str=query_str,
                      template_string_parameters={
-                         "from_node": from_node,
+                         "from_node": relation.constructed_by.from_node.get_pattern(),
                          "from_node_name": relation.constructed_by.from_node.get_name(),
-                         "to_node": to_node,
+                         "to_node": relation.constructed_by.to_node.get_pattern(),
                          "to_node_name": relation.constructed_by.to_node.get_name(),
-                         "condition_string": condition_string,
+                         "record_node": relation.constructed_by.prevalent_record.get_pattern(name="r"),
                          "rel_pattern": relation.result.get_pattern()
                      })
 
     @staticmethod
-    def get_create_entities_by_relations_query(entity: ConstructedNodes) -> Query:
-        # language=sql
-        if entity.model_reified_relations:
+    def get_create_entities_by_relations_query(node_constructor: NodeConstructor) -> Query:
+
+        if node_constructor.infer_reified_relation:
+            # language=sql
             query_str = '''
                             MATCH ($from_node) - [r:$rel_type] -> ($to_node)
                             MERGE ($from_node_name) <- [:REIFIED] - ($result_node) - [:REIFIED] -> ($to_node_name)
                         '''
         else:
+            # language=sql
             query_str = '''
                             MATCH ($from_node) - [r:$rel_type] -> ($to_node)
                             MERGE ($result_node)
                         '''
-        if entity.corr:
+        if node_constructor.infer_corr_from_reified_parents:
+            # language=sql
             query_str += '''WITH $from_node_name, $to_node_name, $result_node_name
                             MATCH ($from_node_name) <- [:CORR] - (e:Event)
                             MATCH ($to_node_name) <- [:CORR] - (f:Event)
@@ -434,15 +414,16 @@ class CypherQueryLibrary:
                             MERGE ($result_node_name) <- [:CORR] - (f)
             '''
 
+        #TODO from node
         return Query(query_str=query_str,
                      template_string_parameters={
-                         "from_node": entity.constructed_by.from_node.get_pattern(),
-                         "to_node": entity.constructed_by.to_node.get_pattern(),
-                         "from_node_name": entity.constructed_by.from_node.get_name(),
-                         "to_node_name": entity.constructed_by.to_node.get_name(),
-                         "rel_type": entity.constructed_by.relation_type,
-                         "result_node": entity.result.get_pattern(),
-                         "result_node_name": entity.result.get_name()
+                         "from_node": node_constructor.node_constructors.from_node.get_pattern(),
+                         "to_node": node_constructor.node_constructors.to_node.get_pattern(),
+                         "from_node_name": node_constructor.node_constructors.from_node.get_name(),
+                         "to_node_name": node_constructor.node_constructors.to_node.get_name(),
+                         "rel_type": node_constructor.node_constructors.relation_type,
+                         "result_node": node_constructor.result.get_pattern(),
+                         "result_node_name": node_constructor.result.get_name()
                      })
 
     @staticmethod
@@ -583,47 +564,6 @@ class CypherQueryLibrary:
                          "dfc_label": CypherQueryLibrary.get_dfc_label(entity.node_type, include_label_in_c_df),
                          "df_threshold": df_threshold,
                          "relative_df_threshold": relative_df_threshold
-                     })
-
-    @staticmethod
-    def get_create_class_query(_class: Class) -> Query:
-
-        # create new class nodes for event nodes that match the condition
-        # language=sql
-        query_str = '''
-                    MATCH (e:$label)
-                    WHERE $where_condition_not_null
-                    WITH $group_by
-                    MERGE (c:$class_label {$class_properties})'''
-
-        return Query(query_str=query_str,
-                     template_string_parameters={
-                         "label": _class.aggregate_from_nodes,
-                         "where_condition_not_null": _class.get_condition(node_name="e"),
-                         "group_by": _class.get_group_by_statement(node_name="e"),
-                         "class_label": _class.get_class_label(),
-                         "class_properties": _class.get_class_properties()
-                     })
-
-    @staticmethod
-    def get_link_event_to_class_query(_class: Class, batch_size: int) -> Query:
-        # Create :OBSERVED relation between the class and events
-
-        # language=SQL
-        query_str = '''
-            CALL apoc.periodic.iterate(
-                'MATCH (c:$class_label)                    
-                 MATCH (e:Event) WHERE $where_link_condition                    
-                 RETURN e, c',
-                'MERGE (e) -[:OBSERVED]-> (c)',
-                {batchSize: $batch_size})                
-            '''
-
-        return Query(query_str=query_str,
-                     template_string_parameters={
-                         "class_label": _class.get_class_label(),
-                         "where_link_condition": _class.get_link_condition(class_node_name="c", event_node_name="e"),
-                         "batch_size": batch_size
                      })
 
     @staticmethod
@@ -829,30 +769,6 @@ class CypherQueryLibrary:
         return Query(query_str=query_str,
                      template_string_parameters={
                          "entity": entity.node_type
-                     })
-
-    @staticmethod
-    def add_entity_as_event_attribute(entity: ConstructedNodes) -> Query:
-        # language=sql
-        query_str = '''
-            MATCH (e:Event) - [:CORR] -> (n:$entity)
-            WITH e, collect(n.ID) as related_entities_collection
-            CALL{   WITH related_entities_collection
-                    RETURN
-                    CASE size(related_entities_collection)
-                    WHEN 1 THEN related_entities_collection[0]
-                    ELSE apoc.text.join(related_entities_collection, ',') 
-                    END AS related_entities
-                }
-            SET e.$entity_id = related_entities
-        '''
-
-        query_str = Template(query_str).substitute(entity=entity.node_type, entity_id=entity.get_keys()[0])
-
-        return Query(query_str=query_str,
-                     template_string_parameters={
-                         "entity": entity.node_type,
-                         "entity_id": entity.get_keys()[0]
                      })
 
     @staticmethod

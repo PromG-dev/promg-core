@@ -181,7 +181,7 @@ class EventKnowledgeGraph:
         """
         self.ekg_builder.create_log()
 
-    def create_nodes_by_nodes(self, node_type: Optional[List[str]] = None) -> None:
+    def create_nodes_by_records(self, node_type: Optional[List[str]] = None) -> None:
         """
         Pass on method to ekg_builder to create relations between entities based on nodes as specified in the
         semantic header
@@ -193,7 +193,7 @@ class EventKnowledgeGraph:
 
         """
 
-        self.ekg_builder.create_nodes_by_nodes(node_type)
+        self.ekg_builder.create_nodes_by_records(node_type)
 
     def create_entity_relations_using_nodes(self, relation_types: Optional[List[str]] = None) -> None:
         """
@@ -231,7 +231,7 @@ class EventKnowledgeGraph:
         :return: None
 
         """
-        self.ekg_builder.create_entities_by_relations(entity_types)
+        self.ekg_builder.create_nodes_by_relations(entity_types)
 
     def create_df_edges(self, entity_types: Optional[List[str]] = None) -> None:
         """
@@ -262,14 +262,6 @@ class EventKnowledgeGraph:
         """
         self.ekg_builder.delete_parallel_dfs_derived()
 
-    def create_classes(self) -> None:
-        """
-        Pass on method to ekg_builder to create class nodes
-
-        :return: None
-        """
-        self.ekg_builder.create_classes()
-
     def create_static_nodes_and_relations(self) -> None:
         """
         Pass on method to ekg_builder to create static nodes and relations
@@ -278,21 +270,6 @@ class EventKnowledgeGraph:
         :return: None
         """
         self.ekg_builder.create_static_nodes_and_relations()
-
-    def add_entity_to_event(self, entity_type: str) -> None:
-        """
-        Pass on method to inference_engine to add the entity identifier as an attribute to an event
-
-        :param entity_type: The type of the entity
-        :type entity_type: str
-        :return: None
-
-        :raise ValueError: when the entity has not been defined
-        """
-        entity = self.semantic_header.get_entity(entity_type)
-        if entity_type is None:
-            raise ValueError(f"{entity_type} is not defined in semantic header")
-        self.inference_engine.add_entity_as_event_attribute(entity)
 
     def match_entity_with_batch_position(self, entity_type: str, relative_position_type: str) -> None:
         """
@@ -311,7 +288,6 @@ class EventKnowledgeGraph:
         if entity is None:
             raise ValueError(f"{entity_type} is not defined in semantic header")
         self.inference_engine.match_entity_with_batch_position(entity, relative_position)
-        self.add_entity_to_event(entity_type=entity_type)
 
     # rule B
     def infer_items_propagate_downwards_one_level(self, entity_type: str) -> None:
@@ -328,7 +304,6 @@ class EventKnowledgeGraph:
         if entity_type is None:
             raise ValueError(f"{entity_type} is not defined in semantic header")
         self.inference_engine.infer_items_propagate_downwards_one_level(entity)
-        self.add_entity_to_event(entity_type=entity_type)
 
     # rule C
     def infer_items_propagate_upwards_multiple_levels(self, entity_type: str, is_load=True) -> None:
@@ -349,7 +324,6 @@ class EventKnowledgeGraph:
         if entity is None:
             raise ValueError(f"{entity_type} is not defined in semantic header")
         self.inference_engine.infer_items_propagate_upwards_multiple_levels(entity, is_load)
-        self.add_entity_to_event(entity_type=entity_type)
 
     # rule D
     def infer_items_propagate_downwards_multiple_level_w_batching(self, entity_type: str, relative_position_type: str,) -> None:
@@ -369,7 +343,6 @@ class EventKnowledgeGraph:
         if entity_type is None:
             raise ValueError(f"{entity_type} is not defined in semantic header")
         self.inference_engine.infer_items_propagate_downwards_multiple_level_w_batching(entity, relative_position)
-        self.add_entity_to_event(entity_type=entity_type)
 
     # endregion
 

@@ -6,77 +6,16 @@ from typing import List, Any, Optional, Union
 
 from dataclasses import dataclass
 
-from .interpreters import Interpreter
 from ..utilities.auxiliary_functions import replace_undefined_value, create_list, get_id_attribute_from_label
 import re
 
 
-@dataclass
-class Class:
-    label: str
-    aggregate_from_nodes: str
-    class_identifiers: List[str]
-    include_identifier_in_label: bool
-    ids: List[str]
-    qi: Any
-
-    @staticmethod
-    def from_dict(obj: Any, interpreter: Interpreter) -> Optional["Class"]:
-        if obj is None:
-            return None
-        _label = obj.get("label")
-        _aggregate_from_nodes = obj.get("aggregate_from_nodes")
-        _class_identifiers = obj.get("class_identifiers")
-        _include_identifier_in_label = replace_undefined_value(obj.get("include_identifier_in_label"), False)
-        _ids = obj.get("ids")
-        _query_interpreter = interpreter.class_qi
-        return Class(_label, _aggregate_from_nodes, _class_identifiers, _include_identifier_in_label, _ids,
-                     _query_interpreter)
-
-    def get_condition(self, node_name="e"):
-        return self.qi.get_condition(class_identifiers=self.class_identifiers, node_name=node_name)
-
-    def get_group_by_statement(self, node_name="e"):
-        return self.qi.get_group_by_statement(class_identifiers=self.class_identifiers,
-                                              node_name=node_name)
-
-    def get_class_properties(self) -> str:
-        return self.qi.get_class_properties(class_identifiers=self.class_identifiers)
-
-    def get_link_condition(self, class_node_name="c", event_node_name="e"):
-        return self.qi.get_link_condition(class_identifiers=self.class_identifiers,
-                                          class_node_name=class_node_name,
-                                          event_node_name=event_node_name)
-
-    def get_class_label(self):
-        return self.qi.get_class_label(class_label=self.label, class_identifiers=self.class_identifiers,
-                                       include_identifier_in_label=self.include_identifier_in_label)
-
-
-@dataclass
-class Condition:
-    attribute: str
-    values: List[Any]
-    qi: Any
-
-    @staticmethod
-    def from_dict(obj: Any, query_interpreter) -> Optional["Condition"]:
-        if obj is None:
-            return None
-
-        not_exist_properties = query_interpreter.get_not_exist_properties()
-        _attribute = obj.get("attribute")
-        _include_values = replace_undefined_value(obj.get("values"), not_exist_properties)
-        _query_interpreter = query_interpreter
-        return Condition(_attribute, _include_values, query_interpreter)
-
-
-@dataclass
 class Property:
-    attribute: str
-    value: str
-    ref_node: Optional[str]
-    ref_attribute: Optional[str]
+    def __init__(self, attribute: str, value: str, ref_node: Optional[str], ref_attribute: Optional[str]):
+        self.attribute = attribute
+        self.value = value
+        self.ref_node = ref_node
+        self.ref_attribute = ref_attribute
 
     @staticmethod
     def from_string(property_description):
@@ -102,11 +41,12 @@ class Property:
 
 
 @dataclass()
-class Node(ABC):
-    name: str
-    labels: List[str]
-    properties: List[Any]
-    where_condition: str
+class Node:
+    def __init__(self, name: str, labels: List[str], properties: List[Property], where_condition: str):
+        self.name = name
+        self.labels = labels
+        self.properties = properties
+        self.where_condition = where_condition
 
     @staticmethod
     def from_string(node_description: str) -> Optional["Node"]:
@@ -200,15 +140,16 @@ class Node(ABC):
         return self.get_pattern(with_brackets=True)
 
 
-@dataclass()
-class Relationship(ABC):
-    relation_name: str
-    relation_type: str
-    from_node: Node
-    to_node: Node
-    properties: List[Property]
-    where_condition: str
-    has_direction: bool
+class Relationship:
+    def __init__(self, relation_name: str, relation_type: str, from_node: Node, to_node: Node,
+                 properties: List[Property], where_condition: str, has_direction: bool):
+        self.relation_name = relation_name
+        self.relation_type = relation_type
+        self.from_node = from_node
+        self.to_node = to_node
+        self.properties = properties
+        self.where_condition = where_condition
+        self.has_direction = has_direction
 
     @staticmethod
     def from_string(relation_description: str) -> Optional["Relationship"]:
@@ -288,25 +229,29 @@ class Relationship(ABC):
 class RelationConstructorByNodes(ABC):
     from_node: Node
     to_node: Node
+    prevalent_record: Union["Node", "Relationship"]
 
     @staticmethod
     def from_dict(obj: Any) -> Optional["RelationConstructorByNodes"]:
         if obj is None:
             return None
 
+        _prevalent_record = RelationshipOrNode.from_string(obj.get("prevalent_record"))
         _from_node = Node.from_string(obj.get("from_node"))
         _to_node = Node.from_string(obj.get("to_node"))
 
-        return RelationConstructorByNodes(from_node=_from_node, to_node=_to_node)
+        return RelationConstructorByNodes(prevalent_record=_prevalent_record, from_node=_from_node, to_node=_to_node)
 
 
 class RelationshipOrNode(ABC):
     @staticmethod
-    def from_string(relation_description: str, interpreter: Interpreter) -> Union["Relationship", "Node"]:
+    def from_string(relation_description: str) -> Union["Relationship", "Node"]:
+        if relation_description is None:
+            return None
         if "-" in relation_description:
-            return Relationship.from_string(relation_description, interpreter)
+            return Relationship.from_string(relation_description)
         else:
-            return Node.from_string(relation_description, interpreter)
+            return Node.from_string(relation_description)
 
 
 @dataclass
@@ -315,23 +260,21 @@ class RelationConstructorByRelations(ABC):
     consequent: Relationship
     from_node: Node
     to_node: Node
-    qi: Any
 
     @staticmethod
-    def from_dict(obj: Any, interpreter: Interpreter) -> \
+    def from_dict(obj: Any) -> \
             Optional["RelationConstructorByRelations"]:
         if obj is None:
             return None
 
-        _antecedents = [RelationshipOrNode.from_string(y, interpreter) for y in obj.get("antecedents")]
-        _consequent = Relationship.from_string(obj.get("consequent"), interpreter)
+        _antecedents = [RelationshipOrNode.from_string(y) for y in obj.get("antecedents")]
+        _consequent = Relationship.from_string(obj.get("consequent"))
 
         _from_node = _consequent.from_node
         _to_node = _consequent.to_node
 
         return RelationConstructorByRelations(antecedents=_antecedents, consequent=_consequent,
-                                              from_node=_from_node, to_node=_to_node,
-                                              qi=interpreter.relation_constructor_by_relations_qi)
+                                              from_node=_from_node, to_node=_to_node)
 
     def get_from_node_name(self):
         return self.consequent.from_node.name
@@ -352,22 +295,27 @@ class RelationConstructorByRelations(ABC):
         return get_id_attribute_from_label(self.to_node.labels[-1])
 
     def get_antecedent_query(self):
-        return self.qi.get_antecedent_query(antecedents=self.antecedents)
+        if not all(isinstance(x, (Relationship, Node)) for x in self.antecedents):
+            raise TypeError("Antecedents are not of type Relationship or Node")
+
+        antecedents_query = [f"MATCH {antecedent.get_pattern()}" for antecedent in self.antecedents]
+        antecedents_query = "\n".join(antecedents_query)
+
+        return antecedents_query
 
 
 @dataclass
 class RelationConstructorByQuery(ABC):
     query: str
-    qi: Any
 
     @staticmethod
-    def from_dict(obj: Any, interpreter: Interpreter) -> Optional["RelationConstructorByQuery"]:
+    def from_dict(obj: Any) -> Optional["RelationConstructorByQuery"]:
         if obj is None:
             return None
 
         _query = obj.get("query")
 
-        return RelationConstructorByQuery(query=_query, qi=interpreter.relation_constructor_by_query_qi)
+        return RelationConstructorByQuery(query=_query)
 
 
 @dataclass
@@ -378,10 +326,9 @@ class Relation(ABC):
     constructed_by: Union[RelationConstructorByNodes, RelationConstructorByRelations, RelationConstructorByQuery]
     constructor_type: str
     include_properties: bool
-    qi: Any
 
     @staticmethod
-    def from_dict(obj: Any, interpreter: Interpreter) -> Optional["Relation"]:
+    def from_dict(obj: Any) -> Optional["Relation"]:
         if obj is None:
             return None
         _include = replace_undefined_value(obj.get("include"), True)
@@ -392,10 +339,9 @@ class Relation(ABC):
 
         _constructed_by = RelationConstructorByNodes.from_dict(obj.get("constructed_by_nodes"))
         if _constructed_by is None:
-            _constructed_by = RelationConstructorByRelations.from_dict(obj.get("constructed_by_relations"),
-                                                                       interpreter)
+            _constructed_by = RelationConstructorByRelations.from_dict(obj.get("constructed_by_relations"))
         if _constructed_by is None:
-            _constructed_by = RelationConstructorByQuery.from_dict(obj.get("constructed_by_query"), interpreter)
+            _constructed_by = RelationConstructorByQuery.from_dict(obj.get("constructed_by_query"))
 
         _constructor_type = _constructed_by.__class__.__name__
 
@@ -413,8 +359,7 @@ class Relation(ABC):
         _include_properties = replace_undefined_value(obj.get("include_properties"), True)
 
         return Relation(_include, _type, constructed_by=_constructed_by, constructor_type=_constructor_type,
-                        include_properties=_include_properties, result=_result,
-                        qi=interpreter.relation_qi)
+                        include_properties=_include_properties, result=_result)
 
     def get_conditioned_node(self):
         if self.constructed_by.from_node.get_condition_string() != "":
@@ -426,93 +371,61 @@ class Relation(ABC):
 
 
 @dataclass
-class NodesConstructorByQuery(ABC):
+class NodesConstructorByQuery:
     query: str
-    qi: Any
 
     @staticmethod
-    def from_dict(obj: Any, interpreter: Interpreter) -> Optional["NodesConstructorByQuery"]:
+    def from_dict(obj: Any) -> Optional["NodesConstructorByQuery"]:
         if obj is None:
             return None
 
         _query = obj.get("query")
 
-        return NodesConstructorByQuery(query=_query, qi=interpreter.entity_constructor_by_query_qi)
+        return NodesConstructorByQuery(query=_query)
 
 
-class ConstructedNodes:
-    def __init__(self, node_type: str, include: bool,
-                 constructed_by: Union[Node, Relationship, NodesConstructorByQuery],
-                 constructor_type: str, result: Node,
-                 model_reified_relations: bool,
-                 prevalence: bool,
-                 observed: bool,
-                 corr: bool,
-                 df: bool,
-                 include_label_in_df: bool,
-                 merge_duplicate_df: bool,
-                 delete_parallel_df: bool):
-        self.node_type = node_type
-        self.include = include
-        self.constructed_by = constructed_by
-        self.constructor_type = constructor_type
+class NodeConstructor:
+    def __init__(self, prevalent_record: Optional[Union["Relationship", "Node"]], relation: Optional["Relationship"],
+                 result: "Node",
+                 infer_observed: bool = False,
+                 infer_corr_from_event_record: bool = False,
+                 infer_corr_from_reified_parents: bool = False,
+                 infer_reified_relation: bool = False):
+        self.prevalent_record = prevalent_record
+        self.relation = relation
         self.result = result
-        self.model_reified_relations = model_reified_relations
-        self.prevalence = prevalence
-        self.observed = observed
-        self.corr = corr
-        self.df = df
-        self.include_label_in_df = include_label_in_df
-        self.merge_duplicate_df = merge_duplicate_df
-        self.delete_parallel_df = delete_parallel_df
-
-    def __repr__(self):
-        return self.result.__repr__()
+        self.infer_prevalence_record = prevalent_record is not None
+        self.infer_observed = infer_observed
+        self.infer_corr_from_event_record = infer_corr_from_event_record
+        self.infer_corr_from_reified_parents = infer_corr_from_reified_parents
+        self.infer_reified_relation = infer_reified_relation
 
     @staticmethod
-    def from_dict(obj: Any, interpreter: Interpreter) -> Optional["ConstructedNodes"]:
-
-        _type = obj.get("type")
-        if obj is None:
-            return None
-        _include = replace_undefined_value(obj.get("include"), True)
-        if not _include:
-            return None
-
+    def from_dict(obj: Any) -> "NodeConstructor":
+        _prevalent_record = RelationshipOrNode.from_string(obj.get("prevalent_record"))
+        _node = Relationship.from_string(obj.get("node"))
+        _relation = Relationship.from_string(obj.get("relation"))
         _result = Node.from_string(obj.get("result"))
-        _constructed_by = Node.from_string(obj.get("constructed_by_node"))
-        if _constructed_by is None:
-            _constructed_by = Relationship.from_string(obj.get("constructed_by_relation"))
-        if _constructed_by is None:
-            _constructed_by = NodesConstructorByQuery.from_dict(obj.get("constructed_by_query"),
-                                                                interpreter=interpreter)
+        _infer_observed = replace_undefined_value(obj.get("infer_observed"), False)
+        _infer_corr_from_event_record = replace_undefined_value(obj.get("infer_corr_from_event_record"), False)
+        _infer_corr_from_reified_parents = replace_undefined_value(obj.get("infer_corr_from_reified_parents"), False)
+        _infer_reified_relation = replace_undefined_value(obj.get("infer_reified_relation"), False)
 
-        _constructor_type = _constructed_by.__class__.__name__
-        _model_reified_relations = replace_undefined_value(obj.get("model_reified_relations"), False)
+        return NodeConstructor(prevalent_record=_prevalent_record,
+                               relation=_relation,
+                               result=_result,
+                               infer_observed=_infer_observed,
+                               infer_corr_from_event_record=_infer_corr_from_event_record,
+                               infer_corr_from_reified_parents=_infer_corr_from_reified_parents,
+                               infer_reified_relation=_infer_reified_relation)
 
-        _prevalence = False
-        if _constructor_type == "Node":
-            _prevalence = "EventEntry" in _constructed_by.labels
-
-        _observed = _include and replace_undefined_value(obj.get("observed"), False)
-        _corr = _include and replace_undefined_value(obj.get("corr"), False)
-        _df = _corr and replace_undefined_value(obj.get("df"), False)
-        _include_label_in_df = _df and replace_undefined_value(obj.get("include_label_in_df"), False)
-        _merge_duplicate_df = _df and replace_undefined_value(obj.get("merge_duplicate_df"), False)
-
-        _delete_parallel_df = _df and obj.get("delete_parallel_df")
-
-        constructed_node = ConstructedNodes(include=_include, constructed_by=_constructed_by,
-                                            constructor_type=_constructor_type,
-                                            node_type=_type, prevalence=_prevalence, observed=_observed, corr=_corr,
-                                            df=_df,
-                                            include_label_in_df=_include_label_in_df,
-                                            merge_duplicate_df=_merge_duplicate_df,
-                                            delete_parallel_df=_delete_parallel_df,
-                                            result=_result, model_reified_relations=_model_reified_relations)
-
-        # TODO check whether names match
-        return constructed_node
+    def __name__(self):
+        if self.prevalent_record is not None:
+            return "constructed_by_record"
+        elif self.node is not None:
+            return "constructed_by_node"
+        elif self.relation is not None:
+            return "constructed_by_relation"
 
     def get_label_string(self):
         return self.result.get_label_str()
@@ -520,14 +433,8 @@ class ConstructedNodes:
     def get_labels(self):
         return self.result.labels
 
-    def get_df_label(self):
-        if self.include_label_in_df:
-            return f'DF_{self.node_type.upper()}'
-        else:
-            return f'DF'
-
-    def get_composed_primary_id(self, node_name: str = "e"):
-        return "+\"-\"+".join([f"{node_name}.{key}" for key in self.get_keys()])
+    def get_prevalent_record_pattern(self, node_name: str):
+        return self.prevalent_record.get_pattern(node_name)
 
     def get_keys(self):
         keys = []
@@ -536,82 +443,140 @@ class ConstructedNodes:
             keys.append(key)
         return keys
 
-    def get_where_condition(self, node_name: str = "e"):
+    def get_where_condition(self, node_name: str = "record"):
         return " AND ".join(
             [f'''{node_name}.{key} IS NOT NULL AND {node_name}.{key} <> "Unknown"''' for key
              in self.get_keys()])
 
-    def get_where_condition_correlation(self, node_name: str = "e", node_name_id: str = "n"):
-        primary_key_condition = f"{self.get_composed_primary_id(node_name)} = {node_name_id}.ID"
-        # extra_conditions = self.create_conditions(node_name)
-        return primary_key_condition
+    def get_pattern(self, name: Optional[str] = None, with_brackets=False, with_properties=True):
+        return self.result.get_pattern(name, with_brackets, with_properties)
+
+    def __repr__(self):
+        return self.result.get_pattern(with_brackets=True)
+
+    def constructed_by_record(self):
+        return self.prevalent_record is not None
+
+    def constructed_by_node(self):
+        return self.node is not None
+
+    def constructed_by_relation(self):
+        return self.relation is not None
 
 
-@dataclass
-class Log:
-    include: bool
-    has: bool
-    qi: Any
+class ConstructedNodes:
+    def __init__(self, node_type: str, include: bool,
+                 node_constructors: List["NodeConstructor"],
+                 infer_df: bool,
+                 include_label_in_df: bool,
+                 merge_duplicate_df: bool,
+                 delete_parallel_df: bool):
+        self.node_type = node_type
+        self.include = include
+        self.node_constructors = node_constructors
+        self.infer_df = infer_df
+        self.include_label_in_df = include_label_in_df
+        self.merge_duplicate_df = merge_duplicate_df
+        self.delete_parallel_df = delete_parallel_df
+
+        labels = self.node_constructors[0].get_labels()
+        for constructor in self.node_constructors:
+            if set(labels) != set(constructor.get_labels()):
+                raise ValueError(f"The resulting nodes for {self.node_type} do not have the same labels")
+
+    def __repr__(self):
+        return f"(:{self.get_label_string()})"
 
     @staticmethod
-    def from_dict(obj: Any, interpreter: Interpreter) -> "Log":
+    def from_dict(obj: Any) -> Optional["ConstructedNodes"]:
         if obj is None:
-            return Log(False, False, interpreter.log_qi)
+            return None
         _include = replace_undefined_value(obj.get("include"), True)
         if not _include:
-            return Log(False, False, interpreter.log_qi)
-        _has = replace_undefined_value(obj.get("has"), True)
-        return Log(_include, _has, qi=interpreter.log_qi)
+            return None
+
+        _type = obj.get("type")
+        node_constructors = create_list(NodeConstructor, obj.get("construction"))
+        _infer_df = replace_undefined_value(obj.get("infer_df"), False)
+        _include_label_in_df = _infer_df and replace_undefined_value(obj.get("include_label_in_df"), False)
+        _merge_duplicate_df = _infer_df and replace_undefined_value(obj.get("merge_duplicate_df"), False)
+        _delete_parallel_df = _infer_df and obj.get("delete_parallel_df")
+
+        constructed_node = ConstructedNodes(include=_include, node_constructors=node_constructors,
+                                            node_type=_type,
+                                            infer_df=_infer_df,
+                                            include_label_in_df=_include_label_in_df,
+                                            merge_duplicate_df=_merge_duplicate_df,
+                                            delete_parallel_df=_delete_parallel_df)
+
+        # TODO check whether names match
+        return constructed_node
+
+    def get_label_string(self):
+        return self.node_constructors[0].get_label_string()
+
+    def get_labels(self):
+        return self.node_constructors[0].labels
+
+    def get_df_label(self):
+        if self.include_label_in_df:
+            return f'DF_{self.node_type.upper()}'
+        else:
+            return f'DF'
 
 
-class SemanticHeader(ABC):
+class SemanticHeader:
     def __init__(self, name: str, version: str,
-                 entities: List[ConstructedNodes], relations: List[Relation],
-                 classes: List[Class], log: Log):
+                 nodes: List[ConstructedNodes], relations: List[Relation]):
         self.name = name
         self.version = version
-        self.entities = entities
+        self.nodes = nodes
         self.relations = relations
-        self.classes = classes
-        self.log = log
 
     def get_entity(self, entity_type) -> Optional[ConstructedNodes]:
-        for entity in self.entities:
+        for entity in self.nodes:
             if entity_type == entity.node_type:
                 return entity
         return None
 
     @staticmethod
-    def from_dict(obj: Any, interpreter: Interpreter) -> Optional["SemanticHeader"]:
+    def from_dict(obj: Any) -> Optional["SemanticHeader"]:
         if obj is None:
             return None
         _name = obj.get("name")
         _version = obj.get("version")
-        _entities = create_list(ConstructedNodes, obj.get("nodes"), interpreter)
-        _relations = create_list(Relation, obj.get("relations"), interpreter)
-        _classes = create_list(Class, obj.get("classes"), interpreter)
-        _log = Log.from_dict(obj.get("log"), interpreter)
-        return SemanticHeader(_name, _version, _entities, _relations,
-                              _classes, _log)
+        _nodes = create_list(ConstructedNodes, obj.get("nodes"))
+        _relations = create_list(Relation, obj.get("relations"))
+        return SemanticHeader(_name, _version, _nodes, _relations)
 
     @staticmethod
-    def create_semantic_header(path: Path, query_interpreter):
+    def create_semantic_header(path: Path):
         with open(path) as f:
             json_semantic_header = json.load(f)
 
-        semantic_header = SemanticHeader.from_dict(json_semantic_header, query_interpreter)
+        semantic_header = SemanticHeader.from_dict(json_semantic_header)
         return semantic_header
 
-    def get_entities_constructed_by_nodes(self):
-        return [entity for entity in self.entities if
-                entity.constructor_type == "Node"]
+    def get_node_by_record_constructors(self, node_types: Optional[List[str]]) -> List[NodeConstructor]:
+        node_constructors = []
+        for node in self.nodes:
+            if node_types is None or node.node_type in node_types:
+                for node_constructor in node.node_constructors:
+                    if node_constructor.constructed_by_record():
+                        node_constructors.append(node_constructor)
+        return node_constructors
 
-    def get_entities_constructed_by_relations(self):
-        return [entity for entity in self.entities if
-                entity.constructor_type == "Relationship"]
+    def get_nodes_constructed_by_relations(self, node_types: Optional[List[str]]) -> List[NodeConstructor]:
+        node_constructors = []
+        for node in self.nodes:
+            if node_types is None or node.node_type in node_types:
+                for node_constructor in node.node_constructors:
+                    if node_constructor.constructed_by_relation():
+                        node_constructors.append(node_constructor)
+        return node_constructors
 
     def get_entities_constructed_by_query(self):
-        return [entity for entity in self.entities if
+        return [entity for entity in self.nodes if
                 entity.constructor_type == "EntityConstructorByQuery"]
 
     def get_relations_derived_from_nodes(self):
