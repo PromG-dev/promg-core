@@ -11,9 +11,12 @@ import re
 
 
 class Property:
-    def __init__(self, attribute: str, value: str, ref_node: Optional[str], ref_attribute: Optional[str]):
+    def __init__(self, attribute: str, value: str, node_name: Optional[str],
+                 node_attribute: Optional[str], ref_node: Optional[str], ref_attribute: Optional[str]):
         self.attribute = attribute
         self.value = value
+        self.node_name = node_name,
+        self.node_attribute = node_attribute,
         self.ref_node = ref_node
         self.ref_attribute = ref_attribute
 
@@ -21,23 +24,34 @@ class Property:
     def from_string(property_description):
         if property_description is None:
             return None
-        components = property_description.split(":")
+        if ":" in property_description:
+            components = property_description.split(":")
+        else:
+            components = property_description.split("=")
         attribute = components[0]
         value = components[1]
         attribute = attribute.strip()
         value = value.strip()
 
-        ref_node = None
-        ref_attribute = None
+        ref_node, ref_attribute, node_name, node_attribute = None, None, None, None
         if "." in value:
             components = value.split(".")
             ref_node = components[0]
             ref_attribute = components[1]
 
-        return Property(attribute=attribute, value=value, ref_node=ref_node, ref_attribute=ref_attribute)
+        if "." in attribute:
+            components = value.split(".")
+            node_name = components[0]
+            node_attribute = components[1]
 
-    def get_pattern(self):
-        return f"{self.attribute}: {self.value}"
+        return Property(attribute=attribute, value=value, node_name=node_name,
+                        node_attribute=node_attribute, ref_node=ref_node, ref_attribute=ref_attribute)
+
+    def get_pattern(self, is_set=False):
+        if not is_set:
+            return f"{self.attribute}: {self.value}"
+        else:
+            return f"{self.attribute} = {self.value}"
 
 
 @dataclass()
@@ -319,7 +333,7 @@ class RelationConstructorByQuery(ABC):
 
 
 @dataclass
-class Relation(ABC):
+class Relation():
     include: bool
     type: str
     result: Relationship
@@ -389,6 +403,8 @@ class NodeConstructor:
                  node: Optional["Node"],
                  relation: Optional["Relationship"],
                  result: "Node",
+                 set_properties: List[Property],
+                 set_labels: str,
                  infer_observed: bool = False,
                  infer_corr_from_event_record: bool = False,
                  infer_corr_from_reified_parents: bool = False,
@@ -397,6 +413,8 @@ class NodeConstructor:
         self.relation = relation
         self.node = node
         self.result = result
+        self.set_properties = set_properties
+        self.set_labels = set_labels
         self.infer_prevalence_record = prevalent_record is not None
         self.infer_observed = infer_observed
         self.infer_corr_from_event_record = infer_corr_from_event_record
@@ -409,6 +427,11 @@ class NodeConstructor:
         _node = Relationship.from_string(obj.get("node"))
         _relation = Relationship.from_string(obj.get("relation"))
         _result = Node.from_string(obj.get("result"))
+        _set_properties = obj.get("set_properties")
+        if _set_properties is not None:
+            _set_properties = _set_properties.split(",")
+            _set_properties = [Property.from_string(prop) for prop in _set_properties]
+        _set_labels = obj.get("set_labels")
         _infer_observed = replace_undefined_value(obj.get("infer_observed"), False)
         _infer_corr_from_event_record = replace_undefined_value(obj.get("infer_corr_from_event_record"), False)
         _infer_corr_from_reified_parents = replace_undefined_value(obj.get("infer_corr_from_reified_parents"), False)
@@ -421,7 +444,9 @@ class NodeConstructor:
                                infer_observed=_infer_observed,
                                infer_corr_from_event_record=_infer_corr_from_event_record,
                                infer_corr_from_reified_parents=_infer_corr_from_reified_parents,
-                               infer_reified_relation=_infer_reified_relation)
+                               infer_reified_relation=_infer_reified_relation,
+                               set_properties=_set_properties,
+                               set_labels=_set_labels)
 
     def __name__(self):
         if self.prevalent_record is not None:
@@ -467,6 +492,15 @@ class NodeConstructor:
     def constructed_by_relation(self):
         return self.relation is not None
 
+    def get_set_result_properties_query(self):
+        if self.set_properties is None:
+            return None
+        return ",".join([prop.get_pattern(is_set=True) for prop in self.set_properties])
+
+    def get_set_result_labels_query(self):
+        if self.set_labels is None:
+            return None
+        return f"{self.result.get_name()}:{self.set_labels}"
 
 class ConstructedNodes:
     def __init__(self, node_type: str, include: bool,
@@ -500,7 +534,7 @@ class ConstructedNodes:
             return None
 
         _type = obj.get("type")
-        node_constructors = create_list(NodeConstructor, obj.get("construction"))
+        node_constructors = create_list(NodeConstructor, obj.get("constructor"))
         _infer_df = replace_undefined_value(obj.get("infer_df"), False)
         _include_label_in_df = _infer_df and replace_undefined_value(obj.get("include_label_in_df"), False)
         _merge_duplicate_df = _infer_df and replace_undefined_value(obj.get("merge_duplicate_df"), False)
@@ -527,7 +561,6 @@ class ConstructedNodes:
             return f'DF_{self.node_type.upper()}'
         else:
             return f'DF'
-
 
 class SemanticHeader:
     def __init__(self, name: str, version: str,
@@ -571,7 +604,8 @@ class SemanticHeader:
         return node_constructors
 
     def get_nodes_constructed_by_relations(self, node_types: Optional[List[str]] = None,
-                                           only_include_delete_parallel_df=False) -> Dict[str, List[NodeConstructor]]:
+                                           only_include_delete_parallel_df=False) -> Dict[
+        str, List[NodeConstructor]]:
         node_constructors = {}
         for node in self.nodes:
             if only_include_delete_parallel_df and not node.delete_parallel_df:
