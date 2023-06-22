@@ -1,6 +1,6 @@
 from typing import Optional, List
 
-from ..data_managers.semantic_header import ConstructedNodes, Relation, Relationship, SemanticHeader
+from ..data_managers.semantic_header import ConstructedNodes, Relation, Relationship, SemanticHeader, NodeConstructor
 from ..database_managers.db_connection import DatabaseConnection
 from ..utilities.performance_handling import Performance
 from ..cypher_queries.query_library import CypherQueryLibrary
@@ -35,12 +35,13 @@ class EKGUsingSemanticHeaderBuilder:
             self._write_message_to_performance(f"Node ({node_constructor.get_pattern(with_properties=False)}) created")
 
     def create_nodes_by_relations(self, node_types: Optional[List[str]]) -> None:
-        for node_constructor in self.semantic_header.get_nodes_constructed_by_relations(node_types):
-            self.connection.exec_query(CypherQueryLibrary.get_create_entities_by_relations_query,
-                                       **{"node_constructor": node_constructor})
-            self._write_message_to_performance(
-                message=f"Relation [{node_constructor.relation.get_pattern()}] reified as "
-                        f"({node_constructor.get_pattern(with_properties=False)}) node")
+        for node_constructors in self.semantic_header.get_nodes_constructed_by_relations(node_types).values():
+            for node_constructor in node_constructors:
+                self.connection.exec_query(CypherQueryLibrary.get_create_entities_by_relations_query,
+                                           **{"node_constructor": node_constructor})
+                self._write_message_to_performance(
+                    message=f"Relation [{node_constructor.relation.get_pattern()}] reified as "
+                            f"({node_constructor.get_pattern(with_properties=False)}) node")
 
     def create_entity_relations_using_nodes(self, relation_types: Optional[List[str]]) -> None:
         # find events that are related to different entities of which one event also has a reference to the other entity
@@ -63,8 +64,10 @@ class EKGUsingSemanticHeaderBuilder:
         for relation in self.semantic_header.get_relations_derived_from_relations():
             if relation.include and relation.type in relation_types:
                 self.connection.exec_query(CypherQueryLibrary.get_create_relation_by_relations_query,
-                                           **{"relation": relation,
-                                              "batch_size": self.batch_size})
+                                           **{
+                                               "relation": relation,
+                                               "batch_size": self.batch_size
+                                           })
 
     def create_df_edges(self, entity_types) -> None:
         entity: ConstructedNodes
@@ -79,33 +82,36 @@ class EKGUsingSemanticHeaderBuilder:
                 self._write_message_to_performance(f"Created [:DF] edge for (:{entity.get_label_string()})")
 
     def merge_duplicate_df(self):
-        entity: ConstructedNodes
-        for entity in self.semantic_header.nodes:
-            if entity.merge_duplicate_df:
-                self.connection.exec_query(CypherQueryLibrary.get_merge_duplicate_df_entity_query, **{"entity": entity})
+        node: ConstructedNodes
+        for node in self.semantic_header.nodes:
+            if node.merge_duplicate_df:
+                self.connection.exec_query(CypherQueryLibrary.get_merge_duplicate_df_entity_query, **{"node": node})
                 self.perf.finished_step(
-                    activity=f"Merged duplicate [:DF] edges for (:{entity.get_label_string()}) done")
+                    activity=f"Merged duplicate [:DF] edges for (:{node.get_label_string()}) done")
 
     def delete_parallel_dfs_derived(self):
-        reified_entity: ConstructedNodes
+        node: ConstructedNodes
         original_entity: ConstructedNodes
         relation: Relationship
-        for reified_entity in self.semantic_header.get_nodes_constructed_by_relations():
-            if reified_entity.delete_parallel_df:
-                relation = reified_entity.node_constructors.relation
-                parent_entity = self.semantic_header.get_entity(relation.from_node.node_label)
-                child_entity = self.semantic_header.get_entity(relation.to_node.node_label)
-                for original_entity in [parent_entity, child_entity]:
-                    self.connection.exec_query(CypherQueryLibrary.delete_parallel_directly_follows_derived,
-                                               **{"reified_entity": reified_entity,
-                                                  "original_entity": original_entity})
-                    self._write_message_to_performance(
-                        f"Deleted parallel DF of (:{reified_entity.get_label_string()}) and (:{original_entity.get_label_string()})")
+        node_constructor: NodeConstructor
+        for _type, node_constructor in self.semantic_header.get_nodes_constructed_by_relations(
+                only_include_delete_parallel_df=True).items():
+            from_node = node_constructor.relation.from_node
+            to_node = node_constructor.relation.to_node
+            for node in [from_node, to_node]:
+                self.connection.exec_query(CypherQueryLibrary.delete_parallel_directly_follows_derived,
+                                           **{"type": _type,
+                                              "node": node})
+                self._write_message_to_performance(
+                    f"Deleted parallel DF of (:{node.get_label_string()}) and (:"
+                    f"{type})")
 
     def create_static_nodes_and_relations(self):
         self._write_message_to_performance("No implementation yet")
 
     def add_attributes_to_classifier(self, relation, label, properties, copy_as):
         self.connection.exec_query(CypherQueryLibrary.add_attributes_to_classifier,
-                                   **{"relation": relation, "label": label, "properties": properties,
-                                      "copy_as": copy_as})
+                                   **{
+                                       "relation": relation, "label": label, "properties": properties,
+                                       "copy_as": copy_as
+                                   })

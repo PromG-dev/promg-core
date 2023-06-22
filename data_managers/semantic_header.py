@@ -2,7 +2,7 @@ import json
 from abc import ABC
 from pathlib import Path
 from string import Template
-from typing import List, Any, Optional, Union
+from typing import List, Any, Optional, Union, Dict
 
 from dataclasses import dataclass
 
@@ -385,7 +385,9 @@ class NodesConstructorByQuery:
 
 
 class NodeConstructor:
-    def __init__(self, prevalent_record: Optional[Union["Relationship", "Node"]], relation: Optional["Relationship"],
+    def __init__(self, prevalent_record: Optional[Union["Relationship", "Node"]],
+                 node: Optional["Node"],
+                 relation: Optional["Relationship"],
                  result: "Node",
                  infer_observed: bool = False,
                  infer_corr_from_event_record: bool = False,
@@ -393,6 +395,7 @@ class NodeConstructor:
                  infer_reified_relation: bool = False):
         self.prevalent_record = prevalent_record
         self.relation = relation
+        self.node = node
         self.result = result
         self.infer_prevalence_record = prevalent_record is not None
         self.infer_observed = infer_observed
@@ -413,6 +416,7 @@ class NodeConstructor:
 
         return NodeConstructor(prevalent_record=_prevalent_record,
                                relation=_relation,
+                               node=_node,
                                result=_result,
                                infer_observed=_infer_observed,
                                infer_corr_from_event_record=_infer_corr_from_event_record,
@@ -516,7 +520,7 @@ class ConstructedNodes:
         return self.node_constructors[0].get_label_string()
 
     def get_labels(self):
-        return self.node_constructors[0].labels
+        return self.node_constructors[0].get_labels()
 
     def get_df_label(self):
         if self.include_label_in_df:
@@ -566,13 +570,18 @@ class SemanticHeader:
                         node_constructors.append(node_constructor)
         return node_constructors
 
-    def get_nodes_constructed_by_relations(self, node_types: Optional[List[str]]) -> List[NodeConstructor]:
-        node_constructors = []
+    def get_nodes_constructed_by_relations(self, node_types: Optional[List[str]] = None,
+                                           only_include_delete_parallel_df=False) -> Dict[str, List[NodeConstructor]]:
+        node_constructors = {}
         for node in self.nodes:
+            if only_include_delete_parallel_df and not node.delete_parallel_df:
+                continue
             if node_types is None or node.node_type in node_types:
                 for node_constructor in node.node_constructors:
                     if node_constructor.constructed_by_relation():
-                        node_constructors.append(node_constructor)
+                        if node.node_type not in node_constructors:
+                            node_constructors[node] = []
+                        node_constructors[node].append(node_constructor)
         return node_constructors
 
     def get_entities_constructed_by_query(self):

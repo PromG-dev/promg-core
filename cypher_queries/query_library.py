@@ -3,142 +3,27 @@ from typing import Dict, Optional, Any, List
 import re
 
 from ..data_managers.datastructures import DataStructure
-from ..data_managers.semantic_header import ConstructedNodes, Relation, NodeConstructor
+from ..data_managers.semantic_header import ConstructedNodes, Relation, NodeConstructor, Relationship, Node
 from ..database_managers.db_connection import Query
 from string import Template
 
 
 class CypherQueryLibrary:
 
-    @staticmethod
-    def get_event_label(label: str, properties: Optional[Dict[str, Any]] = None, option_event_type_in_label=False):
-        """
-        Create the df label based on self.option_DF_entity_type_in_label
-        If not in entity type, add it as property to the label
-        @param label: str, label that should be created in the DF
-        @param properties:
-        @param option_event_type_in_label
-        @return:
-        """
-        if properties is None:
-            if option_event_type_in_label:
-                return label
-            else:
-                return f'Event {{EventType: "{label}"}} '
-        else:
-            conditions = []
-            for key, [value, is_string] in properties.items():
-                if is_string:
-                    conditions.append(f'{key}: "{value}"')
-                else:
-                    conditions.append(f'{key}: {value}')
 
-            conditions = ", ".join(conditions)
 
-            if option_event_type_in_label:
-                return f'{label} {{{conditions}}}'
-            else:
-                return f'Event {{EventType: "{label}", {conditions}}} '
 
-    @staticmethod
-    def get_dfc_label(entity_type: str, include_label_in_dfc: bool) -> str:
-        if include_label_in_dfc:
-            return f'DF_C_{entity_type.upper()}'
-        else:
-            return f'DF_C'
 
-    @staticmethod
-    def get_all_rel_types_query() -> Query:
-        # find all relations and return the distinct types
 
-        # language=SQL
-        query_str = '''
-            MATCH () - [rel] - () RETURN DISTINCT type(rel) AS rel_type
-        '''
 
-        return Query(query_str=query_str,
-                     template_string_parameters={},
-                     parameters={})
 
-    @staticmethod
-    def get_all_node_labels() -> Query:
-        # find all nodes and return the distinct labels
 
-        # language=SQL
-        query_str = '''
-            MATCH (n) RETURN DISTINCT labels(n) AS label
-        '''
 
-        return Query(query_str=query_str,
-                     template_string_parameters={},
-                     parameters={})
 
-    @staticmethod
-    def get_clear_db_query(db_name) -> Query:
 
-        # language=SQL
-        query_str = '''
-            CREATE OR REPLACE DATABASE $db_name
-            WAIT
-        '''
 
-        return Query(query_str=query_str, database="system", template_string_parameters={"db_name": db_name})
 
-    @staticmethod
-    def get_constraint_unique_event_id_query() -> Query:
-        # language=SQL
-        query_str = '''
-            CREATE CONSTRAINT unique_event_ids IF NOT EXISTS 
-            FOR (e:Event) REQUIRE e.ID IS UNIQUE
-        '''
-        return Query(query_str=query_str,
-                     template_string_parameters={},
-                     parameters={})
 
-    @staticmethod
-    def get_constraint_unique_entity_uid_query() -> Query:
-        # language=SQL
-        query_str = '''
-            CREATE CONSTRAINT unique_entity_ids IF NOT EXISTS 
-            FOR (en:Entity) REQUIRE en.uID IS UNIQUE
-        '''
-        return Query(query_str=query_str,
-                     template_string_parameters={},
-                     parameters={})
-
-    @staticmethod
-    def get_constraint_unique_log_id_query() -> Query:
-        # language=SQL
-        query_str = '''
-            CREATE CONSTRAINT unique_entity_ids IF NOT EXISTS 
-            FOR (l:Log) REQUIRE l.ID IS UNIQUE
-        '''
-        return Query(query_str=query_str,
-                     template_string_parameters={},
-                     parameters={})
-
-    @staticmethod
-    def get_create_nodes_by_importing_batch_query(batch: List[Dict[str, str]], labels: List[str]) -> Query:
-        """
-        Create event nodes for each row in the batch with labels
-        The properties of each row are also the property of the node
-        @param batch: List[Dictionary[key: value]], the key and its values form properties of the event nodes
-        @param labels: The labels of the event nodes
-        @return: None,
-        """
-
-        # $batch is a variable we can add in tx.run, this allows us to use string properties
-        # (keys in our dictionary are string)
-        # return is required when using call and yield
-
-        # language=SQL
-        query_str = '''
-                UNWIND $batch AS row
-                CALL apoc.create.node($labels, row) YIELD node
-                RETURN count(*)
-            '''
-
-        return Query(query_str=query_str, parameters={"labels": labels, "batch": batch})
 
     @staticmethod
     def get_make_timestamp_date_query(attribute, datetime_object, batch_size) -> Query:
@@ -318,8 +203,6 @@ class CypherQueryLibrary:
         relation_constructor = relation.constructed_by
         from_node_name = relation_constructor.get_from_node_name()
         to_node_name = relation_constructor.get_to_node_name()
-        from_node_id = relation_constructor.get_id_attribute_from_from_node()
-        to_node_id = relation_constructor.get_id_attribute_from_to_node()
 
         properties = ""
 
@@ -331,41 +214,6 @@ class CypherQueryLibrary:
                          "type": relation.type,
                          "properties": properties,
                          "batch_size": batch_size
-                     })
-
-    @staticmethod
-    def get_create_entity_relationships_query(relation: Relation, batch_size: int) -> Query:
-        # find events that are related to different entities of which one event also has a reference to the other entity
-        # create a relation between these two entities
-
-        # language=sql
-        query_str = '''
-                CALL apoc.periodic.iterate(
-                '
-                MATCH (tf:ForeignKey {type:"$foreign_key"}) - [:$key_type] -> (_from: $entity_labels_from_node)
-                MATCH (to:$entity_labels_to_node {$primary_key:tf.id})
-                RETURN distinct to, _from',
-                'MERGE (_from) 
-                    $arrow_left [:$relation_type] $arrow_right (to)',
-                {batchSize: $batch_size})
-                '''
-
-        relation_constructor = relation.constructed_by
-        _reversed = relation_constructor.reversed
-
-        return Query(query_str=query_str,
-                     template_string_parameters={
-                         "key_type": f"KEY_{relation_constructor.from_node_label.upper()}",
-                         "entity_labels_from_node": relation_constructor.from_node_label,
-                         "entity_labels_to_node": relation_constructor.to_node_label,
-                         "primary_key": relation.constructed_by.primary_key,
-                         "arrow_left": "<-" if _reversed else "-",
-                         "arrow_right": "-" if _reversed else "->",
-                         "relation_type": relation.type.upper(),
-                         "from_node_property_id": relation_constructor.get_id_attribute_from_from_node(),
-                         "to_node_property_id": relation_constructor.get_id_attribute_from_to_node(),
-                         "foreign_key": relation_constructor.foreign_key,
-                         "batch_size": batch_size,
                      })
 
     @staticmethod
@@ -417,11 +265,11 @@ class CypherQueryLibrary:
         #TODO from node
         return Query(query_str=query_str,
                      template_string_parameters={
-                         "from_node": node_constructor.node_constructors.from_node.get_pattern(),
-                         "to_node": node_constructor.node_constructors.to_node.get_pattern(),
-                         "from_node_name": node_constructor.node_constructors.from_node.get_name(),
-                         "to_node_name": node_constructor.node_constructors.to_node.get_name(),
-                         "rel_type": node_constructor.node_constructors.relation_type,
+                         "from_node": node_constructor.relation.from_node.get_pattern(),
+                         "to_node": node_constructor.relation.to_node.get_pattern(),
+                         "from_node_name": node_constructor.relation.from_node.get_name(),
+                         "to_node_name": node_constructor.relation.to_node.get_name(),
+                         "rel_type": node_constructor.relation.relation_type,
                          "result_node": node_constructor.result.get_pattern(),
                          "result_node_name": node_constructor.result.get_name()
                      })
@@ -458,7 +306,7 @@ class CypherQueryLibrary:
                      })
 
     @staticmethod
-    def get_merge_duplicate_df_entity_query(entity: ConstructedNodes) -> Query:
+    def get_merge_duplicate_df_entity_query(node: ConstructedNodes) -> Query:
 
         # language=sql
         query_str = '''
@@ -474,25 +322,29 @@ class CypherQueryLibrary:
                 '''
         return Query(query_str=query_str,
                      template_string_parameters={
-                         "entity_type": entity.node_type,
-                         "df_entity": entity.get_df_label()
+                         "entity_type": node.node_type,
+                         "df_entity": node.get_df_label()
                      })
 
     @staticmethod
-    def delete_parallel_directly_follows_derived(reified_entity: ConstructedNodes, original_entity: ConstructedNodes):
+    def get_dfc_label(entity_type: str, include_label_in_dfc: bool) -> str:
+        if include_label_in_dfc:
+            return f'DF_C_{entity_type.upper()}'
+        else:
+            return f'DF_C'
 
+    @staticmethod
+    def delete_parallel_directly_follows_derived(_type: str, node: Node):
         # language=sql
         query_str = '''
-            MATCH (e1:Event) -[df:$df_reified_entity {entityType: "$reified_entity_type"}]-> (e2:Event)
-            WHERE (e1:Event) -[:$df_original_entity {entityType: "$original_entity_type"}]-> (e2:Event)
+            MATCH (e1:Event) -[df:DF {entityType: "$type"}]-> (e2:Event)
+            WHERE (e1:Event) -[:DF {entityType: "$original_entity_type"}]-> (e2:Event)
             DELETE df'''
 
         return Query(query_str=query_str,
                      template_string_parameters={
-                         "df_reified_entity": reified_entity.get_df_label(),
-                         "df_original_entity": original_entity.get_df_label(),
-                         "reified_entity_type": reified_entity.node_type,
-                         "original_entity_type": original_entity.node_type
+                         "type": _type,
+                         "original_entity_type": node.get_label_str()
                      },
                      parameters={})
 
