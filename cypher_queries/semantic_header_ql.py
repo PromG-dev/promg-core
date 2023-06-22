@@ -20,20 +20,35 @@ class SemanticHeaderQueryLibrary:
                             MATCH ($record) WHERE $conditions
                             MERGE ($result_node)
                             '''
+
+        if node_constructor.set_labels is not None:
+            query_str += '''
+            SET $set_labels
+            '''
+
+        if node_constructor.set_properties is not None:
+            query_str += '''
+            SET $set_result_properties
+            '''
+
         if node_constructor.infer_prevalence_record:
             # language=SQL
-            query_str += '''MERGE (record) <- [:PREVALENCE] - ($result_node_name)
+            query_str += '''
+            MERGE (record) <- [:PREVALENCE] - ($result_node_name)
                 '''
         if node_constructor.infer_corr_from_event_record:
             # language=SQL
-            query_str += '''WITH record, $result_node_name
+            query_str += '''
+            WITH record, $result_node_name
                                 MATCH (event:Event) - [:PREVALENCE] -> (record) <- [:PREVALENCE] - ($result_node_name)
                                 MERGE (event) - [:CORR] -> ($result_node_name)'''
         elif node_constructor.infer_observed:
             # language=SQL
-            query_str += '''WITH record, $result_node_name
+            query_str += '''
+            WITH record, $result_node_name
                                 MATCH (event:Event) - [:PREVALENCE] -> (record) <- [:PREVALENCE] - ($result_node_name)
-                                MERGE (event) <- [:OBSERVED] - ($result_node_name)'''
+                                MERGE (event) <- [:OBSERVED] - ($result_node_name)
+                                '''
 
         return Query(query_str=query_str,
                      template_string_parameters={
@@ -41,6 +56,8 @@ class SemanticHeaderQueryLibrary:
                          "conditions": node_constructor.get_where_condition(node_name="record"),
                          "result_node": node_constructor.result.get_pattern(),
                          "result_node_name": node_constructor.result.get_name(),
+                         "set_result_properties": node_constructor.get_set_result_properties_query(),
+                         "set_labels": node_constructor.get_set_result_labels_query()
                      })
 
     @staticmethod
@@ -113,8 +130,8 @@ class SemanticHeaderQueryLibrary:
         # create a relation between these two entities
 
         query_str = '''
-                            MATCH ($from_node) - [:PREVALENCE] -> (r)
-                            MATCH ($to_node) - [:PREVALENCE] -> (r)
+                            MATCH ($from_node) - [:PREVALENCE] -> (record)
+                            MATCH ($to_node) - [:PREVALENCE] -> (record)
                             MATCH ($record_node)
                             MERGE ($from_node_name) -[$rel_pattern] -> ($to_node_name)
                         '''
@@ -125,7 +142,7 @@ class SemanticHeaderQueryLibrary:
                          "from_node_name": relation.constructed_by.from_node.get_name(),
                          "to_node": relation.constructed_by.to_node.get_pattern(),
                          "to_node_name": relation.constructed_by.to_node.get_name(),
-                         "record_node": relation.constructed_by.prevalent_record.get_pattern(name="r"),
+                         "record_node": relation.constructed_by.prevalent_record.get_pattern(name="record"),
                          "rel_pattern": relation.result.get_pattern()
                      })
 
