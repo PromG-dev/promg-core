@@ -3,7 +3,7 @@ from typing import Optional, List
 from ..data_managers.semantic_header import ConstructedNodes, Relation, Relationship, SemanticHeader, NodeConstructor
 from ..database_managers.db_connection import DatabaseConnection
 from ..utilities.performance_handling import Performance
-from ..cypher_queries.query_library import CypherQueryLibrary
+from ..cypher_queries.semantic_header_ql import SemanticHeaderQueryLibrary as sh_ql
 
 
 class EKGUsingSemanticHeaderBuilder:
@@ -18,26 +18,16 @@ class EKGUsingSemanticHeaderBuilder:
         if self.perf is not None:
             self.perf.finished_step(activity=message)
 
-    def create_log(self):
-        if self.semantic_header.log.include:
-            self.connection.exec_query(CypherQueryLibrary.get_create_log_query)
-            self._write_message_to_performance(message="Creation of (:Log) nodes")
-
-            if self.semantic_header.log.has:
-                self.connection.exec_query(CypherQueryLibrary.get_link_events_to_log_query,
-                                           **{"batch_size": self.batch_size})
-                self._write_message_to_performance(message="Creation of (:Event) <- [:HAS] - (:Log) relation")
-
     def create_nodes_by_records(self, node_types: Optional[List[str]]) -> None:
         for node_constructor in self.semantic_header.get_node_by_record_constructors(node_types):
-            self.connection.exec_query(CypherQueryLibrary.get_create_node_by_record_constructor_query,
+            self.connection.exec_query(sh_ql.get_create_node_by_record_constructor_query,
                                        **{"node_constructor": node_constructor})
             self._write_message_to_performance(f"Node ({node_constructor.get_pattern(with_properties=False)}) created")
 
     def create_nodes_by_relations(self, node_types: Optional[List[str]]) -> None:
         for node_constructors in self.semantic_header.get_nodes_constructed_by_relations(node_types).values():
             for node_constructor in node_constructors:
-                self.connection.exec_query(CypherQueryLibrary.get_create_entities_by_relations_query,
+                self.connection.exec_query(sh_ql.get_create_nodes_by_relations_query,
                                            **{"node_constructor": node_constructor})
                 self._write_message_to_performance(
                     message=f"Relation [{node_constructor.relation.get_pattern()}] reified as "
@@ -52,7 +42,7 @@ class EKGUsingSemanticHeaderBuilder:
         relation: Relation
         for relation in self.semantic_header.get_relations_derived_from_nodes():
             if relation.include and relation.type in relation_types:
-                self.connection.exec_query(CypherQueryLibrary.get_create_relation_using_nodes_query,
+                self.connection.exec_query(sh_ql.get_create_relation_using_nodes_query,
                                            **{"relation": relation})
                 self._write_message_to_performance(
                     message=f"Relation {relation.result.get_pattern(exclude_nodes=False)} done")
@@ -63,7 +53,7 @@ class EKGUsingSemanticHeaderBuilder:
         relation: Relation
         for relation in self.semantic_header.get_relations_derived_from_relations():
             if relation.include and relation.type in relation_types:
-                self.connection.exec_query(CypherQueryLibrary.get_create_relation_by_relations_query,
+                self.connection.exec_query(sh_ql.get_create_relation_by_relations_query,
                                            **{
                                                "relation": relation,
                                                "batch_size": self.batch_size
@@ -77,7 +67,7 @@ class EKGUsingSemanticHeaderBuilder:
 
         for entity in self.semantic_header.nodes:
             if entity.infer_df and entity.node_type in entity_types:
-                self.connection.exec_query(CypherQueryLibrary.get_create_directly_follows_query,
+                self.connection.exec_query(sh_ql.get_create_directly_follows_query,
                                            **{"entity": entity, "batch_size": self.batch_size})
                 self._write_message_to_performance(f"Created [:DF] edge for (:{entity.get_label_string()})")
 
@@ -85,7 +75,7 @@ class EKGUsingSemanticHeaderBuilder:
         node: ConstructedNodes
         for node in self.semantic_header.nodes:
             if node.merge_duplicate_df:
-                self.connection.exec_query(CypherQueryLibrary.get_merge_duplicate_df_entity_query, **{"node": node})
+                self.connection.exec_query(sh_ql.get_merge_duplicate_df_entity_query, **{"node": node})
                 self.perf.finished_step(
                     activity=f"Merged duplicate [:DF] edges for (:{node.get_label_string()}) done")
 
@@ -99,7 +89,7 @@ class EKGUsingSemanticHeaderBuilder:
             from_node = node_constructor.relation.from_node
             to_node = node_constructor.relation.to_node
             for node in [from_node, to_node]:
-                self.connection.exec_query(CypherQueryLibrary.delete_parallel_directly_follows_derived,
+                self.connection.exec_query(sh_ql.delete_parallel_directly_follows_derived,
                                            **{"type": _type,
                                               "node": node})
                 self._write_message_to_performance(
@@ -109,9 +99,4 @@ class EKGUsingSemanticHeaderBuilder:
     def create_static_nodes_and_relations(self):
         self._write_message_to_performance("No implementation yet")
 
-    def add_attributes_to_classifier(self, relation, label, properties, copy_as):
-        self.connection.exec_query(CypherQueryLibrary.add_attributes_to_classifier,
-                                   **{
-                                       "relation": relation, "label": label, "properties": properties,
-                                       "copy_as": copy_as
-                                   })
+

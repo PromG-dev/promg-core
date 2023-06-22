@@ -5,7 +5,7 @@ from tqdm import tqdm
 from ..database_managers.db_connection import DatabaseConnection
 from ..data_managers.datastructures import ImportedDataStructures
 from ..utilities.performance_handling import Performance
-from ..cypher_queries.query_library import CypherQueryLibrary
+from ..cypher_queries.data_importer_ql import DataImporterQueryLibrary as di_ql
 import pandas as pd
 
 
@@ -62,33 +62,33 @@ class Importer:
         datetime_formats = structure.get_datetime_formats()
         for attribute, datetime_format in datetime_formats.items():
             if datetime_format.is_epoch:
-                self.connection.exec_query(CypherQueryLibrary.get_convert_epoch_to_timestamp,
+                self.connection.exec_query(di_ql.get_convert_epoch_to_timestamp_query,
                                            **{
                                                "attribute": attribute,
                                                "datetime_object": datetime_format,
                                                "batch_size": self.batch_size
                                            })
 
-            self.connection.exec_query(CypherQueryLibrary.get_make_timestamp_date_query,
+            self.connection.exec_query(di_ql.get_make_timestamp_date_query,
                                        **{
                                            "attribute": attribute, "datetime_object": datetime_format,
                                            "batch_size": self.batch_size
                                        })
 
     def _merge_nodes(self, structure):
-        self.connection.exec_query(CypherQueryLibrary.merge_same_nodes,
+        self.connection.exec_query(di_ql.get_merge_same_nodes_query,
                                    **{"data_structure": structure})
 
     def _filter_nodes(self, structure):
         for boolean in (True, False):
             attribute_values_pairs_filtered = structure.get_attribute_value_pairs_filtered(exclude=boolean)
             for name, values in attribute_values_pairs_filtered.items():
-                self.connection.exec_query(CypherQueryLibrary.get_filter_events_by_property_query,
+                self.connection.exec_query(di_ql.get_filter_events_by_property_query,
                                            **{"prop": name, "values": values, "exclude": boolean})
 
     def _finalize_import(self, labels):
         # finalize the import
-        self.connection.exec_query(CypherQueryLibrary.get_finalize_import_events_query,
+        self.connection.exec_query(di_ql.get_finalize_import_events_query,
                                    **{"labels": labels,
                                       "batch_size": self.batch_size})
 
@@ -106,7 +106,7 @@ class Importer:
                                   for m in
                                   df_log[batch * self.batch_size:(batch + 1) * self.batch_size].to_dict(
                                       orient='records')]
-            self.connection.exec_query(CypherQueryLibrary.get_create_nodes_by_importing_batch_query,
+            self.connection.exec_query(di_ql.get_create_nodes_by_importing_batch_query,
                                        **{"batch": batch_without_nans, "labels": labels})
 
             pbar.update(1)
