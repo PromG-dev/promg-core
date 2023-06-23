@@ -197,14 +197,12 @@ class DataStructure:
         return [attribute_name for attribute_name, attribute in self.attributes.items() if attribute.is_primary_key]
 
     def get_primary_keys_as_attributes(self):
-        # TODO move to query interpreter
         primary_keys = self.get_primary_keys()
         primary_key_with = [f"n.{primary_key} as {primary_key}" for primary_key in primary_keys]
         primary_key_string = ", ".join(primary_key_with)
         return primary_key_string
 
     def get_label_string(self):
-        # TODO move to query interpreter
         return ":".join(self.labels)
 
     def get_foreign_keys(self):
