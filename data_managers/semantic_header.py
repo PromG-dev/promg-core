@@ -153,6 +153,10 @@ class Node:
     def __repr__(self):
         return self.get_pattern(with_brackets=True)
 
+    @staticmethod
+    def from_dict(obj: Any) -> Optional["Node"]:
+        return Node.from_string(obj)
+
 
 class Relationship:
     def __init__(self, relation_name: str, relation_type: str, from_node: Node, to_node: Node,
@@ -200,6 +204,10 @@ class Relationship:
         return Relationship(relation_name=_relation_name, relation_type=_relation_type,
                             from_node=_from_node, to_node=_to_node, properties=[], where_condition="",
                             has_direction=_has_direction)
+
+    @staticmethod
+    def from_dict(obj: Any) -> Optional["Relationship"]:
+        return Relationship.from_string(obj)
 
     def get_pattern(self, name: Optional[str] = None, exclude_nodes=True, with_brackets=False):
         rel_pattern_str = "$rel_name"
@@ -333,58 +341,6 @@ class RelationConstructorByQuery(ABC):
 
 
 @dataclass
-class Relation():
-    include: bool
-    type: str
-    result: Relationship
-    constructed_by: Union[RelationConstructorByNodes, RelationConstructorByRelations, RelationConstructorByQuery]
-    constructor_type: str
-    include_properties: bool
-
-    @staticmethod
-    def from_dict(obj: Any) -> Optional["Relation"]:
-        if obj is None:
-            return None
-        _include = replace_undefined_value(obj.get("include"), True)
-        if not _include:
-            return None
-
-        _type = obj.get("type")
-
-        _constructed_by = RelationConstructorByNodes.from_dict(obj.get("constructed_by_nodes"))
-        if _constructed_by is None:
-            _constructed_by = RelationConstructorByRelations.from_dict(obj.get("constructed_by_relations"))
-        if _constructed_by is None:
-            _constructed_by = RelationConstructorByQuery.from_dict(obj.get("constructed_by_query"))
-
-        _constructor_type = _constructed_by.__class__.__name__
-
-        _result = Relationship.from_string(obj.get("result"))
-
-        if _constructed_by.from_node.name != _result.from_node.name:
-            raise ValueError(
-                "Name of the from_node in the constructed_by_nodes does not match the name of the from_node"
-                " in the result relationship")
-        if _constructed_by.to_node.name != _result.to_node.name:
-            raise ValueError(
-                "Name of the to_node in the constructed_by_nodes does not match the name of the to_node"
-                " in the result relationship")
-
-        _include_properties = replace_undefined_value(obj.get("include_properties"), True)
-
-        return Relation(_include, _type, constructed_by=_constructed_by, constructor_type=_constructor_type,
-                        include_properties=_include_properties, result=_result)
-
-    def get_conditioned_node(self):
-        if self.constructed_by.from_node.get_condition_string() != "":
-            return "from_node"
-        if self.constructed_by.to_node.get_condition_string() != "":
-            return "to_node"
-        else:
-            return "none"
-
-
-@dataclass
 class NodesConstructorByQuery:
     query: str
 
@@ -502,6 +458,7 @@ class NodeConstructor:
             return None
         return f"{self.result.get_name()}:{self.set_labels}"
 
+
 class ConstructedNodes:
     def __init__(self, node_type: str, include: bool,
                  node_constructors: List["NodeConstructor"],
@@ -562,9 +519,121 @@ class ConstructedNodes:
         else:
             return f'DF'
 
+
+class RelationConstructor:
+    def __init__(self, prevalent_record: Optional[Union["Relationship", "Node"]],
+                 nodes: List["Node"],
+                 relations: List["Relationship"],
+                 from_node: "Node",
+                 to_node: "Node",
+                 result: "Relationship",
+                 set_properties: List[Property]):
+        self.prevalent_record = prevalent_record
+        self.from_node = from_node
+        self.to_node = to_node
+        self.relations = relations
+        self.nodes = nodes
+        self.result = result
+        self.set_properties = set_properties
+
+    @staticmethod
+    def from_dict(obj: Any) -> "RelationConstructor":
+        _prevalent_record = RelationshipOrNode.from_string(obj.get("prevalent_record"))
+        _nodes = create_list(Node, obj.get("nodes"))
+        _relations = create_list(Relationship, obj.get("relations"))
+        _from_node = Node.from_string(obj.get("from_node"))
+        _to_node = Node.from_string(obj.get("to_node"))
+        _result = Relationship.from_string(obj.get("result"))
+        _set_properties = obj.get("set_properties")
+        if _set_properties is not None:
+            _set_properties = _set_properties.split(",")
+            _set_properties = [Property.from_string(prop) for prop in _set_properties]
+
+        return RelationConstructor(prevalent_record=_prevalent_record,
+                                   relations=_relations,
+                                   nodes=_nodes,
+                                   from_node=_from_node,
+                                   to_node=_to_node,
+                                   result=_result,
+                                   set_properties=_set_properties, )
+
+    def __name__(self):
+        if self.prevalent_record is not None:
+            return "constructed_by_record"
+        elif self.nodes is not None:
+            return "constructed_by_nodes"
+        elif self.relations is not None:
+            return "constructed_by_relations"
+
+    def get_type(self):
+        return self.result.relation_type
+
+    def get_prevalent_record_pattern(self, node_name: str):
+        return self.prevalent_record.get_pattern(node_name)
+
+    def get_keys(self):
+        keys = []
+        for prop in self.result.properties:
+            key = prop.ref_attribute
+            keys.append(key)
+        return keys
+
+    def get_where_condition(self, node_name: str = "record"):
+        return " AND ".join(
+            [f'''{node_name}.{key} IS NOT NULL AND {node_name}.{key} <> "Unknown"''' for key
+             in self.get_keys()])
+
+    def get_pattern(self, name: Optional[str] = None, with_brackets=False, with_properties=True):
+        return self.result.get_pattern(name, with_brackets, with_properties)
+
+    def __repr__(self):
+        return self.result.get_pattern(with_brackets=False, exclude_nodes=False)
+
+    def constructed_by_record(self):
+        return self.prevalent_record is not None
+
+    def constructed_by_nodes(self):
+        return len(self.nodes) > 0
+
+    def constructed_by_relations(self):
+        return len(self.relations) > 0
+
+    def get_set_result_properties_query(self):
+        if self.set_properties is None:
+            return None
+        return ",".join([prop.get_pattern(is_set=True) for prop in self.set_properties])
+
+
+    def get_relations_query(self):
+        relation_queries = [f"MATCH {relation.get_pattern(exclude_nodes=False, with_brackets=True)}" for relation in self.relations]
+        relation_query = "\n".join(relation_queries)
+        return relation_query
+
+@dataclass
+class ConstructedRelation:
+    include: bool
+    type: str
+    relation_constructors: List["RelationConstructor"]
+
+    @staticmethod
+    def from_dict(obj: Any) -> Optional["ConstructedRelation"]:
+        if obj is None:
+            return None
+        _include = replace_undefined_value(obj.get("include"), True)
+        if not _include:
+            return None
+
+        _type = obj.get("type")
+        _relation_constructors = create_list(RelationConstructor, obj.get("constructor"))
+        return ConstructedRelation(_include, _type, relation_constructors=_relation_constructors)
+
+    def __repr__(self):
+        return f"[:{self.type}]"
+
+
 class SemanticHeader:
     def __init__(self, name: str, version: str,
-                 nodes: List[ConstructedNodes], relations: List[Relation]):
+                 nodes: List[ConstructedNodes], relations: List[ConstructedRelation]):
         self.name = name
         self.version = version
         self.nodes = nodes
@@ -583,7 +652,7 @@ class SemanticHeader:
         _name = obj.get("name")
         _version = obj.get("version")
         _nodes = create_list(ConstructedNodes, obj.get("nodes"))
-        _relations = create_list(Relation, obj.get("relations"))
+        _relations = create_list(ConstructedRelation, obj.get("relations"))
         return SemanticHeader(_name, _version, _nodes, _relations)
 
     @staticmethod
@@ -598,9 +667,10 @@ class SemanticHeader:
         node_constructors = []
         for node in self.nodes:
             if node_types is None or node.node_type in node_types:
-                for node_constructor in node.node_constructors:
-                    if node_constructor.constructed_by_record():
-                        node_constructors.append(node_constructor)
+                node_constructors.extend([
+                    node_constructor for node_constructor in node.node_constructors if
+                    node_constructor.constructed_by_record()
+                ])
         return node_constructors
 
     def get_nodes_constructed_by_relations(self, node_types: Optional[List[str]] = None,
@@ -614,17 +684,40 @@ class SemanticHeader:
                 for node_constructor in node.node_constructors:
                     if node_constructor.constructed_by_relation():
                         if node.node_type not in node_constructors:
-                            node_constructors[node] = []
-                        node_constructors[node].append(node_constructor)
+                            node_constructors[node.node_type] = []
+                        node_constructors[node.node_type].append(node_constructor)
         return node_constructors
 
     def get_entities_constructed_by_query(self):
         return [entity for entity in self.nodes if
                 entity.constructor_type == "EntityConstructorByQuery"]
 
-    def get_relations_derived_from_nodes(self):
-        return [relation for relation in self.relations if
-                relation.constructor_type == "RelationConstructorByNodes"]
+    def get_relations_constructed_by_nodes(self, rel_types: Optional[List[str]]):
+        return self._get_relations_constructed_by_specific_constructor(rel_types, constructor="nodes")
+
+    def get_relations_constructed_by_relations(self, rel_types: Optional[List[str]]):
+        return self._get_relations_constructed_by_specific_constructor(rel_types, constructor="relations")
+
+    def get_relations_constructed_by_record(self, rel_types: Optional[List[str]]):
+        return self._get_relations_constructed_by_specific_constructor(rel_types, constructor="record")
+
+    def _get_relations_constructed_by_specific_constructor(self, rel_types, constructor):
+        rel_constructors = []
+        for relation in self.relations:
+            if rel_types is None or relation.type in rel_types:
+                if constructor == "nodes":
+                    rel_constructors.extend(
+                        [rel_constructor for rel_constructor in relation.relation_constructors if
+                         rel_constructor.constructed_by_nodes()])
+                elif constructor == "relations":
+                    rel_constructors.extend(
+                        [rel_constructor for rel_constructor in relation.relation_constructors if
+                         rel_constructor.constructed_by_relations()])
+                elif constructor == "record":
+                    rel_constructors.extend(
+                        [rel_constructor for rel_constructor in relation.relation_constructors if
+                         rel_constructor.constructed_by_record()])
+        return rel_constructors
 
     def get_relations_derived_from_relations(self):
         return [relation for relation in self.relations if

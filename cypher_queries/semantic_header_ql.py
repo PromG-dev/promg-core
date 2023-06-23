@@ -1,4 +1,5 @@
-from ..data_managers.semantic_header import ConstructedNodes, Relation, NodeConstructor, Relationship, Node
+from ..data_managers.semantic_header import ConstructedNodes, ConstructedRelation, NodeConstructor, Relationship, Node, \
+    RelationConstructor
 from ..database_managers.db_connection import Query
 
 
@@ -62,7 +63,6 @@ class SemanticHeaderQueryLibrary:
 
     @staticmethod
     def get_create_nodes_by_relations_query(node_constructor: NodeConstructor) -> Query:
-
         if node_constructor.infer_reified_relation:
             # language=sql
             query_str = '''
@@ -98,34 +98,27 @@ class SemanticHeaderQueryLibrary:
                      })
 
     @staticmethod
-    def get_create_relation_by_relations_query(relation: Relation, batch_size: int) -> Query:
+    def get_create_relation_by_relations_query(relation_constructor: RelationConstructor, batch_size: int) -> Query:
         # language=SQL
         query_str = '''
                 CALL apoc.periodic.iterate(
-                '$antecedents_query                        
-                RETURN distinct $from_node, $to_node',
-                'MERGE ($from_node) - [:$type $properties] -> ($to_node)',                        
+                '$relation_queries                        
+                RETURN distinct $from_node_name, $to_node_name',
+                'MERGE ($from_node_name) -[$rel_pattern] -> ($to_node_name)',                        
                 {batchSize: $batch_size})
             '''
 
-        relation_constructor = relation.constructed_by
-        from_node_name = relation_constructor.get_from_node_name()
-        to_node_name = relation_constructor.get_to_node_name()
-
-        properties = ""
-
         return Query(query_str=query_str,
                      template_string_parameters={
-                         "antecedents_query": relation_constructor.get_antecedent_query(),
-                         "from_node": from_node_name,
-                         "to_node": to_node_name,
-                         "type": relation.type,
-                         "properties": properties,
+                         "relation_queries": relation_constructor.get_relations_query(),
+                         "from_node_name": relation_constructor.from_node.get_name(),
+                         "to_node_name": relation_constructor.to_node.get_name(),
+                         "rel_pattern": relation_constructor.result.get_pattern(),
                          "batch_size": batch_size
                      })
 
     @staticmethod
-    def get_create_relation_using_nodes_query(relation: Relation) -> Query:
+    def get_create_relation_using_record_query(relation_constructor: RelationConstructor) -> Query:
         # find events that are related to different entities of which one event also has a reference to the other entity
         # create a relation between these two entities
 
@@ -138,12 +131,12 @@ class SemanticHeaderQueryLibrary:
 
         return Query(query_str=query_str,
                      template_string_parameters={
-                         "from_node": relation.constructed_by.from_node.get_pattern(),
-                         "from_node_name": relation.constructed_by.from_node.get_name(),
-                         "to_node": relation.constructed_by.to_node.get_pattern(),
-                         "to_node_name": relation.constructed_by.to_node.get_name(),
-                         "record_node": relation.constructed_by.prevalent_record.get_pattern(name="record"),
-                         "rel_pattern": relation.result.get_pattern()
+                         "from_node": relation_constructor.from_node.get_pattern(),
+                         "from_node_name": relation_constructor.from_node.get_name(),
+                         "to_node": relation_constructor.to_node.get_pattern(),
+                         "to_node_name": relation_constructor.to_node.get_name(),
+                         "record_node": relation_constructor.prevalent_record.get_pattern(name="record"),
+                         "rel_pattern": relation_constructor.result.get_pattern()
                      })
 
 
