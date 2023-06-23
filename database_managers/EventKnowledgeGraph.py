@@ -172,15 +172,6 @@ class EventKnowledgeGraph:
 
     # region EKG builder using semantic header
 
-    def create_log(self) -> None:
-        # TODO Remove?
-        """
-        Pass on method to ekg_builder to create Log nodes and its relations as specified in the semantic header
-        :return: None
-
-        """
-        self.ekg_builder.create_log()
-
     def create_nodes_by_records(self, node_type: Optional[List[str]] = None) -> None:
         """
         Pass on method to ekg_builder to create relations between entities based on nodes as specified in the
@@ -195,7 +186,7 @@ class EventKnowledgeGraph:
 
         self.ekg_builder.create_nodes_by_records(node_type)
 
-    def create_entity_relations_using_nodes(self, relation_types: Optional[List[str]] = None) -> None:
+    def create_relations_using_record(self, relation_types: Optional[List[str]] = None) -> None:
         """
         Pass on method to ekg_builder to create relations between entities based on nodes as specified in the
         semantic header
@@ -206,9 +197,9 @@ class EventKnowledgeGraph:
         :return: None
 
         """
-        self.ekg_builder.create_entity_relations_using_nodes(relation_types)
+        self.ekg_builder.create_relations_using_record(relation_types)
 
-    def create_entity_relations_using_relations(self, relation_types: Optional[List[str]] = None) -> None:
+    def create_relations_using_relations(self, relation_types: Optional[List[str]] = None) -> None:
         """
         Pass on method to ekg_builder to create relations between entities based on relations as specified in the
         semantic header
@@ -219,19 +210,19 @@ class EventKnowledgeGraph:
         :return: None
 
         """
-        self.ekg_builder.create_entity_relations_using_relations(relation_types)
+        self.ekg_builder.create_relations_using_relations(relation_types)
 
-    def create_entities_by_relations(self, entity_types: Optional[List[str]] = None) -> None:
+    def create_nodes_by_relations(self, node_types: Optional[List[str]] = None) -> None:
         """
         Pass on method to ekg_builder to create entities based on relations as specified in the semantic header
 
-        :param entity_types: list of entity types for which the entities based on relations should be created. In
+        :param node_types: list of entity types for which the entities based on relations should be created. In
         case of None, all entities based on relations are created as specified in the semantic header
-        :type entity_types: List[str], optional
+        :type node_types: List[str], optional
         :return: None
 
         """
-        self.ekg_builder.create_nodes_by_relations(entity_types)
+        self.ekg_builder.create_nodes_by_relations(node_types)
 
     def create_df_edges(self, entity_types: Optional[List[str]] = None) -> None:
         """
