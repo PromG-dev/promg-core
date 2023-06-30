@@ -1,6 +1,6 @@
 from typing import Optional, List
 
-from ..data_managers.semantic_header import ConstructedNodes, Relation, Relationship, SemanticHeader, NodeConstructor
+from ..data_managers.semantic_header import ConstructedNodes, ConstructedRelation, Relationship, SemanticHeader, NodeConstructor
 from ..database_managers.db_connection import DatabaseConnection
 from ..utilities.performance_handling import Performance
 from ..cypher_queries.semantic_header_ql import SemanticHeaderQueryLibrary as sh_ql
@@ -36,31 +36,24 @@ class EKGUsingSemanticHeaderBuilder:
                     message=f"Relation [{node_constructor.relation.get_pattern()}] reified as "
                             f"({node_constructor.get_pattern(with_properties=False)}) node")
 
-    def create_entity_relations_using_nodes(self, relation_types: Optional[List[str]]) -> None:
+    def create_relations_using_record(self, relation_types: Optional[List[str]]) -> None:
         # find events that are related to different entities of which one event also has a reference to the other entity
         # create a relation between these two entities
-        if relation_types is None:
-            relation_types = [relation.type for relation in self.semantic_header.get_relations_derived_from_nodes()]
+        relation: ConstructedRelation
+        for relation_constructor in self.semantic_header.get_relations_constructed_by_record(relation_types):
+            self.connection.exec_query(sh_ql.get_create_relation_using_record_query,
+                                       **{"relation_constructor": relation_constructor})
+            self._write_message_to_performance(
+                message=f"Relation {relation_constructor.get_pattern()} done")
 
-        relation: Relation
-        for relation in self.semantic_header.get_relations_derived_from_nodes():
-            if relation.include and relation.type in relation_types:
-                self.connection.exec_query(sh_ql.get_create_relation_using_nodes_query,
-                                           **{"relation": relation})
-                self._write_message_to_performance(
-                    message=f"Relation {relation.result.get_pattern(exclude_nodes=False)} done")
-
-    def create_entity_relations_using_relations(self, relation_types: Optional[List[str]]) -> None:
-        if relation_types is None:
-            relation_types = [relation.type for relation in self.semantic_header.get_relations_derived_from_relations()]
-        relation: Relation
-        for relation in self.semantic_header.get_relations_derived_from_relations():
-            if relation.include and relation.type in relation_types:
-                self.connection.exec_query(sh_ql.get_create_relation_by_relations_query,
-                                           **{
-                                               "relation": relation,
-                                               "batch_size": self.batch_size
-                                           })
+    def create_relations_using_relations(self, relation_types: Optional[List[str]]) -> None:
+        relation: ConstructedRelation
+        for relation_constructor in self.semantic_header.get_relations_constructed_by_relations(relation_types):
+            self.connection.exec_query(sh_ql.get_create_relation_by_relations_query,
+                                       **{
+                                           "relation_constructor": relation_constructor,
+                                           "batch_size": self.batch_size
+                                       })
 
     def create_df_edges(self, entity_types) -> None:
         entity: ConstructedNodes
