@@ -148,13 +148,14 @@ class DataStructure:
         self.attributes = attributes
         self.split_combined_events = split_combined_events
 
-    def is_event_data(self):
-        return "Event" in self.labels or "EventRecord" in self.labels
+    def has_datetime_attribute(self):
+        return any([attribute.is_datetime for attribute in self.attributes.values()])
+        # return "Event" in self.labels or "EventRecord" in self.labels
 
     def contains_composed_events(self):
         contains_composed_events = "startTimestamp" in self.get_datetime_formats() \
                                    or "completeTimestamp" in self.get_datetime_formats()
-        return self.is_event_data() and contains_composed_events
+        return self.has_datetime_attribute() and contains_composed_events
 
     @staticmethod
     def from_dict(obj: Any) -> Optional['DataStructure']:
@@ -406,7 +407,7 @@ class DataStructure:
         df_log = df_log.dropna(how='all', axis=1)  # drop all columns in which all values are nan (empty)
         df_log = df_log.dropna(how='all')  # drop all columns in which all values are nan (empty)
 
-        if use_sample and self.is_event_data():
+        if use_sample and self.has_datetime_attribute():
             df_log = self.create_sample(file_name, df_log)
 
         df_log = self.preprocess_according_to_attributes(df_log)

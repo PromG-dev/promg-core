@@ -38,7 +38,7 @@ class Importer:
                 self._import_nodes_from_data(labels, df_log, file_name)
                 self._write_message_to_performance(f"Imported data from table {structure.name}: {file_name}")
 
-            if structure.is_event_data():
+            if structure.has_datetime_attribute():
                 # once all events are imported, we convert the string timestamp to the timestamp as used in Cypher
                 self._reformat_timestamps(structure)
                 self._write_message_to_performance(

@@ -21,7 +21,10 @@ class EKGUsingSemanticHeaderBuilder:
     def create_nodes_by_records(self, node_types: Optional[List[str]]) -> None:
         for node_constructor in self.semantic_header.get_node_by_record_constructors(node_types):
             self.connection.exec_query(sh_ql.get_create_node_by_record_constructor_query,
-                                       **{"node_constructor": node_constructor})
+                                       **{
+                                           "node_constructor": node_constructor,
+                                           "batch_size": self.batch_size
+                                       })
             self._write_message_to_performance(f"Node ({node_constructor.get_pattern(with_properties=False)}) created")
 
     def create_nodes_by_relations(self, node_types: Optional[List[str]]) -> None:
@@ -90,13 +93,13 @@ class EKGUsingSemanticHeaderBuilder:
             to_node = node_constructor.relation.to_node
             for node in [from_node, to_node]:
                 self.connection.exec_query(sh_ql.delete_parallel_directly_follows_derived,
-                                           **{"type": _type,
-                                              "node": node})
+                                           **{
+                                               "type": _type,
+                                               "node": node
+                                           })
                 self._write_message_to_performance(
                     f"Deleted parallel DF of (:{node.get_label_string()}) and (:"
                     f"{type})")
 
     def create_static_nodes_and_relations(self):
         self._write_message_to_performance("No implementation yet")
-
-

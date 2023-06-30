@@ -4,21 +4,23 @@ from ..database_managers.db_connection import Query
 
 class SemanticHeaderQueryLibrary:
     @staticmethod
-    def get_create_node_by_record_constructor_query(node_constructor: NodeConstructor) -> Query:
+    def get_create_node_by_record_constructor_query(node_constructor: NodeConstructor, batch_size: int = 5000) -> Query:
         # find events that contain the entity as property and not nan
         # save the value of the entity property as id and also whether it is a virtual entity
         # create a new entity node if it not exists yet with properties
         if "Event" in node_constructor.get_labels():
             # language=SQL
             query_str = '''
-                            MATCH ($record) WHERE $conditions
-                            CREATE ($result_node)
+            CALL apoc.periodic.iterate(
+                            'MATCH ($record) WHERE $conditions RETURN $record_name',
+                            'CREATE ($result_node)
                             '''
         else:
             # language=SQL
             query_str = '''
-                            MATCH ($record) WHERE $conditions
-                            MERGE ($result_node)
+            CALL apoc.periodic.iterate(
+                            'MATCH ($record) WHERE $conditions RETURN $record_name',
+                            'MERGE ($result_node)
                             '''
 
         if node_constructor.set_labels is not None:
@@ -50,14 +52,20 @@ class SemanticHeaderQueryLibrary:
                                 MERGE (event) <- [:OBSERVED] - ($result_node_name)
                                 '''
 
+        query_str += ''' ',
+                         {batch_size: $batch_size, parallel: true})
+        '''
+
         return Query(query_str=query_str,
                      template_string_parameters={
                          "record": node_constructor.get_prevalent_record_pattern(node_name="record"),
+                         "record_name": "record",
                          "conditions": node_constructor.get_where_condition(node_name="record"),
                          "result_node": node_constructor.result.get_pattern(),
                          "result_node_name": node_constructor.result.get_name(),
                          "set_result_properties": node_constructor.get_set_result_properties_query(),
-                         "set_labels": node_constructor.get_set_result_labels_query()
+                         "set_labels": node_constructor.get_set_result_labels_query(),
+                         "batch_size": batch_size
                      })
 
     @staticmethod
