@@ -1,5 +1,6 @@
 import math
 
+import numpy as np
 from tqdm import tqdm
 
 from ..database_managers.db_connection import DatabaseConnection
@@ -101,7 +102,7 @@ class Importer:
             pbar.set_description(f"Loading data from {file_name} from batch {batch}")
 
             # import the events in batches, use the records of the log
-            batch_without_nans = [{k: v for k, v in m.items()
+            batch_without_nans = [{k: int(v) if isinstance(v, np.integer) else v for k, v in m.items()
                                    if (isinstance(v, list) and len(v) > 0) or (not pd.isna(v) and v is not None)}
                                   for m in
                                   df_log[batch * self.batch_size:(batch + 1) * self.batch_size].to_dict(

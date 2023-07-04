@@ -1,6 +1,7 @@
 from typing import Optional, List
 
-from ..data_managers.semantic_header import ConstructedNodes, ConstructedRelation, Relationship, SemanticHeader, NodeConstructor
+from ..data_managers.semantic_header import ConstructedNodes, ConstructedRelation, Relationship, SemanticHeader, \
+    NodeConstructor
 from ..database_managers.db_connection import DatabaseConnection
 from ..utilities.performance_handling import Performance
 from ..cypher_queries.semantic_header_ql import SemanticHeaderQueryLibrary as sh_ql
@@ -25,6 +26,10 @@ class EKGUsingSemanticHeaderBuilder:
                                            "node_constructor": node_constructor,
                                            "batch_size": self.batch_size
                                        })
+            self.connection.exec_query(sh_ql.get_reset_created_record_query,
+                                       **{"node_constructor": node_constructor,
+                                          "batch_size": self.batch_size}
+                                       )
             self._write_message_to_performance(f"Node ({node_constructor.get_pattern(with_properties=False)}) created")
 
     def create_nodes_by_relations(self, node_types: Optional[List[str]]) -> None:

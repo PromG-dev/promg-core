@@ -415,7 +415,9 @@ class NodeConstructor:
     def get_label_string(self):
         return self.result.get_label_str()
 
-    def get_labels(self):
+    def get_labels(self, as_str=True):
+        if as_str:
+            return ",".join([f'"{label}"' for label in self.result.labels])
         return self.result.labels
 
     def get_prevalent_record_pattern(self, node_name: str):
@@ -451,7 +453,12 @@ class NodeConstructor:
     def get_set_result_properties_query(self):
         if self.set_properties is None:
             return None
-        return ",".join([prop.get_pattern(is_set=True) for prop in self.set_properties])
+        return ",".join([prop.get_pattern(is_set=False) for prop in self.set_properties])
+
+    def get_idt_properties_query(self):
+        if self.result.properties is None:
+            return None
+        return ",".join([prop.get_pattern(is_set=False) for prop in self.result.properties])
 
     def get_set_result_labels_query(self):
         if self.set_labels is None:

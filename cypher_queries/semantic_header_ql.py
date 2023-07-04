@@ -1,3 +1,5 @@
+from string import Template
+
 from ..data_managers.semantic_header import ConstructedNodes, ConstructedRelation, NodeConstructor, Relationship, Node, \
     RelationConstructor
 from ..database_managers.db_connection import Query
@@ -9,65 +11,92 @@ class SemanticHeaderQueryLibrary:
         # find events that contain the entity as property and not nan
         # save the value of the entity property as id and also whether it is a virtual entity
         # create a new entity node if it not exists yet with properties
+        merge_or_create = 'apoc.merge.node($labels, {$idt_properties})'
+        set_label_str = ""
+        set_property_str = ""
+        infer_corr_str = ""
+        infer_observed_str = ""
+
         if "Event" in node_constructor.get_labels():
-            # language=SQL
-            query_str = '''
-            CALL apoc.periodic.iterate(
-                            'MATCH ($record) WHERE $conditions RETURN $record_name',
-                            'CREATE ($result_node)
-                            '''
-        else:
-            # language=SQL
-            query_str = '''
-            CALL apoc.periodic.iterate(
-                            'MATCH ($record) WHERE $conditions RETURN $record_name',
-                            'MERGE ($result_node)
-                            '''
+            merge_or_create = 'apoc.create.node([$labels], {$idt_properties})'
 
         if node_constructor.set_labels is not None:
-            query_str += '''
-            SET $set_labels
-            '''
+            set_label_str = f'SET $set_labels'''
 
         if node_constructor.set_properties is not None:
-            query_str += '''
-            SET $set_result_properties
-            '''
+            merge_or_create = 'apoc.merge.node([$labels], {$idt_properties}, {$set_properties})'
 
-        if node_constructor.infer_prevalence_record:
-            # language=SQL
-            query_str += '''
-            MERGE (record) <- [:PREVALENCE] - ($result_node_name)
-                '''
         if node_constructor.infer_corr_from_event_record:
             # language=SQL
-            query_str += '''
-            WITH record, $result_node_name
-                                MATCH (event:Event) - [:PREVALENCE] -> (record) <- [:PREVALENCE] - ($result_node_name)
-                                MERGE (event) - [:CORR] -> ($result_node_name)'''
+            infer_corr_str = '''
+            WITH record, node
+                                MATCH (event:Event) - [:PREVALENCE] -> (record) <- [:PREVALENCE] - (node)
+                                MERGE (event) - [:CORR] -> (node)'''
         elif node_constructor.infer_observed:
             # language=SQL
-            query_str += '''
-            WITH record, $result_node_name
-                                MATCH (event:Event) - [:PREVALENCE] -> (record) <- [:PREVALENCE] - ($result_node_name)
-                                MERGE (event) <- [:OBSERVED] - ($result_node_name)
+            infer_observed_str = '''
+            WITH record, node
+                                MATCH (event:Event) - [:PREVALENCE] -> (record) <- [:PREVALENCE] - (node)
+                                MERGE (event) <- [:OBSERVED] - (node)
                                 '''
 
-        query_str += ''' ',
-                         {batch_size: $batch_size, parallel: true})
-        '''
+        # language=SQL
+        query_str = '''
+                    CALL apoc.periodic.commit(
+                        'MATCH ($record) 
+                            WHERE record.created IS NULL
+                            AND $conditions 
+                            WITH record limit $limit
+                            CALL $merge_or_create
+                            YIELD node
+                            SET record.created = True
+                            $set_label_str
+                            $set_property_str
+                            CREATE (record) <- [:PREVALENCE] - (node)
+                            $infer_corr_str
+                            $infer_observed_str
+                            RETURN count(*)',
+                            {limit: $limit})
+                    '''
+
+        query_str = Template(query_str).safe_substitute({
+            "set_label_str": set_label_str,
+            "set_property_str": set_property_str,
+            "infer_corr_str": infer_corr_str,
+            "infer_observed_str": infer_observed_str,
+            "merge_or_create": merge_or_create,
+        })
 
         return Query(query_str=query_str,
                      template_string_parameters={
                          "record": node_constructor.get_prevalent_record_pattern(node_name="record"),
                          "record_name": "record",
                          "conditions": node_constructor.get_where_condition(node_name="record"),
+                         "labels": node_constructor.get_labels(as_str=True),
+                         "idt_properties": node_constructor.get_idt_properties_query(),
+                         "result_label": node_constructor.get_label_string(),
                          "result_node": node_constructor.result.get_pattern(),
                          "result_node_name": node_constructor.result.get_name(),
-                         "set_result_properties": node_constructor.get_set_result_properties_query(),
-                         "set_labels": node_constructor.get_set_result_labels_query(),
-                         "batch_size": batch_size
-                     })
+                         "set_properties": node_constructor.get_set_result_properties_query(),
+                         "set_labels": node_constructor.get_set_result_labels_query()
+                     },
+                     parameters={"limit": batch_size})
+
+    @staticmethod
+    def get_reset_created_record_query(node_constructor: NodeConstructor, batch_size: int):
+        query_str = '''
+                    CALL apoc.periodic.commit(
+                        'MATCH ($record) 
+                            WHERE record.created = True
+                            WITH record limit $limit
+                            SET record.created = Null
+                            RETURN count(*)',
+                            {limit: $limit})
+                    '''
+        return Query(query_str=query_str,
+                     template_string_parameters={
+                         "record": node_constructor.get_prevalent_record_pattern(node_name="record"),
+                     },parameters={"limit": batch_size*10})
 
     @staticmethod
     def get_create_nodes_by_relations_query(node_constructor: NodeConstructor) -> Query:
@@ -147,7 +176,6 @@ class SemanticHeaderQueryLibrary:
                          "rel_pattern": relation_constructor.result.get_pattern()
                      })
 
-
     @staticmethod
     def get_create_directly_follows_query(entity: ConstructedNodes, batch_size) -> Query:
         # find the specific entities and events with a certain label correlated to that entity
@@ -214,4 +242,3 @@ class SemanticHeaderQueryLibrary:
                          "original_entity_type": node.get_label_str()
                      },
                      parameters={})
-
