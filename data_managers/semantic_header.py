@@ -453,12 +453,12 @@ class NodeConstructor:
     def get_set_result_properties_query(self):
         if self.set_properties is None:
             return None
-        return ",".join([prop.get_pattern(is_set=False) for prop in self.set_properties])
+        return ",".join([prop.get_pattern(is_set=True) for prop in self.set_properties])
 
-    def get_idt_properties_query(self):
+    def get_idt_properties_query(self, node_name = "n"):
         if self.result.properties is None:
             return None
-        return ",".join([prop.get_pattern(is_set=False) for prop in self.result.properties])
+        return ",".join([f"{node_name}.{prop.attribute} as {prop.attribute}" for prop in self.result.properties])
 
     def get_set_result_labels_query(self):
         if self.set_labels is None:
@@ -609,7 +609,6 @@ class RelationConstructor:
         if self.set_properties is None:
             return None
         return ",".join([prop.get_pattern(is_set=True) for prop in self.set_properties])
-
 
     def get_relations_query(self):
         relation_queries = [f"MATCH {relation.get_pattern(exclude_nodes=False, with_brackets=True)}" for relation in self.relations]

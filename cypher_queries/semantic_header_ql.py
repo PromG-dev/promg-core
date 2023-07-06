@@ -11,33 +11,30 @@ class SemanticHeaderQueryLibrary:
         # find events that contain the entity as property and not nan
         # save the value of the entity property as id and also whether it is a virtual entity
         # create a new entity node if it not exists yet with properties
-        merge_or_create = 'apoc.merge.node($labels, {$idt_properties})'
+        merge_or_create = 'CREATE ($result_node)'
         set_label_str = ""
         set_property_str = ""
         infer_corr_str = ""
         infer_observed_str = ""
 
-        if "Event" in node_constructor.get_labels():
-            merge_or_create = 'apoc.create.node([$labels], {$idt_properties})'
-
         if node_constructor.set_labels is not None:
             set_label_str = f'SET $set_labels'''
 
         if node_constructor.set_properties is not None:
-            merge_or_create = 'apoc.merge.node([$labels], {$idt_properties}, {$set_properties})'
+            set_property_str = 'SET $set_result_properties'
 
         if node_constructor.infer_corr_from_event_record:
             # language=SQL
             infer_corr_str = '''
-            WITH record, node
-                                MATCH (event:Event) - [:PREVALENCE] -> (record) <- [:PREVALENCE] - (node)
-                                MERGE (event) - [:CORR] -> (node)'''
+            WITH record, $result_node_name
+                                MATCH (event:Event) - [:PREVALENCE] -> (record) <- [:PREVALENCE] - ($result_node_name)
+                                CREATE (event) - [:CORR] -> ($result_node_name)'''
         elif node_constructor.infer_observed:
             # language=SQL
             infer_observed_str = '''
-            WITH record, node
-                                MATCH (event:Event) - [:PREVALENCE] -> (record) <- [:PREVALENCE] - (node)
-                                MERGE (event) <- [:OBSERVED] - (node)
+            WITH record, $result_node_name
+                                MATCH (event:Event) - [:PREVALENCE] -> (record) <- [:PREVALENCE] - ($result_node_name)
+                                CREATE (event) <- [:OBSERVED] - ($result_node_name)
                                 '''
 
         # language=SQL
@@ -47,12 +44,11 @@ class SemanticHeaderQueryLibrary:
                             WHERE record.created IS NULL
                             AND $conditions 
                             WITH record limit $limit
-                            CALL $merge_or_create
-                            YIELD node
+                            CREATE ($result_node)
                             SET record.created = True
                             $set_label_str
                             $set_property_str
-                            CREATE (record) <- [:PREVALENCE] - (node)
+                            CREATE (record) <- [:PREVALENCE] - ($result_node_name)
                             $infer_corr_str
                             $infer_observed_str
                             RETURN count(*)',
@@ -72,12 +68,9 @@ class SemanticHeaderQueryLibrary:
                          "record": node_constructor.get_prevalent_record_pattern(node_name="record"),
                          "record_name": "record",
                          "conditions": node_constructor.get_where_condition(node_name="record"),
-                         "labels": node_constructor.get_labels(as_str=True),
-                         "idt_properties": node_constructor.get_idt_properties_query(),
-                         "result_label": node_constructor.get_label_string(),
                          "result_node": node_constructor.result.get_pattern(),
                          "result_node_name": node_constructor.result.get_name(),
-                         "set_properties": node_constructor.get_set_result_properties_query(),
+                         "set_result_properties": node_constructor.get_set_result_properties_query(),
                          "set_labels": node_constructor.get_set_result_labels_query()
                      },
                      parameters={"limit": batch_size})
@@ -96,7 +89,45 @@ class SemanticHeaderQueryLibrary:
         return Query(query_str=query_str,
                      template_string_parameters={
                          "record": node_constructor.get_prevalent_record_pattern(node_name="record"),
-                     },parameters={"limit": batch_size*10})
+                     },
+                     parameters={"limit": batch_size*10})
+
+    @staticmethod
+    def get_number_of_ids_query(node_constructor: NodeConstructor):
+        query_str = '''MATCH (n:$labels)
+                        RETURN count(DISTINCT n.sysId) as num_ids'''
+
+        return Query(query_str=query_str,
+                     template_string_parameters={
+                         "labels": node_constructor.get_label_string(),
+                     })
+
+    @staticmethod
+    def get_merge_nodes_with_same_id_query(node_constructor: NodeConstructor, batch_size: int):
+        if "Event" in node_constructor.get_labels():
+            return None
+
+        query_str = '''
+                    CALL apoc.periodic.commit(
+                           'MATCH (n:$labels)
+                           WITH n LIMIT $limit
+                           WITH $idt_properties, collect(n) as same_nodes
+                           WHERE size(same_nodes) > 1
+                           UNWIND range(0, toInteger(floor(size(same_nodes)/100))) as i
+                           WITH same_nodes, i*100 as min_range, apoc.coll.min([(i+1)*100, size(same_nodes)]) AS max_range
+                           WITH same_nodes[min_range..max_range] as lim_nodes
+                           CALL apoc.refactor.mergeNodes(lim_nodes, {properties: "discard", mergeRels: true})
+                           YIELD node
+                           RETURN COUNT(*)',
+                           {limit:$limit})
+                       '''
+        return Query(query_str=query_str,
+                     template_string_parameters={
+                         "labels": node_constructor.get_label_string(),
+                         "idt_properties": node_constructor.get_idt_properties_query()
+                     },
+                     parameters={"limit": batch_size})
+
 
     @staticmethod
     def get_create_nodes_by_relations_query(node_constructor: NodeConstructor) -> Query:

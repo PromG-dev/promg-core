@@ -107,6 +107,7 @@ class Sample:
     population_column: str
     size: int
     ids: List[Any]
+    between: List[str]
 
     @staticmethod
     def from_dict(obj: Any, default_file_name: Optional[str] = None) -> Optional['Sample']:
@@ -121,8 +122,9 @@ class Sample:
         _population_column = obj.get("population_column")
         _size = obj.get("size")
         _ids = obj.get("ids")
+        _between = obj.get("between")
 
-        return Sample(_file_name, _use_random_sample, _population_column, _size, _ids)
+        return Sample(_file_name, _use_random_sample, _population_column, _size, _ids, _between)
 
 
 class DataStructure:
@@ -240,10 +242,17 @@ class DataStructure:
         sample_column = sample.population_column
         if sample.use_random_sample:
             random_selection = random.sample(df_log[sample_column].unique().tolist(), k=sample.size)
+            df_log = df_log[df_log[sample_column].isin(random_selection)]
         else:
-            random_selection = sample.ids
-
-        df_log = df_log[df_log[sample_column].isin(random_selection)]
+            if sample.ids is not None:
+                random_selection = sample.ids
+                df_log = df_log[df_log[sample_column].isin(random_selection)]
+            elif sample.between is not None:
+                start_date = sample.between[0]
+                end_date = sample.between[1]
+                df_log['date_time_conv'] = pd.to_datetime(df_log[sample_column])
+                df_log = df_log.loc[df_log["date_time_conv"].between(start_date, end_date)]
+                df_log = df_log.drop(columns=['date_time_conv'])
 
         return df_log
 
