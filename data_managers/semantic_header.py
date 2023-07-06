@@ -420,7 +420,7 @@ class NodeConstructor:
             return ",".join([f'"{label}"' for label in self.result.labels])
         return self.result.labels
 
-    def get_prevalent_record_pattern(self, node_name: str):
+    def get_prevalent_record_pattern(self, node_name: str = "record"):
         return self.prevalent_record.get_pattern(node_name)
 
     def get_keys(self):

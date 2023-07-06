@@ -34,9 +34,12 @@ class EKGUsingSemanticHeaderBuilder:
                                        })
             if merge_first:
                 self._write_message_to_performance(
-                    f"Node ({node_constructor.get_pattern(with_properties=False)}) merged")
+                    f"Node ({node_constructor.get_pattern(with_properties=False)})"
+                    f"using ({node_constructor.get_prevalent_record_pattern()} merged")
             else:
-                self._write_message_to_performance(f"Node ({node_constructor.get_pattern(with_properties=False)}) created")
+                self._write_message_to_performance(f"Node ({node_constructor.get_pattern(with_properties=False)}) "
+                                                   f"using ({node_constructor.get_prevalent_record_pattern()}) "
+                                                   f"created")
 
             self.connection.exec_query(sh_ql.get_reset_created_record_query,
                                        **{"node_constructor": node_constructor,

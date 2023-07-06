@@ -104,7 +104,7 @@ class SemanticHeaderQueryLibrary:
         return Query(query_str=query_str,
                      template_string_parameters={
                          "labels": node_constructor.get_label_string(),
-                         "attribute": node_constructor.result.properties[0].attribute,
+                         "attribute": node_constructor.result.properties[0].ref_attribute,
                          "record": node_constructor.get_prevalent_record_pattern(node_name="record")
                      })
 
