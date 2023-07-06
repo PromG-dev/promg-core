@@ -7,11 +7,11 @@ from ..database_managers.db_connection import Query
 
 class SemanticHeaderQueryLibrary:
     @staticmethod
-    def get_create_node_by_record_constructor_query(node_constructor: NodeConstructor, batch_size: int = 5000) -> Query:
+    def get_create_node_by_record_constructor_query(node_constructor: NodeConstructor, batch_size: int = 5000, merge=False) -> Query:
         # find events that contain the entity as property and not nan
         # save the value of the entity property as id and also whether it is a virtual entity
         # create a new entity node if it not exists yet with properties
-        merge_or_create = 'CREATE ($result_node)'
+        merge_or_create = 'MERGE' if merge else 'CREATE'
         set_label_str = ""
         set_property_str = ""
         infer_corr_str = ""
@@ -44,7 +44,7 @@ class SemanticHeaderQueryLibrary:
                             WHERE record.created IS NULL
                             AND $conditions 
                             WITH record limit $limit
-                            CREATE ($result_node)
+                            $merge_or_create ($result_node)
                             SET record.created = True
                             $set_label_str
                             $set_property_str
@@ -93,13 +93,19 @@ class SemanticHeaderQueryLibrary:
                      parameters={"limit": batch_size*10})
 
     @staticmethod
-    def get_number_of_ids_query(node_constructor: NodeConstructor):
+    def get_number_of_ids_query(node_constructor: NodeConstructor, use_record: bool = False):
         query_str = '''MATCH (n:$labels)
                         RETURN count(DISTINCT n.sysId) as num_ids'''
+
+        if use_record:
+            query_str = '''MATCH ($record) 
+                           RETURN count(DISTINCT record.$attribute) as num_ids'''
 
         return Query(query_str=query_str,
                      template_string_parameters={
                          "labels": node_constructor.get_label_string(),
+                         "attribute": node_constructor.result.properties[0].attribute,
+                         "record": node_constructor.get_prevalent_record_pattern(node_name="record")
                      })
 
     @staticmethod

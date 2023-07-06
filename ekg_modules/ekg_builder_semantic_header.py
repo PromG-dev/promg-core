@@ -21,24 +21,34 @@ class EKGUsingSemanticHeaderBuilder:
 
     def create_nodes_by_records(self, node_types: Optional[List[str]]) -> None:
         for node_constructor in self.semantic_header.get_node_by_record_constructors(node_types):
+            num_ids = self.connection.exec_query(sh_ql.get_number_of_ids_query,
+                                                   **{"node_constructor": node_constructor,
+                                                      "use_record": True})
+            merge_first = num_ids[0]['num_ids'] < 1000
+
             self.connection.exec_query(sh_ql.get_create_node_by_record_constructor_query,
                                        **{
                                            "node_constructor": node_constructor,
-                                           "batch_size": self.batch_size
+                                           "batch_size": self.batch_size,
+                                           "merge": merge_first
                                        })
-            self._write_message_to_performance(f"Node ({node_constructor.get_pattern(with_properties=False)}) created")
+            if merge_first:
+                self._write_message_to_performance(
+                    f"Node ({node_constructor.get_pattern(with_properties=False)}) merged")
+            else:
+                self._write_message_to_performance(f"Node ({node_constructor.get_pattern(with_properties=False)}) created")
 
             self.connection.exec_query(sh_ql.get_reset_created_record_query,
                                        **{"node_constructor": node_constructor,
                                           "batch_size": self.batch_size}
                                        )
-
-            max_limit = self.connection.exec_query(sh_ql.get_number_of_ids_query,
-                                                   **{"node_constructor": node_constructor})
-            self.connection.exec_query(sh_ql.get_merge_nodes_with_same_id_query,
-                                       **{"node_constructor": node_constructor,
-                                          "batch_size": max(self.batch_size*10, max_limit[0]['num_ids']*2)}
-                                       )
+            if not merge_first:
+                max_limit = self.connection.exec_query(sh_ql.get_number_of_ids_query,
+                                                       **{"node_constructor": node_constructor})
+                self.connection.exec_query(sh_ql.get_merge_nodes_with_same_id_query,
+                                           **{"node_constructor": node_constructor,
+                                              "batch_size": max(self.batch_size*10, max_limit[0]['num_ids']*2)}
+                                           )
 
             self._write_message_to_performance(f"Node ({node_constructor.get_pattern(with_properties=False)}) merged")
 
