@@ -30,11 +30,11 @@ class EKGUsingSemanticHeaderBuilder:
 
     def create_entities(self, entity_types: Optional[List[str]]) -> None:
         if entity_types is None:
-            entity_types = [entity.constructed_by.node_label for entity in
+            entity_types = [entity.type for entity in
                             self.semantic_header.get_entities_constructed_by_nodes()]
         entity: Entity
         for entity in self.semantic_header.get_entities_constructed_by_nodes():
-            if entity.constructed_by.node_label in entity_types:
+            if entity.type in entity_types:
                 self.connection.exec_query(CypherQueryLibrary.get_create_entity_query, **{"entity": entity})
                 self._write_message_to_performance(f"Entity (:{entity.get_label_string()}) node created")
 
