@@ -1,13 +1,15 @@
 from string import Template
 
-from ..data_managers.semantic_header import ConstructedNodes, ConstructedRelation, NodeConstructor, Relationship, Node, \
+from ..data_managers.semantic_header import ConstructedNodes, ConstructedRelation, NodeConstructor, Relationship, \
+    Node, \
     RelationConstructor
 from ..database_managers.db_connection import Query
 
 
 class SemanticHeaderQueryLibrary:
     @staticmethod
-    def get_create_node_by_record_constructor_query(node_constructor: NodeConstructor, batch_size: int = 5000, merge=False) -> Query:
+    def get_create_node_by_record_constructor_query(node_constructor: NodeConstructor, batch_size: int = 5000,
+                                                    merge=False) -> Query:
         # find events that contain the entity as property and not nan
         # save the value of the entity property as id and also whether it is a virtual entity
         # create a new entity node if it not exists yet with properties
@@ -28,6 +30,13 @@ class SemanticHeaderQueryLibrary:
             infer_corr_str = '''
             WITH record, $result_node_name
                                 MATCH (event:Event) - [:PREVALENCE] -> (record) <- [:PREVALENCE] - ($result_node_name)
+                                CREATE (event) - [:CORR] -> ($result_node_name)'''
+        elif node_constructor.infer_corr_from_entity_record:  # TODO update such that only correct events are considered
+            # language=SQL
+            infer_corr_str = '''
+                        WITH record, $result_node_name
+                                MATCH (event:Event) - [:PREVALENCE] -> (record) <- [:PREVALENCE] - (
+                                $result_node_name)
                                 CREATE (event) - [:CORR] -> ($result_node_name)'''
         elif node_constructor.infer_observed:
             # language=SQL
@@ -90,7 +99,7 @@ class SemanticHeaderQueryLibrary:
                      template_string_parameters={
                          "record": node_constructor.get_prevalent_record_pattern(node_name="record"),
                      },
-                     parameters={"limit": batch_size*10})
+                     parameters={"limit": batch_size * 10})
 
     @staticmethod
     def get_number_of_ids_query(node_constructor: NodeConstructor, use_record: bool = False):
@@ -120,7 +129,8 @@ class SemanticHeaderQueryLibrary:
                            WITH $idt_properties, collect(n) as same_nodes
                            WHERE size(same_nodes) > 1
                            UNWIND range(0, toInteger(floor(size(same_nodes)/100))) as i
-                           WITH same_nodes, i*100 as min_range, apoc.coll.min([(i+1)*100, size(same_nodes)]) AS max_range
+                           WITH same_nodes, i*100 as min_range, apoc.coll.min([(i+1)*100, size(same_nodes)]) AS 
+                           max_range
                            WITH same_nodes[min_range..max_range] as lim_nodes
                            CALL apoc.refactor.mergeNodes(lim_nodes, {properties: "discard", mergeRels: true})
                            YIELD node
@@ -133,7 +143,6 @@ class SemanticHeaderQueryLibrary:
                          "idt_properties": node_constructor.get_idt_properties_query()
                      },
                      parameters={"limit": batch_size})
-
 
     @staticmethod
     def get_create_nodes_by_relations_query(node_constructor: NodeConstructor) -> Query:
