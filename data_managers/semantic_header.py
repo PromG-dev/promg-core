@@ -40,7 +40,7 @@ class Property:
             ref_attribute = components[1]
 
         if "." in attribute:
-            components = value.split(".")
+            components = attribute.split(".")
             node_name = components[0]
             node_attribute = components[1]
 
