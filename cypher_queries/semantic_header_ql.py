@@ -214,7 +214,7 @@ class SemanticHeaderQueryLibrary:
                      })
 
     @staticmethod
-    def get_create_directly_follows_query(entity: ConstructedNodes, batch_size) -> Query:
+    def get_create_directly_follows_query(entity: ConstructedNodes, batch_size, event_label) -> Query:
         # find the specific entities and events with a certain label correlated to that entity
         # order all events by time, order_nr and id grouped by a node n
         # collect the sorted nodes as a list
@@ -222,23 +222,69 @@ class SemanticHeaderQueryLibrary:
         # find neighbouring nodes and add an edge between
 
         # language=sql
-        query_str = '''
-             CALL apoc.periodic.iterate(
-                'MATCH (n:$entity_labels_string) <-[:CORR]- (e)
-                WITH n , e as nodes ORDER BY e.timestamp, ID(e)
-                WITH n , collect (nodes) as nodeList
-                UNWIND range(0,size(nodeList)-2) AS i
-                WITH n , nodeList[i] as first, nodeList[i+1] as second
-                RETURN first, second',
-                'MERGE (first) -[df:$df_entity {entityType: "$entity_type"}]->(second)
-                 SET df.type = "DF"
-                ',
-                {batchSize: $batch_size})
-            '''
+
+        if event_label == "CompoundEvent":
+            if entity.node_type == "Resource":
+                query_str = '''
+                     CALL apoc.periodic.iterate(
+                        'MATCH (n:$entity_labels_string) <-[:CORR]- (e:$event_label)
+                        CALL {
+                                WITH e
+                                MATCH (e) - [:CONSISTS_OF] -> (single_event:Event)
+                                RETURN id(single_event) as min_id ORDER BY id(single_event)
+                                LIMIT 1
+                            }
+                        WITH n , e as nodes ORDER BY e.timestamp, min_id
+                        WITH n , collect (nodes) as nodeList
+                        UNWIND range(0,size(nodeList)-2) AS i
+                        WITH n , nodeList[i] as first, nodeList[i+1] as second
+                        RETURN n, first, second',
+                        'MERGE (first) -[df:$df_entity {entityType: "$entity_type"}]->(second)
+                         SET df.type = "DF"
+                         SET df.entityId = n.sysId
+                        ',
+                        {batchSize: $batch_size})
+                    '''
+            else:
+                query_str = '''
+                                     CALL apoc.periodic.iterate(
+                                        'MATCH (n:$entity_labels_string) <-[:CORR]- (e:$event_label)
+                                        CALL {
+                                                WITH e
+                                                MATCH (e) - [:CONSISTS_OF] -> (single_event:Event)
+                                                RETURN id(single_event) as min_id ORDER BY id(single_event)
+                                                LIMIT 1
+                                            }
+                                        WITH n , e as nodes ORDER BY e.timestamp, min_id
+                                        WITH n , collect (nodes) as nodeList
+                                        UNWIND range(0,size(nodeList)-2) AS i
+                                        WITH n , nodeList[i] as first, nodeList[i+1] as second
+                                        RETURN first, second',
+                                        'MERGE (first) -[df:$df_entity {entityType: "$entity_type"}]->(second)
+                                         SET df.type = "DF"
+                                        ',
+                                        {batchSize: $batch_size})
+                                    '''
+
+        else:
+            query_str = '''
+                             CALL apoc.periodic.iterate(
+                                'MATCH (n:$entity_labels_string) <-[:CORR]- (e:$event_label)
+                                WITH n , e as nodes ORDER BY e.timestamp, ID(e)
+                                WITH n , collect (nodes) as nodeList
+                                UNWIND range(0,size(nodeList)-2) AS i
+                                WITH n , nodeList[i] as first, nodeList[i+1] as second
+                                RETURN first, second',
+                                'MERGE (first) -[df:$df_entity {entityType: "$entity_type"}]->(second)
+                                 SET df.type = "DF"
+                                ',
+                                {batchSize: $batch_size})
+                            '''
 
         return Query(query_str=query_str,
                      template_string_parameters={
                          "entity_labels_string": entity.get_label_string(),
+                         "event_label": event_label,
                          "df_entity": entity.get_df_label(),
                          "entity_type": entity.node_type,
                          "batch_size": batch_size
