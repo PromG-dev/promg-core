@@ -29,7 +29,7 @@ class DataImporterQueryLibrary:
         return Query(query_str=query_str, parameters={"labels": labels, "batch": batch})
 
     @staticmethod
-    def get_make_timestamp_date_query(attribute, datetime_object, batch_size) -> Query:
+    def get_make_timestamp_date_query(label, attribute, datetime_object, batch_size) -> Query:
         """
         Convert the strings of the timestamp to the datetime as used in cypher
         Remove the str_timestamp property
@@ -41,7 +41,7 @@ class DataImporterQueryLibrary:
         # language=SQL
         query_str = '''
                 CALL apoc.periodic.iterate(
-                'MATCH (e:Event) WHERE e.$attribute IS NOT NULL AND e.justImported = True 
+                'MATCH (e:$label) WHERE e.$attribute IS NOT NULL AND e.justImported = True 
                 WITH e, e.$offset as timezone_dt
                 WITH e, datetime(apoc.date.convertFormat(timezone_dt, "$datetime_object_format", 
                     "$datetime_object_convert_to")) as converted
@@ -52,6 +52,7 @@ class DataImporterQueryLibrary:
 
         return Query(query_str=query_str,
                      template_string_parameters={
+                         "label": label,
                          "datetime_object_format": datetime_object.format,
                          "datetime_object_convert_to": datetime_object.convert_to,
                          "batch_size": batch_size,
@@ -60,11 +61,11 @@ class DataImporterQueryLibrary:
                      })
 
     @staticmethod
-    def get_convert_epoch_to_timestamp_query(attribute, datetime_object, batch_size) -> Query:
+    def get_convert_epoch_to_timestamp_query(label, attribute, datetime_object, batch_size) -> Query:
         # language=SQL
         query_str = '''
                 CALL apoc.periodic.iterate(
-                'MATCH (e:Event) WHERE e.$attribute IS NOT NULL AND e.justImported = True 
+                'MATCH (e:$label) WHERE e.$attribute IS NOT NULL AND e.justImported = True 
                 WITH e, e.$attribute as timezone_dt
                 WITH e, apoc.date.format(timezone_dt, $unit, 
                     $dt_format) as converted
@@ -78,6 +79,7 @@ class DataImporterQueryLibrary:
         return Query(query_str=query_str,
                      template_string_parameters={"attribute": attribute},
                      parameters={
+                         "label": label,
                          "batch_size": batch_size,
                          "unit": datetime_object.unit,
                          "datetime_object_format": datetime_object.format
