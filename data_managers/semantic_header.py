@@ -40,7 +40,7 @@ class Property:
             ref_attribute = components[1]
 
         if "." in attribute:
-            components = value.split(".")
+            components = attribute.split(".")
             node_name = components[0]
             node_attribute = components[1]
 
@@ -363,6 +363,7 @@ class NodeConstructor:
                  set_labels: str,
                  infer_observed: bool = False,
                  infer_corr_from_event_record: bool = False,
+                 infer_corr_from_entity_record: bool = False,
                  infer_corr_from_reified_parents: bool = False,
                  infer_reified_relation: bool = False):
         self.prevalent_record = prevalent_record
@@ -374,6 +375,7 @@ class NodeConstructor:
         self.infer_prevalence_record = prevalent_record is not None
         self.infer_observed = infer_observed
         self.infer_corr_from_event_record = infer_corr_from_event_record
+        self.infer_corr_from_entity_record = infer_corr_from_entity_record
         self.infer_corr_from_reified_parents = infer_corr_from_reified_parents
         self.infer_reified_relation = infer_reified_relation
 
@@ -390,6 +392,7 @@ class NodeConstructor:
         _set_labels = obj.get("set_labels")
         _infer_observed = replace_undefined_value(obj.get("infer_observed"), False)
         _infer_corr_from_event_record = replace_undefined_value(obj.get("infer_corr_from_event_record"), False)
+        _infer_corr_from_entity_record = replace_undefined_value(obj.get("infer_corr_from_entity_record"), False)
         _infer_corr_from_reified_parents = replace_undefined_value(obj.get("infer_corr_from_reified_parents"), False)
         _infer_reified_relation = replace_undefined_value(obj.get("infer_reified_relation"), False)
 
@@ -399,6 +402,7 @@ class NodeConstructor:
                                result=_result,
                                infer_observed=_infer_observed,
                                infer_corr_from_event_record=_infer_corr_from_event_record,
+                               infer_corr_from_entity_record=_infer_corr_from_entity_record,
                                infer_corr_from_reified_parents=_infer_corr_from_reified_parents,
                                infer_reified_relation=_infer_reified_relation,
                                set_properties=_set_properties,
