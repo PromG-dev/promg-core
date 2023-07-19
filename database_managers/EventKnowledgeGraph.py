@@ -224,7 +224,7 @@ class EventKnowledgeGraph:
         """
         self.ekg_builder.create_nodes_by_relations(node_types)
 
-    def create_df_edges(self, entity_types: Optional[List[str]] = None) -> None:
+    def create_df_edges(self, entity_types: Optional[List[str]] = None, event_label: str = "Event") -> None:
         """
         Pass on method to ekg_builder to create directly follows edges between events for specific entities
 
@@ -234,7 +234,7 @@ class EventKnowledgeGraph:
         :return: None
 
         """
-        self.ekg_builder.create_df_edges(entity_types)
+        self.ekg_builder.create_df_edges(entity_types, event_label)
 
     def merge_duplicate_df(self) -> None:
         """
@@ -317,7 +317,8 @@ class EventKnowledgeGraph:
         self.inference_engine.infer_items_propagate_upwards_multiple_levels(entity, is_load)
 
     # rule D
-    def infer_items_propagate_downwards_multiple_level_w_batching(self, entity_type: str, relative_position_type: str,) -> None:
+    def infer_items_propagate_downwards_multiple_level_w_batching(self, entity_type: str,
+                                                                  relative_position_type: str, ) -> None:
         """
         Pass on method to inference_engine to infer items while propagating downwards multiple levels with batching
 

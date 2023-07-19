@@ -50,11 +50,11 @@ class Importer:
                 self._write_message_to_performance(
                     f"Similar nodes from table {structure.name}: {file_name} are merged")
 
-            self._filter_nodes(structure=structure) # filter nodes according to the structure
+            self._filter_nodes(structure=structure)  # filter nodes according to the structure
             self._write_message_to_performance(
                 f"Filtered the nodes from table {structure.name}: {file_name}")
 
-            self._finalize_import(labels=labels) # removes temporary properties
+            self._finalize_import(labels=labels)  # removes temporary properties
 
             self._write_message_to_performance(
                 f"Finalized the import from table {structure.name}: {file_name}")
@@ -65,6 +65,7 @@ class Importer:
             if datetime_format.is_epoch:
                 self.connection.exec_query(di_ql.get_convert_epoch_to_timestamp_query,
                                            **{
+                                               "label": structure.get_label_string(),
                                                "attribute": attribute,
                                                "datetime_object": datetime_format,
                                                "batch_size": self.batch_size
@@ -72,6 +73,7 @@ class Importer:
 
             self.connection.exec_query(di_ql.get_make_timestamp_date_query,
                                        **{
+                                           "label": structure.get_label_string(),
                                            "attribute": attribute, "datetime_object": datetime_format,
                                            "batch_size": self.batch_size
                                        })
@@ -90,8 +92,10 @@ class Importer:
     def _finalize_import(self, labels):
         # finalize the import
         self.connection.exec_query(di_ql.get_finalize_import_events_query,
-                                   **{"labels": labels,
-                                      "batch_size": self.batch_size})
+                                   **{
+                                       "labels": labels,
+                                       "batch_size": self.batch_size
+                                   })
 
     def _import_nodes_from_data(self, labels, df_log, file_name):
         # start with batch 0 and increment until everything is imported

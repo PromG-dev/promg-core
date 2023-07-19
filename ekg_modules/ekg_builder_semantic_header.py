@@ -83,7 +83,7 @@ class EKGUsingSemanticHeaderBuilder:
                                            "batch_size": self.batch_size
                                        })
 
-    def create_df_edges(self, entity_types) -> None:
+    def create_df_edges(self, entity_types, event_label) -> None:
         entity: ConstructedNodes
 
         if entity_types is None:
@@ -92,7 +92,8 @@ class EKGUsingSemanticHeaderBuilder:
         for entity in self.semantic_header.nodes:
             if entity.infer_df and entity.node_type in entity_types:
                 self.connection.exec_query(sh_ql.get_create_directly_follows_query,
-                                           **{"entity": entity, "batch_size": self.batch_size})
+                                           **{"entity": entity, "batch_size": self.batch_size,
+                                           "event_label": event_label})
                 self._write_message_to_performance(f"Created [:DF] edge for (:{entity.get_label_string()})")
 
     def merge_duplicate_df(self):
