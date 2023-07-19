@@ -410,10 +410,6 @@ class DataStructure:
         else:
             raise TypeError(f"The file extension of {file_name} is not implemented. Use .csv.")
 
-        # drop all columns with only nan values
-        df_log = df_log.dropna(how='all', axis=1)  # drop all columns in which all values are nan (empty)
-        df_log = df_log.dropna(how='all')  # drop all columns in which all values are nan (empty)
-
         if use_sample and self.has_datetime_attribute():
             df_log = self.create_sample(file_name, df_log)
 
@@ -434,8 +430,9 @@ class DataStructure:
         if self.add_log:
             df_log["log"] = file_name
 
-        # if self.add_event_index:
-        #     df_log["idx"] = df_log.reset_index().index
+        # drop all columns with only nan values
+        df_log = df_log.dropna(how='all', axis=1)  # drop all columns in which all values are nan (empty)
+        df_log = df_log.dropna(how='all')  # drop all columns in which all values are nan (empty)
 
         return df_log
 
@@ -487,7 +484,7 @@ class DataStructure:
 class ImportedDataStructures:
     def __init__(self, path: Path):
         random.seed(1)
-        with open(path) as f:
+        with open(path, encoding='utf-8') as f:
             json_event_tables = json.load(f)
 
         self.structures = [DataStructure.from_dict(item) for item in json_event_tables]
