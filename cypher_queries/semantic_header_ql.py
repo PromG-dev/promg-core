@@ -29,20 +29,20 @@ class SemanticHeaderQueryLibrary:
             # language=SQL
             infer_corr_str = '''
             WITH record, $result_node_name
-                                MATCH (event:Event) - [:PREVALENCE] -> (record) <- [:PREVALENCE] - ($result_node_name)
-                                CREATE (event) - [:CORR] -> ($result_node_name)'''
+                                MATCH (event:$event_label) - [:PREVALENCE] -> (record) <- [:PREVALENCE] - ($result_node_name)
+                                MERGE (event) - [:$corr_type] -> ($result_node_name)'''
         elif node_constructor.infer_corr_from_entity_record:  # TODO update such that only correct events are considered
             # language=SQL
             infer_corr_str = '''
                         WITH record, $result_node_name
-                                MATCH (event:Event) - [:PREVALENCE] -> (record) <- [:PREVALENCE] - (
+                                MATCH (event:$event_label) - [:PREVALENCE] -> (record) <- [:PREVALENCE] - (
                                 $result_node_name)
-                                CREATE (event) - [:CORR] -> ($result_node_name)'''
+                                MERGE (event) - [:$corr_type] -> ($result_node_name)'''
         elif node_constructor.infer_observed:
             # language=SQL
             infer_observed_str = '''
             WITH record, $result_node_name
-                                MATCH (event:Event) - [:PREVALENCE] -> (record) <- [:PREVALENCE] - ($result_node_name)
+                                MATCH (event:$event_label) - [:PREVALENCE] -> (record) <- [:PREVALENCE] - ($result_node_name)
                                 CREATE (event) <- [:OBSERVED] - ($result_node_name)
                                 '''
 
@@ -51,13 +51,13 @@ class SemanticHeaderQueryLibrary:
                     CALL apoc.periodic.commit(
                         'MATCH ($record) 
                             WHERE record.created IS NULL
-                            AND $conditions 
+                            $conditions 
                             WITH record limit $limit
                             $merge_or_create ($result_node)
                             SET record.created = True
                             $set_label_str
                             $set_property_str
-                            CREATE (record) <- [:PREVALENCE] - ($result_node_name)
+                            MERGE (record) <- [:PREVALENCE] - ($result_node_name)
                             $infer_corr_str
                             $infer_observed_str
                             RETURN count(*)',
@@ -76,11 +76,13 @@ class SemanticHeaderQueryLibrary:
                      template_string_parameters={
                          "record": node_constructor.get_prevalent_record_pattern(node_name="record"),
                          "record_name": "record",
-                         "conditions": node_constructor.get_where_condition(node_name="record"),
+                         "conditions": node_constructor.get_where_condition(node_name="record", include_start_and=True),
                          "result_node": node_constructor.result.get_pattern(),
                          "result_node_name": node_constructor.result.get_name(),
                          "set_result_properties": node_constructor.get_set_result_properties_query(),
-                         "set_labels": node_constructor.get_set_result_labels_query()
+                         "set_labels": node_constructor.get_set_result_labels_query(),
+                         "corr_type": node_constructor.corr_type,
+                         "event_label": node_constructor.event_label
                      },
                      parameters={"limit": batch_size})
 
@@ -236,7 +238,7 @@ class SemanticHeaderQueryLibrary:
             if entity.node_type == "Resource":
                 query_str = '''
                      CALL apoc.periodic.iterate(
-                        'MATCH (n:$entity_labels_string) <-[:CORR]- (e:$event_label)
+                        'MATCH (n:$entity_labels_string) <-[:$corr_type_string]- (e:$event_label)
                         CALL {
                                 WITH e
                                 MATCH (e) - [:CONSISTS_OF] -> (single_event:Event)
@@ -257,7 +259,7 @@ class SemanticHeaderQueryLibrary:
             else:
                 query_str = '''
                                      CALL apoc.periodic.iterate(
-                                        'MATCH (n:$entity_labels_string) <-[:CORR]- (e:$event_label)
+                                        'MATCH (n:$entity_labels_string) <-[:$corr_type_string]- (e:$event_label)
                                         CALL {
                                                 WITH e
                                                 MATCH (e) - [:CONSISTS_OF] -> (single_event:Event)
@@ -278,7 +280,7 @@ class SemanticHeaderQueryLibrary:
         else:
             query_str = '''
                              CALL apoc.periodic.iterate(
-                                'MATCH (n:$entity_labels_string) <-[:CORR]- (e:$event_label)
+                                'MATCH (n:$entity_labels_string) <-[:$corr_type_string]- (e:$event_label)
                                 WITH n , e as nodes ORDER BY e.timestamp, ID(e)
                                 WITH n , collect (nodes) as nodeList
                                 UNWIND range(0,size(nodeList)-2) AS i
@@ -293,6 +295,7 @@ class SemanticHeaderQueryLibrary:
         return Query(query_str=query_str,
                      template_string_parameters={
                          "entity_labels_string": entity.get_label_string(),
+                         "corr_type_string": entity.get_corr_type_strings(),
                          "event_label": event_label,
                          "df_entity": entity.get_df_label(),
                          "entity_type": entity.node_type,
