@@ -365,6 +365,8 @@ class NodeConstructor:
                  infer_corr_from_event_record: bool = False,
                  infer_corr_from_entity_record: bool = False,
                  infer_corr_from_reified_parents: bool = False,
+                 event_label: str = "Event",
+                 corr_type: str = "CORR",
                  infer_reified_relation: bool = False):
         self.prevalent_record = prevalent_record
         self.relation = relation
@@ -377,6 +379,8 @@ class NodeConstructor:
         self.infer_corr_from_event_record = infer_corr_from_event_record
         self.infer_corr_from_entity_record = infer_corr_from_entity_record
         self.infer_corr_from_reified_parents = infer_corr_from_reified_parents
+        self.event_label = event_label
+        self.corr_type = corr_type
         self.infer_reified_relation = infer_reified_relation
 
     @staticmethod
@@ -394,6 +398,8 @@ class NodeConstructor:
         _infer_corr_from_event_record = replace_undefined_value(obj.get("infer_corr_from_event_record"), False)
         _infer_corr_from_entity_record = replace_undefined_value(obj.get("infer_corr_from_entity_record"), False)
         _infer_corr_from_reified_parents = replace_undefined_value(obj.get("infer_corr_from_reified_parents"), False)
+        _corr_type = replace_undefined_value(obj.get("corr_type"), "CORR")
+        _event_label = replace_undefined_value(obj.get("event_label"), "Event")
         _infer_reified_relation = replace_undefined_value(obj.get("infer_reified_relation"), False)
 
         return NodeConstructor(prevalent_record=_prevalent_record,
@@ -404,6 +410,8 @@ class NodeConstructor:
                                infer_corr_from_event_record=_infer_corr_from_event_record,
                                infer_corr_from_entity_record=_infer_corr_from_entity_record,
                                infer_corr_from_reified_parents=_infer_corr_from_reified_parents,
+                               corr_type=_corr_type,
+                               event_label=_event_label,
                                infer_reified_relation=_infer_reified_relation,
                                set_properties=_set_properties,
                                set_labels=_set_labels)
@@ -430,14 +438,22 @@ class NodeConstructor:
     def get_keys(self):
         keys = []
         for prop in self.result.properties:
-            key = prop.ref_attribute
-            keys.append(key)
+            # only check whether the ref attribute exists, if it should exist in the ref node
+            if prop.ref_node is not None:
+                key = prop.ref_attribute
+                keys.append(key)
         return keys
 
-    def get_where_condition(self, node_name: str = "record"):
-        return " AND ".join(
+    def get_where_condition(self, node_name: str = "record", include_start_and: bool = False):
+        condition_str = " AND ".join(
             [f'''{node_name}.{key} IS NOT NULL AND {node_name}.{key} <> "Unknown"''' for key
              in self.get_keys()])
+        if condition_str != "":
+            if include_start_and:
+                return f"AND {condition_str}"
+            else:
+                return condition_str
+        return condition_str
 
     def get_pattern(self, name: Optional[str] = None, with_brackets=False, with_properties=True):
         return self.result.get_pattern(name, with_brackets, with_properties)
@@ -459,7 +475,7 @@ class NodeConstructor:
             return None
         return ",".join([prop.get_pattern(is_set=True) for prop in self.set_properties])
 
-    def get_idt_properties_query(self, node_name = "n"):
+    def get_idt_properties_query(self, node_name="n"):
         if self.result.properties is None:
             return None
         return ",".join([f"{node_name}.{prop.attribute} as {prop.attribute}" for prop in self.result.properties])
@@ -484,11 +500,6 @@ class ConstructedNodes:
         self.include_label_in_df = include_label_in_df
         self.merge_duplicate_df = merge_duplicate_df
         self.delete_parallel_df = delete_parallel_df
-
-        labels = self.node_constructors[0].get_labels()
-        for constructor in self.node_constructors:
-            if set(labels) != set(constructor.get_labels()):
-                raise ValueError(f"The resulting nodes for {self.node_type} do not have the same labels")
 
     def __repr__(self):
         return f"(:{self.get_label_string()})"
@@ -523,6 +534,10 @@ class ConstructedNodes:
 
     def get_labels(self):
         return self.node_constructors[0].get_labels()
+
+    def get_corr_type_strings(self):
+        corr_types = list(set([node_constructor.corr_type for node_constructor in self.node_constructors]))
+        return "|".join(corr_types)
 
     def get_df_label(self):
         if self.include_label_in_df:
@@ -615,9 +630,11 @@ class RelationConstructor:
         return ",".join([prop.get_pattern(is_set=True) for prop in self.set_properties])
 
     def get_relations_query(self):
-        relation_queries = [f"MATCH {relation.get_pattern(exclude_nodes=False, with_brackets=True)}" for relation in self.relations]
+        relation_queries = [f"MATCH {relation.get_pattern(exclude_nodes=False, with_brackets=True)}" for relation in
+                            self.relations]
         relation_query = "\n".join(relation_queries)
         return relation_query
+
 
 @dataclass
 class ConstructedRelation:
