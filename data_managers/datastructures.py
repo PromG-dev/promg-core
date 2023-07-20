@@ -131,7 +131,7 @@ class DataStructure:
     def __init__(self, include: bool, name: str, file_directory: str, file_names: List[str],
                  encoding: str, seperator: str, decimal: str,
                  labels: List[str], true_values: List[str], false_values: List[str],
-                 add_log: bool, add_event_index: bool,
+                 add_log: bool, add_index: bool,
                  samples: Dict[str, Sample], attributes: Dict[str, Attribute],
                  split_combined_events: bool):
         self.include = include
@@ -145,7 +145,7 @@ class DataStructure:
         self.true_values = true_values
         self.false_values = false_values
         self.add_log = add_log
-        self.add_event_index = add_event_index
+        self.add_index = add_index
         self.samples = samples
         self.attributes = attributes
         self.split_combined_events = split_combined_events
@@ -180,7 +180,7 @@ class DataStructure:
         _true_values = obj.get("true_values")
         _false_values = obj.get("false_values")
         _add_log = replace_undefined_value(obj.get("add_log"), False)
-        _add_event_index = replace_undefined_value(obj.get("add_event_index"), True)
+        _add_index = replace_undefined_value(obj.get("add_index"), True)
 
         _samples_obj = obj.get("samples") if obj.get("samples") is not None else obj.get("sample")
         if len(_file_names) == 1:  # single file name is defined
@@ -193,7 +193,7 @@ class DataStructure:
         _attributes = {attribute.name: attribute for attribute in _attributes}
         _split_combined_events = replace_undefined_value(obj.get("split_combined_events"), False)
         return DataStructure(_include, _name, _file_directory, _file_names, _encoding, _seperator, _decimal,
-                             _labels, _true_values, _false_values, _add_log, _add_event_index,
+                             _labels, _true_values, _false_values, _add_log, _add_index,
                              _samples, _attributes, _split_combined_events)
 
     def get_primary_keys(self):
@@ -429,6 +429,9 @@ class DataStructure:
 
         if self.add_log:
             df_log["log"] = file_name
+
+        if self.add_index:
+            df_log["index"] = df_log.index
 
         # drop all columns with only nan values
         df_log = df_log.dropna(how='all', axis=1)  # drop all columns in which all values are nan (empty)
