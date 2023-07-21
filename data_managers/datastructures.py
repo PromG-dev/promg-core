@@ -1,5 +1,6 @@
 import json
 import os
+import re
 import warnings
 import random
 from pathlib import Path
@@ -28,7 +29,11 @@ class DatetimeObject:
             return None
         _format = obj.get("format")
         _timezone_offset = replace_undefined_value(obj.get("timezone_offset"), "")
-        _convert_to = str(obj.get("convert_to"))
+        _convert_to = "ISO_DATE"
+        if re.search('[hkHK]', _format):
+            _convert_to = "ISO_DATE_TIME"
+
+        # _convert_to = str(obj.get("convert_to"))
         _is_epoch = replace_undefined_value(obj.get("is_epoch"), False)
         _unit = obj.get("unit")
         return DatetimeObject(_format, _timezone_offset, _convert_to, _is_epoch, _unit)
