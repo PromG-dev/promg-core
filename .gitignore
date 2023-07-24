@@ -1,2 +1,4 @@
 /.idea/
 *.pyc
+/promg.egg-info
+/dist
