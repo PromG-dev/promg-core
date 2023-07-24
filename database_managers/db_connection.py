@@ -35,6 +35,8 @@ class DatabaseConnection(object):
 
     def exec_query(self, function, **kwargs):
         result = function(**kwargs)
+        if result is None:
+            return
         query = result.query_string
         kwargs = result.kwargs
         database = result.database

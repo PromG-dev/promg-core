@@ -172,42 +172,21 @@ class EventKnowledgeGraph:
 
     # region EKG builder using semantic header
 
-    def create_log(self) -> None:
-        """
-        Pass on method to ekg_builder to create Log nodes and its relations as specified in the semantic header
-        :return: None
-
-        """
-        self.ekg_builder.create_log()
-
-    def create_entities_by_nodes(self, entity_types: Optional[List[str]] = None) -> None:
+    def create_nodes_by_records(self, node_type: Optional[List[str]] = None) -> None:
         """
         Pass on method to ekg_builder to create relations between entities based on nodes as specified in the
         semantic header
 
-        :param entity_types: list of entity types that should be created based on nodes. In case of None,
+        :param node_type: list of entity types that should be created based on nodes. In case of None,
         all entities based on nodes are created as specified in the semantic header
-        :type entity_types: List[str], optional
+        :type node_type: List[str], optional
         :return: None
 
         """
 
-        self.ekg_builder.create_entities(entity_types)
+        self.ekg_builder.create_nodes_by_records(node_type)
 
-    def correlate_events_to_entities(self, entity_types: Optional[List[str]] = None) -> None:
-        """
-        Pass on method to ekg_builder to create relations between entities based on nodes as specified in the
-        semantic header
-
-        :param entity_types: list of entity types that should be correlated to events. In case of None, all relations
-        based on entities are correlated to events as specified in the semantic header
-        :type entity_types: List[str], optional
-        :return: None
-
-        """
-        self.ekg_builder.correlate_events_to_entities(entity_types)
-
-    def create_entity_relations_using_nodes(self, relation_types: Optional[List[str]] = None) -> None:
+    def create_relations_using_record(self, relation_types: Optional[List[str]] = None) -> None:
         """
         Pass on method to ekg_builder to create relations between entities based on nodes as specified in the
         semantic header
@@ -218,9 +197,9 @@ class EventKnowledgeGraph:
         :return: None
 
         """
-        self.ekg_builder.create_entity_relations_using_nodes(relation_types)
+        self.ekg_builder.create_relations_using_record(relation_types)
 
-    def create_entity_relations_using_relations(self, relation_types: Optional[List[str]] = None) -> None:
+    def create_relations_using_relations(self, relation_types: Optional[List[str]] = None) -> None:
         """
         Pass on method to ekg_builder to create relations between entities based on relations as specified in the
         semantic header
@@ -231,34 +210,21 @@ class EventKnowledgeGraph:
         :return: None
 
         """
-        self.ekg_builder.create_entity_relations_using_relations(relation_types)
+        self.ekg_builder.create_relations_using_relations(relation_types)
 
-    def create_entities_by_relations(self, entity_types: Optional[List[str]] = None) -> None:
+    def create_nodes_by_relations(self, node_types: Optional[List[str]] = None) -> None:
         """
         Pass on method to ekg_builder to create entities based on relations as specified in the semantic header
 
-        :param entity_types: list of entity types for which the entities based on relations should be created. In
+        :param node_types: list of entity types for which the entities based on relations should be created. In
         case of None, all entities based on relations are created as specified in the semantic header
-        :type entity_types: List[str], optional
+        :type node_types: List[str], optional
         :return: None
 
         """
-        self.ekg_builder.create_entities_by_relations(entity_types)
+        self.ekg_builder.create_nodes_by_relations(node_types)
 
-    def correlate_events_to_reification(self) -> None:
-        """
-        Pass on method to ekg_builder to correlate events to reified entities
-        #TODO rename reified entities
-
-        :param entity_types: list of entity types for which the DFs should be created. In case of None,
-        DFs are created for all EntityTypes as specified in the semantic header
-        :type entity_types: List[str], optional
-        :return: None
-
-        """
-        self.ekg_builder.correlate_events_to_reification()
-
-    def create_df_edges(self, entity_types: Optional[List[str]] = None) -> None:
+    def create_df_edges(self, entity_types: Optional[List[str]] = None, event_label: str = "Event") -> None:
         """
         Pass on method to ekg_builder to create directly follows edges between events for specific entities
 
@@ -268,7 +234,7 @@ class EventKnowledgeGraph:
         :return: None
 
         """
-        self.ekg_builder.create_df_edges(entity_types)
+        self.ekg_builder.create_df_edges(entity_types, event_label)
 
     def merge_duplicate_df(self) -> None:
         """
@@ -287,14 +253,6 @@ class EventKnowledgeGraph:
         """
         self.ekg_builder.delete_parallel_dfs_derived()
 
-    def create_classes(self) -> None:
-        """
-        Pass on method to ekg_builder to create class nodes
-
-        :return: None
-        """
-        self.ekg_builder.create_classes()
-
     def create_static_nodes_and_relations(self) -> None:
         """
         Pass on method to ekg_builder to create static nodes and relations
@@ -303,21 +261,6 @@ class EventKnowledgeGraph:
         :return: None
         """
         self.ekg_builder.create_static_nodes_and_relations()
-
-    def add_entity_to_event(self, entity_type: str) -> None:
-        """
-        Pass on method to inference_engine to add the entity identifier as an attribute to an event
-
-        :param entity_type: The type of the entity
-        :type entity_type: str
-        :return: None
-
-        :raise ValueError: when the entity has not been defined
-        """
-        entity = self.semantic_header.get_entity(entity_type)
-        if entity_type is None:
-            raise ValueError(f"{entity_type} is not defined in semantic header")
-        self.inference_engine.add_entity_as_event_attribute(entity)
 
     def match_entity_with_batch_position(self, entity_type: str, relative_position_type: str) -> None:
         """
@@ -336,7 +279,6 @@ class EventKnowledgeGraph:
         if entity is None:
             raise ValueError(f"{entity_type} is not defined in semantic header")
         self.inference_engine.match_entity_with_batch_position(entity, relative_position)
-        self.add_entity_to_event(entity_type=entity_type)
 
     # rule B
     def infer_items_propagate_downwards_one_level(self, entity_type: str) -> None:
@@ -353,7 +295,6 @@ class EventKnowledgeGraph:
         if entity_type is None:
             raise ValueError(f"{entity_type} is not defined in semantic header")
         self.inference_engine.infer_items_propagate_downwards_one_level(entity)
-        self.add_entity_to_event(entity_type=entity_type)
 
     # rule C
     def infer_items_propagate_upwards_multiple_levels(self, entity_type: str, is_load=True) -> None:
@@ -374,10 +315,10 @@ class EventKnowledgeGraph:
         if entity is None:
             raise ValueError(f"{entity_type} is not defined in semantic header")
         self.inference_engine.infer_items_propagate_upwards_multiple_levels(entity, is_load)
-        self.add_entity_to_event(entity_type=entity_type)
 
     # rule D
-    def infer_items_propagate_downwards_multiple_level_w_batching(self, entity_type: str, relative_position_type: str,) -> None:
+    def infer_items_propagate_downwards_multiple_level_w_batching(self, entity_type: str,
+                                                                  relative_position_type: str, ) -> None:
         """
         Pass on method to inference_engine to infer items while propagating downwards multiple levels with batching
 
@@ -394,7 +335,6 @@ class EventKnowledgeGraph:
         if entity_type is None:
             raise ValueError(f"{entity_type} is not defined in semantic header")
         self.inference_engine.infer_items_propagate_downwards_multiple_level_w_batching(entity, relative_position)
-        self.add_entity_to_event(entity_type=entity_type)
 
     # endregion
 

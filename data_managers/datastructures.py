@@ -1,5 +1,6 @@
 import json
 import os
+import re
 import warnings
 import random
 from pathlib import Path
@@ -28,7 +29,11 @@ class DatetimeObject:
             return None
         _format = obj.get("format")
         _timezone_offset = replace_undefined_value(obj.get("timezone_offset"), "")
-        _convert_to = str(obj.get("convert_to"))
+        _convert_to = "ISO_DATE"
+        if re.search('[hkHK]', _format):
+            _convert_to = "ISO_DATE_TIME"
+
+        # _convert_to = str(obj.get("convert_to"))
         _is_epoch = replace_undefined_value(obj.get("is_epoch"), False)
         _unit = obj.get("unit")
         return DatetimeObject(_format, _timezone_offset, _convert_to, _is_epoch, _unit)
@@ -107,6 +112,7 @@ class Sample:
     population_column: str
     size: int
     ids: List[Any]
+    between: List[str]
 
     @staticmethod
     def from_dict(obj: Any, default_file_name: Optional[str] = None) -> Optional['Sample']:
@@ -121,15 +127,16 @@ class Sample:
         _population_column = obj.get("population_column")
         _size = obj.get("size")
         _ids = obj.get("ids")
+        _between = obj.get("between")
 
-        return Sample(_file_name, _use_random_sample, _population_column, _size, _ids)
+        return Sample(_file_name, _use_random_sample, _population_column, _size, _ids, _between)
 
 
 class DataStructure:
     def __init__(self, include: bool, name: str, file_directory: str, file_names: List[str],
                  encoding: str, seperator: str, decimal: str,
                  labels: List[str], true_values: List[str], false_values: List[str],
-                 add_log: bool, add_event_index: bool,
+                 add_log: bool, add_index: bool,
                  samples: Dict[str, Sample], attributes: Dict[str, Attribute],
                  split_combined_events: bool):
         self.include = include
@@ -143,18 +150,19 @@ class DataStructure:
         self.true_values = true_values
         self.false_values = false_values
         self.add_log = add_log
-        self.add_event_index = add_event_index
+        self.add_index = add_index
         self.samples = samples
         self.attributes = attributes
         self.split_combined_events = split_combined_events
 
-    def is_event_data(self):
-        return "Event" in self.labels
+    def has_datetime_attribute(self):
+        return any([attribute.is_datetime for attribute in self.attributes.values()])
+        # return "Event" in self.labels or "EventRecord" in self.labels
 
     def contains_composed_events(self):
         contains_composed_events = "startTimestamp" in self.get_datetime_formats() \
                                    or "completeTimestamp" in self.get_datetime_formats()
-        return self.is_event_data() and contains_composed_events
+        return self.has_datetime_attribute() and contains_composed_events
 
     @staticmethod
     def from_dict(obj: Any) -> Optional['DataStructure']:
@@ -177,7 +185,7 @@ class DataStructure:
         _true_values = obj.get("true_values")
         _false_values = obj.get("false_values")
         _add_log = replace_undefined_value(obj.get("add_log"), False)
-        _add_event_index = replace_undefined_value(obj.get("add_event_index"), True)
+        _add_index = replace_undefined_value(obj.get("add_index"), True)
 
         _samples_obj = obj.get("samples") if obj.get("samples") is not None else obj.get("sample")
         if len(_file_names) == 1:  # single file name is defined
@@ -190,21 +198,19 @@ class DataStructure:
         _attributes = {attribute.name: attribute for attribute in _attributes}
         _split_combined_events = replace_undefined_value(obj.get("split_combined_events"), False)
         return DataStructure(_include, _name, _file_directory, _file_names, _encoding, _seperator, _decimal,
-                             _labels, _true_values, _false_values, _add_log, _add_event_index,
+                             _labels, _true_values, _false_values, _add_log, _add_index,
                              _samples, _attributes, _split_combined_events)
 
     def get_primary_keys(self):
         return [attribute_name for attribute_name, attribute in self.attributes.items() if attribute.is_primary_key]
 
     def get_primary_keys_as_attributes(self):
-        # TODO move to query interpreter
         primary_keys = self.get_primary_keys()
         primary_key_with = [f"n.{primary_key} as {primary_key}" for primary_key in primary_keys]
         primary_key_string = ", ".join(primary_key_with)
         return primary_key_string
 
     def get_label_string(self):
-        # TODO move to query interpreter
         return ":".join(self.labels)
 
     def get_foreign_keys(self):
@@ -241,10 +247,17 @@ class DataStructure:
         sample_column = sample.population_column
         if sample.use_random_sample:
             random_selection = random.sample(df_log[sample_column].unique().tolist(), k=sample.size)
+            df_log = df_log[df_log[sample_column].isin(random_selection)]
         else:
-            random_selection = sample.ids
-
-        df_log = df_log[df_log[sample_column].isin(random_selection)]
+            if sample.ids is not None:
+                random_selection = sample.ids
+                df_log = df_log[df_log[sample_column].isin(random_selection)]
+            elif sample.between is not None:
+                start_date = sample.between[0]
+                end_date = sample.between[1]
+                df_log['date_time_conv'] = pd.to_datetime(df_log[sample_column])
+                df_log = df_log.loc[df_log["date_time_conv"].between(start_date, end_date)]
+                df_log = df_log.drop(columns=['date_time_conv'])
 
         return df_log
 
@@ -402,11 +415,7 @@ class DataStructure:
         else:
             raise TypeError(f"The file extension of {file_name} is not implemented. Use .csv.")
 
-        # drop all columns with only nan values
-        df_log = df_log.dropna(how='all', axis=1)  # drop all columns in which all values are nan (empty)
-        df_log = df_log.dropna(how='all')  # drop all columns in which all values are nan (empty)
-
-        if use_sample and self.is_event_data():
+        if use_sample and self.has_datetime_attribute():
             df_log = self.create_sample(file_name, df_log)
 
         df_log = self.preprocess_according_to_attributes(df_log)
@@ -426,8 +435,12 @@ class DataStructure:
         if self.add_log:
             df_log["log"] = file_name
 
-        # if self.add_event_index:
-        #     df_log["idx"] = df_log.reset_index().index
+        if self.add_index:
+            df_log["index"] = df_log.index
+
+        # drop all columns with only nan values
+        df_log = df_log.dropna(how='all', axis=1)  # drop all columns in which all values are nan (empty)
+        df_log = df_log.dropna(how='all')  # drop all columns in which all values are nan (empty)
 
         return df_log
 
@@ -479,7 +492,7 @@ class DataStructure:
 class ImportedDataStructures:
     def __init__(self, path: Path):
         random.seed(1)
-        with open(path) as f:
+        with open(path, encoding='utf-8') as f:
             json_event_tables = json.load(f)
 
         self.structures = [DataStructure.from_dict(item) for item in json_event_tables]

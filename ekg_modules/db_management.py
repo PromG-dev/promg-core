@@ -1,8 +1,8 @@
 from typing import List, Set, Optional, Dict
 
 
-from ..cypher_queries.query_library import CypherQueryLibrary as cql
-from ..data_managers.semantic_header import Entity
+from ..cypher_queries.db_managment_ql import DBManagementQueryLibrary as dbm_ql
+from ..data_managers.semantic_header import ConstructedNodes
 from ..database_managers.db_connection import DatabaseConnection
 from ..utilities.performance_handling import Performance
 
@@ -18,19 +18,19 @@ class DBManagement:
             self.perf.finished_step(activity=message)
 
     def clear_db(self):
-        self.connection.exec_query(cql.get_clear_db_query, **{"db_name": self.db_name})
+        self.connection.exec_query(dbm_ql.get_clear_db_query, **{"db_name": self.db_name})
         self._write_message_to_performance("DB is cleared")
 
     def set_constraints(self):
         # for implementation only (not required by schema or patterns)
-        self.connection.exec_query(cql.get_constraint_unique_event_id_query)
+        self.connection.exec_query(dbm_ql.get_constraint_unique_event_id_query)
         self._write_message_to_performance("Constraint on unique event IDs is set")
 
         # required by core pattern
-        self.connection.exec_query(cql.get_constraint_unique_entity_uid_query)
+        self.connection.exec_query(dbm_ql.get_constraint_unique_entity_uid_query)
         self._write_message_to_performance("Constraint on unique entity uIDs is set")
 
-        self.connection.exec_query(cql.get_constraint_unique_log_id_query)
+        self.connection.exec_query(dbm_ql.get_constraint_unique_log_id_query)
         self._write_message_to_performance("Constraint on unique log IDs is set")
 
     def get_all_rel_types(self) -> List[str]:
@@ -40,7 +40,7 @@ class DBManagement:
         """
 
         # execute the query and store the result
-        result = self.connection.exec_query(cql.get_all_rel_types_query)
+        result = self.connection.exec_query(dbm_ql.get_all_rel_types_query)
         # in case there are no rel types, the result is None
         # return in this case an emtpy list
         if result is None:
@@ -56,7 +56,7 @@ class DBManagement:
         """
 
         # execute the query and store the result
-        result = self.connection.exec_query(cql.get_all_node_labels)
+        result = self.connection.exec_query(dbm_ql.get_all_node_labels_query)
         # in case there are no labels, return an empty set
         if result is None:
             return set([])
@@ -72,18 +72,18 @@ class DBManagement:
             else:
                 return []
 
-        node_count = self.connection.exec_query(cql.get_node_count_query)
-        edge_count = self.connection.exec_query(cql.get_edge_count_query)
-        agg_edge_count = self.connection.exec_query(cql.get_aggregated_edge_count_query)
+        node_count = self.connection.exec_query(dbm_ql.get_node_count_query)
+        edge_count = self.connection.exec_query(dbm_ql.get_edge_count_query)
+        agg_edge_count = self.connection.exec_query(dbm_ql.get_aggregated_edge_count_query)
         result = \
             make_empty_list_if_none(node_count) + \
             make_empty_list_if_none(edge_count) + \
             make_empty_list_if_none(agg_edge_count)
         return result
 
-    def get_event_log(self, entity: Entity, additional_event_attributes: List[str]):
-        return self.connection.exec_query(cql.get_event_log,
-                                            **{"entity": entity,
+    def get_event_log(self, entity: ConstructedNodes, additional_event_attributes: List[str]):
+        return self.connection.exec_query(dbm_ql.get_event_log_query,
+                                          **{"entity": entity,
                                                "additional_event_attributes": additional_event_attributes})
 
     def do_custom_query(self, query_function, **kwargs):
