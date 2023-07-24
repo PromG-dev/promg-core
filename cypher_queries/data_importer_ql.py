@@ -128,21 +128,3 @@ class DataImporterQueryLibrary:
         # execute query
         return Query(query_str=query_str,
                      template_string_parameters=template_string_parameters)
-
-    @staticmethod
-    def get_merge_same_nodes_query(data_structure: DataStructure) -> Query:
-        # language=sql
-        query_str = '''
-                MATCH (n:$labels)
-                WITH $primary_keys, collect(n) as nodes
-                CALL apoc.refactor.mergeNodes(nodes, {
-                    properties:'combine'})
-                YIELD node
-                RETURN node
-            '''
-
-        return Query(query_str=query_str,
-                     template_string_parameters={
-                         "labels": data_structure.get_label_string(),
-                         "primary_keys": data_structure.get_primary_keys_as_attributes()
-                     })
