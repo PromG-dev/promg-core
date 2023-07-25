@@ -44,7 +44,7 @@ class Column:
     name: str
     dtype: str
     nan_values: List[str]
-    mandatory: bool
+    optional: bool
     range_start: int
     range_end: int
 
@@ -55,10 +55,10 @@ class Column:
         _name = obj.get("name")
         _dtype = obj.get("dtype")
         _nan_values = replace_undefined_value(obj.get("nan_values"), [])
-        _mandatory = replace_undefined_value(obj.get("mandatory"), True)
+        _optional = replace_undefined_value(obj.get("optional"), False)
         _range_start = obj.get("range_start")
         _range_end = obj.get("range_end")
-        return Column(_name, _dtype, _nan_values, _mandatory, _range_start, _range_end)
+        return Column(_name, _dtype, _nan_values, _optional, _range_start, _range_end)
 
 
 @dataclass
@@ -68,7 +68,7 @@ class Attribute:
     separator: str
     is_datetime: bool
     is_compound: bool
-    mandatory: bool
+    optional: bool
     datetime_object: DatetimeObject
     na_rep_value: Any
     na_rep_columns: List[Column]
@@ -85,7 +85,7 @@ class Attribute:
         _name = obj.get("name")
         _columns = create_list(Column, obj.get("columns"))
         _is_compound = len(_columns) > 1
-        _mandatory = bool(obj.get("mandatory"))
+        _optional = bool(obj.get("optional"))
         _datetime_object = DatetimeObject.from_dict(obj.get("datetime_object"))
         _is_datetime = _datetime_object is not None
         _na_rep_value = obj.get("na_rep_value")
@@ -97,7 +97,7 @@ class Attribute:
         _use_filter = replace_undefined_value(obj.get("use_filter"), _use_filter)
         _is_primary_key = replace_undefined_value(obj.get("is_primary_key"), False)
         _is_foreign_key = replace_undefined_value(obj.get("is_foreign_key"), False)
-        return Attribute(name=_name, mandatory=_mandatory, columns=_columns, separator=_separator,
+        return Attribute(name=_name, optional=_optional, columns=_columns, separator=_separator,
                          is_compound=_is_compound,
                          is_datetime=_is_datetime, datetime_object=_datetime_object,
                          na_rep_value=_na_rep_value, na_rep_columns=_na_rep_columns,
@@ -286,7 +286,7 @@ class DataStructure:
         column: Column
         for i, column in zip(range(len(attribute.columns)), attribute.columns):
             attribute_name = f"{attribute.name}_{i}"
-            if column.mandatory:
+            if not column.optional:
                 try:
                     df_log[attribute_name].fillna("Unknown", inplace=True)
                 except:
@@ -339,7 +339,7 @@ class DataStructure:
                 df_log = DataStructure.replace_nan_values_based_on_na_rep_columns(df_log, attribute)
             if attribute.na_rep_value is not None:
                 df_log = DataStructure.replace_nan_values_based_on_na_rep_value(df_log, attribute)
-            if attribute.mandatory:
+            if not attribute.optional:
                 df_log = DataStructure.replace_nan_values_with_unknown(df_log, attribute)
 
             df_log = DataStructure.combine_attribute_columns(df_log, attribute)
