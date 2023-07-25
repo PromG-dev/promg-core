@@ -1,0 +1,183 @@
+{
+  "title": "List of csv structure specifications",
+  "type": "array",
+  "minItems": 1,
+  "uniqueItems": true,
+  "items": {
+    "description": "csv structure specification",
+    "type": "object",
+    "properties": {
+      "name": {
+        "description": "a unique name for this file structure",
+        "type": "string"
+      },
+      "file_directory": {
+        "description": "the relative path using '\\\\' w.r.t. the main script file (main.py) to the file directories",
+        "type": "string"
+      },
+      "file_names": {
+        "description": "the names of the csv file that are described by this structure including the extension .csv",
+        "type": "array",
+        "items": {
+          "type": "string"
+        },
+        "minItems": 1,
+        "uniqueItems": true
+      },
+      "seperator": {
+        "description": "the seperator used in the csv_files",
+        "type": "string",
+        "default": ","
+      },
+      "true_values": {
+        "description": "a list containing the values that should be interpreted as True",
+        "type": "array",
+        "items": {
+          "type": "string"
+        }
+      },
+      "false_values": {
+        "description": "a list containing the values that should be interpreted as False",
+        "type": "array",
+        "items": {
+          "type": "string"
+        }
+      },
+      "samples": {
+        "description": "an object that describes how a sample should be taken for each file",
+        "type": "object",
+        "properties": {
+          "file_name": {
+            "description": "the name of the file for the sample",
+            "type": "string"
+          },
+          "use_random_sample": {
+            "description": "indicates whether a random sample should be taken, using a seed the same random sample will be taken each time",
+            "type": "boolean"
+          },
+          "population_column": {
+            "description": "the name of the column in the csav file that should be used to determine the sample",
+            "type": "string"
+          },
+          "ids": {
+            "description": "a list of ids in case use_random_sample is False",
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "between": {
+            "description": "a list of two dates in format %d-%M-%Y",
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        }
+      },
+      "labels": {
+        "description": "the labels that the entries of this file should get in the EKG, e.g. 'Event' or 'Object'",
+        "type": "array",
+        "items": {
+          "type": "string"
+        },
+        "minItems": 1
+      },
+      "add_log": {
+        "description": "indicates whether a log node should be added for each file",
+        "type": "boolean",
+        "default": false
+      },
+      "attributes": {
+        "description": "a list of attributes that should be included in the entry nodes",
+        "type": "array",
+        "minItems": 1,
+        "uniqueItems": true,
+        "items": {
+          "type": "object",
+          "properties": {
+            "name": {
+              "description": "the name the attribute should have in the entry node, i.e. this name will be used in the EKG, should be lowerCamelCase",
+              "type": "str"
+            },
+            "columns": {
+              "description": "the columns that are used to create this attribute, most often 1, but multiple columns can also be concatenated",
+              "type": "array",
+              "items": {
+                "type": "object",
+                "description": "description of a column",
+                "properties": {
+                  "name": {
+                    "description": "the column name",
+                    "type": "string"
+                  },
+                  "dtype": {
+                    "description": "the data type object of the column, it is best practice to assign the string dtype to identifiers",
+                    "type": "string"
+                  },
+                  "range_start": {
+                    "description": "in case this column contains multiple attributes, indicate at what character the value for this attribute starts",
+                    "type": "integer"
+                  },
+                  "range_end": {
+                    "description": "in case this column contains multiple attributes, indicate at what character the value for this attribute ends, can be negative to start counting from the end",
+                    "type": "integer"
+                  }
+                }
+              }
+            },
+            "na_rep_columns": {
+              "description": "the columns that are used in case the specified columns have missing values to create this attribute, most often 1, but multiple columns can also be concatenated",
+              "type": "array",
+              "items": {
+                "type": "object",
+                "description": "description of a column",
+                "properties": {
+                  "name": {
+                    "description": "the column name",
+                    "type": "string"
+                  },
+                  "dtype": {
+                    "description": "the data type object of the column, it is best practice to assign the string dtype to identifiers",
+                    "type": "string"
+                  },
+                  "range_start": {
+                    "description": "in case this column contains multiple attributes, indicate at what character the value for this attribute starts",
+                    "type": "integer"
+                  },
+                  "range_end": {
+                    "description": "in case this column contains multiple attributes, indicate at what character the value for this attribute ends, can be negative to start counting from the end",
+                    "type": "integer"
+                  }
+                }
+              }
+            },
+            "optional": {
+              "description": "indicates whether this attribute is optional in the entry nodes",
+              "type": "boolean"
+            },
+            "datetime_object": {
+              "description": "in case the attribute represents a datetime, it has to be converted in the graph database. This object describes the datetime object and how it should be converted",
+              "type": "object",
+              "properties": {
+                "format": {
+                  "description": "the java format (https://docs.oracle.com/javase/8/docs/api/java/time/format/DateTimeFormatter.html) of the attribute in the csv file, e.g. y-M-d H:m:s.nX",
+                  "type": "string"
+                },
+                "timezone_offset": {
+                  "description": "The offset for the timestamp //todo remove X from the string format",
+                  "type": "string"
+                },
+                "convert_to": {
+                  "description": "the format the datetime should be converted to using a predefined formatter (https://docs.oracle.com/javase/8/docs/api/java/time/format/DateTimeFormatter.html)",
+                  "type": "string",
+                  "default": "ISO_DATE_TIME"
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}
