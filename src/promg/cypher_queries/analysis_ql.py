@@ -26,17 +26,14 @@ class AnalysisQueryLibrary:
             # language=sql
             query_str = '''
                                 MATCH 
-                                (c1:Class) <-[:OBSERVED]-(e1:Event) 
+                                (c1:Activity) -[:OBSERVED]-> (e1:Event) 
                                     -[df:$df_label {entityType: '$entity_type'}]-> 
-                                (e2:Event) -[:OBSERVED]-> (c2:Class)
-                                MATCH (e1) -[:CORR] -> (n) <-[:CORR]- (e2)
-                                WHERE n.entityType = df.entityType AND 
-                                    c1.classType = c2.classType $classifier_condition $classifier_self_loops
-                                WITH n.entityType as EType,c1,count(df) AS df_freq,c2
+                                (e2:Event) <-  [:OBSERVED] - (c2:Activity)
+                                $classifier_self_loops
+                                WITH c1, count(df) AS df_freq,c2
                                 MERGE 
                                 (c1) 
-                                    -[rel2:$dfc_label {entityType: '$entity_type', type:'DF_C', classType: 
-                                    c1.classType}]-> 
+                                    -[rel2:$dfc_label {entityType: '$entity_type', type:'DF_C'}]-> 
                                 (c2) 
                                 ON CREATE SET rel2.count=df_freq'''
         else:
@@ -46,24 +43,22 @@ class AnalysisQueryLibrary:
             # language=sql
             query_str = '''
                                 MATCH 
-                                (c1:Class) 
-                                    <-[:OBSERVED]-
+                                (c1:Activity) 
+                                    -[:OBSERVED]->
                                 (e1:Event) 
                                     -[df:$df_label {entityType: '$entity_type'}]-> 
-                                (e2:Event) -[:OBSERVED]-> (c2:Class)
+                                (e2:Event) <-[:OBSERVED]- (c2:Activity)
                                 MATCH (e1) -[:CORR] -> (n) <-[:CORR]- (e2)
-                                WHERE n.entityType = df.entityType 
-                                    AND c1.classType = c2.classType $classifier_condition $classifier_self_loops
-                                WITH n.entityType as entityType,c1,count(df) AS df_freq,c2
+                                $classifier_self_loops
+                                WITH c1,count(df) AS df_freq,c2
                                 WHERE df_freq > $df_threshold
-                                OPTIONAL MATCH (c2:Class) <-[:OBSERVED]- (e2b:Event) -[df2:DF]-> 
-                                    (e1b:Event) -[:OBSERVED]-> (c1:Class)
-                                WITH entityType as EType,c1,df_freq,count(df2) AS df_freq2,c2
+                                OPTIONAL MATCH (c2:Activity) -[:OBSERVED]-> (e2b:Event) -[df2:$df_label {entityType: '$entity_type'}]-> 
+                                    (e1b:Event) <-[:OBSERVED]- (c2:Activity)
+                                WITH c1,df_freq,count(df2) AS df_freq2,c2
                                 WHERE (df_freq*$relative_df_threshold > df_freq2)
                                 MERGE 
                                 (c1) 
-                                    -[rel2:$dfc_label {entityType: '$entity_type', type:'DF_C', classType: 
-                                    c1.classType}]-> 
+                                    -[rel2:$dfc_label {entityType: '$entity_type', type:'DF_C'}]-> 
                                 (c2) 
                                 ON CREATE SET rel2.count=df_freq'''
 
@@ -77,7 +72,7 @@ class AnalysisQueryLibrary:
                          "df_label": entity.get_df_label(),
                          "entity_type": entity.node_type,
                          "classifier_condition": classifier_condition,
-                         "classifier_self_loops": "AND c1 <> c2" if exclude_self_loops else "",
+                         "classifier_self_loops": "WHERE c1 <> c2" if exclude_self_loops else "",
                          "dfc_label": AnalysisQueryLibrary.get_dfc_label(entity.node_type, include_label_in_c_df),
                          "df_threshold": df_threshold,
                          "relative_df_threshold": relative_df_threshold

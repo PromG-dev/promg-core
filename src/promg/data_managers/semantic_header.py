@@ -530,9 +530,13 @@ class ConstructedNodes:
         return constructed_node
 
     def get_label_string(self):
+        if len(self.node_constructors) == 0:
+            return self.node_type
         return self.node_constructors[0].get_label_string()
 
     def get_labels(self):
+        if len(self.node_constructors) == 0:
+            return self.node_type
         return self.node_constructors[0].get_labels()
 
     def get_corr_type_strings(self):

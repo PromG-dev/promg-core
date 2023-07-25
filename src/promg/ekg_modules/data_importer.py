@@ -44,11 +44,6 @@ class Importer:
                 self._reformat_timestamps(structure)
                 self._write_message_to_performance(
                     f"Reformatted timestamps from events from event table {structure.name}: {file_name}")
-            else:
-                # non event nodes may need to get merged depending on their primary key
-                self._merge_nodes(structure)
-                self._write_message_to_performance(
-                    f"Similar nodes from table {structure.name}: {file_name} are merged")
 
             self._filter_nodes(structure=structure)  # filter nodes according to the structure
             self._write_message_to_performance(
@@ -77,10 +72,6 @@ class Importer:
                                            "attribute": attribute, "datetime_object": datetime_format,
                                            "batch_size": self.batch_size
                                        })
-
-    def _merge_nodes(self, structure):
-        self.connection.exec_query(di_ql.get_merge_same_nodes_query,
-                                   **{"data_structure": structure})
 
     def _filter_nodes(self, structure):
         for boolean in (True, False):
