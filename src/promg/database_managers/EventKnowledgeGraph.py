@@ -152,7 +152,7 @@ class EventKnowledgeGraph:
 
         current_file_path = os.path.dirname(__file__)
 
-        dir_path = os.path.join(current_file_path, '..', '..', 'data', self.semantic_header.name, 'event_logs')
+        dir_path = os.path.join(current_file_path, '../../..', '..', 'data', self.semantic_header.name, 'event_logs')
         file_path = os.path.join(dir_path, f"{entity_type}.csv")
         os.makedirs(dir_path, exist_ok=True)
         df.to_csv(file_path, index=True, index_label="idx")
