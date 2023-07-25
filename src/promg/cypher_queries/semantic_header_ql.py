@@ -21,7 +21,7 @@ class SemanticHeaderQueryLibrary:
         if node_constructor.set_labels is not None:
             set_label_str = f'SET $set_labels'''
 
-        if node_constructor.set_properties is not None:
+        if node_constructor.optional_properties is not None:
             set_property_str = 'SET $set_result_properties'
 
         if node_constructor.infer_corr_from_event_record:
