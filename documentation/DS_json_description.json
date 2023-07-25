@@ -65,6 +65,13 @@
             "items": {
               "type": "string"
             }
+          },
+          "between": {
+            "description": "a list of two dates in format %d-%M-%Y",
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
           }
         }
       },
@@ -146,12 +153,8 @@
                 }
               }
             },
-            "mandatory": {
-              "description": "indicates whether this attribute is mandatory in the entry nodes",
-              "type": "boolean"
-            },
-            "is_primary_key": {
-              "description": "indicate whether this attribute is a primary key in case for non-event entries",
+            "optional": {
+              "description": "indicates whether this attribute is optional in the entry nodes",
               "type": "boolean"
             },
             "datetime_object": {
