@@ -1,9 +1,8 @@
 from string import Template
 
-from ..data_managers.semantic_header import ConstructedNodes, ConstructedRelation, NodeConstructor, Relationship, \
-    Node, \
+from promg.data_managers.semantic_header import ConstructedNodes, NodeConstructor, Node, \
     RelationConstructor
-from ..database_managers.db_connection import Query
+from promg.database_managers.db_connection import Query
 
 
 class SemanticHeaderQueryLibrary:

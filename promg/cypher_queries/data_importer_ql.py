@@ -1,7 +1,7 @@
 from typing import Dict, Optional, List
 
-from ..data_managers.datastructures import DataStructure
-from ..database_managers.db_connection import Query
+from promg.data_managers.datastructures import DataStructure
+from promg.database_managers.db_connection import Query
 
 
 class DataImporterQueryLibrary:

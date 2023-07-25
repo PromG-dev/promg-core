@@ -6,7 +6,7 @@ from typing import List, Any, Optional, Union, Dict
 
 from dataclasses import dataclass
 
-from ..utilities.auxiliary_functions import replace_undefined_value, create_list, get_id_attribute_from_label
+from promg.utilities.auxiliary_functions import replace_undefined_value, create_list, get_id_attribute_from_label
 import re
 
 

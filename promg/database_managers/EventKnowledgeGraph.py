@@ -2,14 +2,14 @@ import os
 from typing import List, Set, Optional, Dict
 
 from .db_connection import DatabaseConnection
-from ..data_managers.semantic_header import SemanticHeader
-from ..data_managers.datastructures import ImportedDataStructures
-from ..ekg_modules.ekg_analysis import EKGAnalysis
-from ..ekg_modules.ekg_builder_semantic_header import EKGUsingSemanticHeaderBuilder
-from ..ekg_modules.db_management import DBManagement
-from ..ekg_modules.data_importer import Importer
-from ..ekg_modules.inference_engine import InferenceEngine
-from ..utilities.performance_handling import Performance
+from promg.data_managers.semantic_header import SemanticHeader
+from promg.data_managers.datastructures import ImportedDataStructures
+from promg.ekg_modules.ekg_analysis import EKGAnalysis
+from promg.ekg_modules.ekg_builder_semantic_header import EKGUsingSemanticHeaderBuilder
+from promg.ekg_modules.db_management import DBManagement
+from promg.ekg_modules.data_importer import Importer
+from promg.ekg_modules.inference_engine import InferenceEngine
+from promg.utilities.performance_handling import Performance
 
 from tabulate import tabulate
 import pandas as pd
@@ -152,7 +152,7 @@ class EventKnowledgeGraph:
 
         current_file_path = os.path.dirname(__file__)
 
-        dir_path = os.path.join(current_file_path, '..', '..', 'data', self.semantic_header.name, 'event_logs')
+        dir_path = os.path.join(current_file_path, '../..', '..', 'data', self.semantic_header.name, 'event_logs')
         file_path = os.path.join(dir_path, f"{entity_type}.csv")
         os.makedirs(dir_path, exist_ok=True)
         df.to_csv(file_path, index=True, index_label="idx")

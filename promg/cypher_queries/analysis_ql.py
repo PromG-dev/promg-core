@@ -1,6 +1,6 @@
 from typing import Optional, List
-from ..data_managers.semantic_header import ConstructedNodes
-from ..database_managers.db_connection import Query
+from promg.data_managers.semantic_header import ConstructedNodes
+from promg.database_managers.db_connection import Query
 
 
 class AnalysisQueryLibrary:
