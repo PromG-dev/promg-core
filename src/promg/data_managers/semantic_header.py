@@ -145,7 +145,11 @@ class Node:
 
         return node_pattern
 
-    def get_label_str(self, include_first_colon=False):
+    def get_label_str(self, include_first_colon=False, as_list=False):
+        if as_list:
+            str = ",".join([f'"{label}"' for label in self.labels])
+            return f'[{str}]'
+
         if len(self.labels) > 0:
             return ":" * include_first_colon + ":".join(self.labels)
         return ""
@@ -662,11 +666,78 @@ class ConstructedRelation:
         return f"[:{self.type}]"
 
 
+class RecordConstructor:
+    def __init__(self, record_labels: List[str],
+                 required_attributes: List[str], optional_attributes: List[str], node_name: str = "record",
+                 prevalent_record: Optional["Node"] = Node.from_string("(record:Record)")):
+        self.node_name = node_name
+        self.prevalent_record = prevalent_record
+        self.record_labels = record_labels
+        self.required_attributes = required_attributes
+        self.optional_attributes = optional_attributes
+
+    @staticmethod
+    def from_dict(obj: Any) -> "RecordConstructor":
+        if isinstance(obj, str):
+            return RecordConstructor.from_str(obj)
+        _prevalent_record = Node.from_string(obj.get("prevalent_record"))
+        _record_labels = obj.get("record_labels").split(":")
+        _required_attributes = obj.get("required_attributes")
+        _optional_attributes = obj.get("optional_attributes")
+
+        return RecordConstructor(prevalent_record=_prevalent_record, record_labels=_record_labels,
+                                 required_attributes=_required_attributes,
+                                 optional_attributes=_optional_attributes)
+
+    @staticmethod
+    def from_str(obj: str) -> "RecordConstructor":
+        obj = re.sub("[\(\)]", "", obj)
+        _node_name = obj.split(":", maxsplit=1)[0].strip()
+        if _node_name == "":
+            _node_name = "record"
+        record_description = obj.split(":", maxsplit=1)[1].strip()
+        if "WHERE" in record_description.upper():
+            labels = record_description.split("WHERE")[0].replace(" ", "")
+            condition_and_properties = record_description.split("WHERE")[1].strip()
+            condition = condition_and_properties.split("{")[0].strip()
+            properties = condition_and_properties.split("{")[1].replace("}", "").strip()
+        else:
+            labels = record_description.split("{")[0].replace(" ", "")
+            condition = None
+            properties = record_description.split("{")[1].replace("}", "").strip()
+
+        _record_labels = labels.split(":")
+        prevalent_record_str = f"({_node_name}:Record)"
+        if condition is not None:
+            prevalent_record_str = f"({_node_name}:Record WHERE {condition})"
+        _prevalent_record = Node.from_string(prevalent_record_str)
+        properties = properties.split(",")
+        _required_attributes = [prop.strip() for prop in properties if "OPTIONAL" not in prop.upper()]
+        _optional_attributes = [prop.replace("OPTIONAL", "").strip() for prop in properties if
+                                "OPTIONAL" in prop.upper()]
+
+        return RecordConstructor(node_name=_node_name, record_labels=_record_labels,
+                                 required_attributes=_required_attributes, optional_attributes=_optional_attributes)
+
+    def get_prevalent_record_pattern(self, record_name: str = "record"):
+        return self.prevalent_record.get_pattern(record_name)
+
+    def get_required_attributes_is_not_null_pattern(self, record_name: str = "record"):
+        return " AND ".join(
+            [f'''{record_name}.{attribute} IS NOT NULL''' for attribute in self.required_attributes])
+
+    def get_record_labels_pattern(self):
+        return ":".join(self.record_labels)
+
+
 class SemanticHeader:
     def __init__(self, name: str, version: str,
-                 nodes: List[ConstructedNodes], relations: List[ConstructedRelation]):
+                 records: List["RecordConstructor"],
+                 nodes: List[ConstructedNodes],
+                 relations: List[ConstructedRelation]):
         self.name = name
         self.version = version
+        self.records = records
         self.nodes = nodes
         self.relations = relations
 
@@ -684,7 +755,8 @@ class SemanticHeader:
         _version = obj.get("version")
         _nodes = create_list(ConstructedNodes, obj.get("nodes"))
         _relations = create_list(ConstructedRelation, obj.get("relations"))
-        return SemanticHeader(_name, _version, _nodes, _relations)
+        _records = create_list(RecordConstructor, obj.get("records"))
+        return SemanticHeader(name=_name, version=_version, records=_records, nodes=_nodes, relations=_relations)
 
     @staticmethod
     def create_semantic_header(path: Path):

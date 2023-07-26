@@ -12,6 +12,7 @@ import numpy as np
 import pandas as pd
 from pandas import DataFrame
 
+from .semantic_header import Node
 from ..utilities.auxiliary_functions import replace_undefined_value, create_list
 
 
@@ -197,6 +198,7 @@ class DataStructure:
         _attributes = create_list(Attribute, obj.get("attributes"))
         _attributes = {attribute.name: attribute for attribute in _attributes}
         _split_combined_events = replace_undefined_value(obj.get("split_combined_events"), False)
+
         return DataStructure(_include, _name, _file_directory, _file_names, _encoding, _seperator, _decimal,
                              _labels, _true_values, _false_values, _add_log, _add_index,
                              _samples, _attributes, _split_combined_events)

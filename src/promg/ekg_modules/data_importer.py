@@ -1,8 +1,10 @@
 import math
+from typing import List
 
 import numpy as np
 from tqdm import tqdm
 
+from ..data_managers.semantic_header import RecordConstructor
 from ..database_managers.db_connection import DatabaseConnection
 from ..data_managers.datastructures import ImportedDataStructures
 from ..utilities.performance_handling import Performance
@@ -11,11 +13,13 @@ import pandas as pd
 
 
 class Importer:
-    def __init__(self, db_connection: DatabaseConnection, data_structures: ImportedDataStructures, batch_size: int,
+    def __init__(self, db_connection: DatabaseConnection, data_structures: ImportedDataStructures,
+                 records: List["RecordConstructor"], batch_size: int,
                  use_sample: bool = False, use_preprocessed_files: bool = False,
                  perf: Performance = None):
         self.connection = db_connection
         self.structures = data_structures.structures
+        self.records = records
 
         self.batch_size = batch_size
         self.use_sample = use_sample
@@ -37,6 +41,7 @@ class Importer:
                                                  use_preprocessed_file=self.use_preprocessed_files)
                 df_log["justImported"] = True
                 self._import_nodes_from_data(labels, df_log, file_name)
+
                 self._write_message_to_performance(f"Imported data from table {structure.name}: {file_name}")
 
             if structure.has_datetime_attribute():
@@ -104,7 +109,25 @@ class Importer:
                                       orient='records')]
             self.connection.exec_query(di_ql.get_create_nodes_by_importing_batch_query,
                                        **{"batch": batch_without_nans, "labels": labels})
+            self._create_records()
 
             pbar.update(1)
             batch += 1
         pbar.close()
+
+    def _create_records(self) -> None:
+        for record_constructor in self.records:
+            self.connection.exec_query(di_ql.get_create_record_query,
+                                       **{
+                                           "record_constructor": record_constructor,
+                                           "batch_size": self.batch_size
+                                       })
+            self.connection.exec_query(di_ql.get_reset_added_label_query,
+                                       **{
+                                           "record_constructor": record_constructor,
+                                           "batch_size": self.batch_size
+                                       })
+        self.connection.exec_query(di_ql.get_mark_records_as_done_query,
+                                   **{
+                                       "batch_size": self.batch_size
+                                   })

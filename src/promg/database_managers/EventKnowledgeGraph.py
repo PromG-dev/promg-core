@@ -47,6 +47,7 @@ class EventKnowledgeGraph:
         # classes responsible for executing queries
         self.ekg_management = DBManagement(db_connection=db_connection, db_name=db_name, perf=perf)
         self.data_importer = Importer(db_connection, data_structures=specification_of_data_structures,
+                                      records=semantic_header.records,
                                       batch_size=batch_size,
                                       use_sample=use_sample, use_preprocessed_files=use_preprocessed_files, perf=perf)
         self.ekg_builder = EKGUsingSemanticHeaderBuilder(db_connection=db_connection, semantic_header=semantic_header,
@@ -171,20 +172,19 @@ class EventKnowledgeGraph:
     # endregion
 
     # region EKG builder using semantic header
-
-    def create_nodes_by_records(self, node_type: Optional[List[str]] = None) -> None:
+    def create_nodes_by_records(self, node_types: Optional[List[str]] = None) -> None:
         """
         Pass on method to ekg_builder to create relations between entities based on nodes as specified in the
         semantic header
 
-        :param node_type: list of entity types that should be created based on nodes. In case of None,
+        :param node_types: list of entity types that should be created based on nodes. In case of None,
         all entities based on nodes are created as specified in the semantic header
-        :type node_type: List[str], optional
+        :type node_types: List[str], optional
         :return: None
 
         """
 
-        self.ekg_builder.create_nodes_by_records(node_type)
+        self.ekg_builder.create_nodes_by_records(node_types)
 
     def create_relations_using_record(self, relation_types: Optional[List[str]] = None) -> None:
         """
