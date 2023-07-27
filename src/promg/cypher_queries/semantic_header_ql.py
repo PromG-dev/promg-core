@@ -21,7 +21,7 @@ class SemanticHeaderQueryLibrary:
         if node_constructor.set_labels is not None:
             set_label_str = f'SET $set_labels'''
 
-        if node_constructor.optional_properties is not None:
+        if len(node_constructor.result.optional_properties) > 0:
             set_property_str = 'SET $set_result_properties'
 
         if node_constructor.infer_corr_from_event_record:
@@ -115,7 +115,7 @@ class SemanticHeaderQueryLibrary:
         return Query(query_str=query_str,
                      template_string_parameters={
                          "labels": node_constructor.get_label_string(),
-                         "attribute": node_constructor.result.properties[0].ref_attribute,
+                         "attribute": node_constructor.result.required_properties[0].ref_attribute,
                          "record": node_constructor.get_prevalent_record_pattern(node_name="record")
                      })
 
@@ -187,8 +187,8 @@ class SemanticHeaderQueryLibrary:
                          "to_node": node_constructor.relation.to_node.get_pattern(),
                          "from_node_name": node_constructor.relation.from_node.get_name(),
                          "to_node_name": node_constructor.relation.to_node.get_name(),
-                         "rel_type": node_constructor.relation.relation_type,
-                         "result_labels": node_constructor.result.get_label_str(as_list = True)
+                         "rel_type": node_constructor.relation.get_relation_type(),
+                         "result_labels": node_constructor.result.get_label_str(as_list=True)
                      },
                      parameters={"limit": batch_size})
 
@@ -216,18 +216,48 @@ class SemanticHeaderQueryLibrary:
     def get_create_relation_using_record_query(relation_constructor: RelationConstructor, batch_size: int) -> Query:
         # find events that are related to different entities of which one event also has a reference to the other entity
         # create a relation between these two entities
+        add_str = ""
+        if relation_constructor.model_as_node:
+            # language=sql
+            merge_str = '''
+                            MERGE ($from_node_name) -[:FROM] -> (relation:$relation_label_str) - [:TO] -> ($to_node_name)
+                            MERGE (relation)  - [:PREVALENCE] -> (record)
+                            '''
+            if relation_constructor.infer_corr_from_reified_parents:
+                # language=sql
+                add_str = '''
+                            WITH $from_node_name, $to_node_name, relation
+                            CALL {WITH $from_node_name, relation
+                                    MATCH ($from_node_name) <- [:CORR] - (e:Event)
+                                    MERGE (relation) <- [:CORR] - (e)}
+                            CALL {WITH $to_node_name, relation
+                                    MATCH ($to_node_name) <- [:CORR] - (f:Event)
+                                    MERGE (relation) <- [:CORR] - (f)
+                             }                                
+                                    
+                       '''
+        else:
+            merge_str = "MERGE ($from_node_name) -[$rel_pattern] -> ($to_node_name)"
+
+
 
         query_str = '''     CALL apoc.periodic.commit('
                             MATCH (record:$record_labels)
                             WHERE record.rel_created IS NULL
-                            WITH record limit $limit
+                            WITH  record limit $limit
                             MATCH ($from_node) - [:PREVALENCE] -> (record)
                             MATCH ($to_node) - [:PREVALENCE] -> (record)
-                            MERGE ($from_node_name) -[$rel_pattern] -> ($to_node_name)
+                            $merge_str
                             SET record.rel_created = True
+                            $add_str
                             RETURN COUNT(*)',
                             {limit:$limit})
                         '''
+
+        query_str = Template(query_str).safe_substitute({
+            "merge_str": merge_str,
+            "add_str": add_str
+        })
 
         return Query(query_str=query_str,
                      template_string_parameters={
@@ -237,9 +267,12 @@ class SemanticHeaderQueryLibrary:
                          "to_node_name": relation_constructor.to_node.get_name(),
                          "record_labels": relation_constructor.prevalent_record.get_label_str(
                              include_first_colon=False),
-                         "rel_pattern": relation_constructor.result.get_pattern(),
-                         "limit": batch_size * 10
-                     })
+                         "rel_pattern": relation_constructor.result.get_pattern("r"),
+                         "relation_labels": relation_constructor.result.get_relation_types_str(as_list=True),
+                         "relation_label_str": relation_constructor.result.get_relation_types_str()
+                     },
+                     parameters={
+                         "limit": batch_size * 10})
 
     @staticmethod
     def get_reset_created_relation_query(relation_constructor: RelationConstructor, batch_size: int) -> Query:
