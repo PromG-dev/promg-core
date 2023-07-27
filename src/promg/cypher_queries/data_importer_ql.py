@@ -1,6 +1,7 @@
 from typing import Dict, Optional, List
 
 from ..data_managers.datastructures import DataStructure
+from ..data_managers.semantic_header import RecordConstructor
 from ..database_managers.db_connection import Query
 
 
@@ -128,3 +129,58 @@ class DataImporterQueryLibrary:
         # execute query
         return Query(query_str=query_str,
                      template_string_parameters=template_string_parameters)
+
+    @staticmethod
+    def get_create_record_query(record_constructor: RecordConstructor, batch_size: int = 5000):
+        # language=SQL
+        query_str = '''CALL apoc.periodic.commit(
+                            'MATCH ($record) 
+                                WHERE record.added_label IS NULL
+                                AND $required_attributes_not_null
+                                WITH $record_name limit $limit
+                                SET record:$labels
+                                SET record.added_label = True
+                                RETURN count(*)',
+                            {limit: $limit})
+                        '''
+
+        record_name = "record"
+        return Query(query_str=query_str,
+                     template_string_parameters={
+                         "record": record_constructor.get_prevalent_record_pattern(record_name=record_name),
+                         "record_name": "record",
+                         "required_attributes_not_null": record_constructor.get_required_attributes_is_not_null_pattern(
+                             record_name=record_name),
+                         "labels": record_constructor.get_record_labels_pattern()
+                     },
+                     parameters={"limit": batch_size})
+
+    @staticmethod
+    def get_reset_added_label_query(record_constructor: RecordConstructor, batch_size: int):
+        query_str = '''
+                            CALL apoc.periodic.commit(
+                                'MATCH ($record) 
+                                    WHERE record.added_label = True
+                                    WITH record limit $limit
+                                    SET record.added_label = Null
+                                    RETURN count(*)',
+                                    {limit: $limit})
+                            '''
+        return Query(query_str=query_str,
+                     template_string_parameters={
+                         "record": record_constructor.get_prevalent_record_pattern(record_name="record"),
+                     },
+                     parameters={"limit": batch_size * 10})
+
+    @staticmethod
+    def get_mark_records_as_done_query(batch_size: int):
+        query_str = '''
+                            CALL apoc.periodic.commit(
+                                'MATCH (record:Record) 
+                                 WITH record limit $limit
+                                 remove record:Record
+                                 RETURN count(*)',
+                                 {limit: $limit})
+                            '''
+        return Query(query_str=query_str,
+                     parameters={"limit": batch_size * 10})
