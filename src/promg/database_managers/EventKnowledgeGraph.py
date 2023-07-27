@@ -338,7 +338,7 @@ class EventKnowledgeGraph:
 
     # endregion
 
-    def create_df_process_model(self, entity_type: str, classifiers: Optional[List[str]] = None):
+    def create_df_process_model(self, entity_type: str):
         """
         Pass on method to ekg_analysis to create a DF process model
 
@@ -354,7 +354,7 @@ class EventKnowledgeGraph:
         entity = self.semantic_header.get_entity(entity_type)
         if entity_type is None:
             raise ValueError(f"{entity_type} is not defined in semantic header")
-        self.ekg_analysis.create_df_process_model(entity, classifiers)
+        self.ekg_analysis.create_df_process_model(entity)
 
     def do_custom_query(self, query_name: str, **kwargs: Optional[Dict[str, any]]) -> any:
         r"""

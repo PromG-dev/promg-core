@@ -14,7 +14,7 @@ class AnalysisQueryLibrary:
     @staticmethod
     def get_aggregate_df_relations_query(entity: ConstructedNodes,
                                          include_label_in_c_df: bool = True,
-                                         classifiers: Optional[List[str]] = None, df_threshold: int = 0,
+                                         df_threshold: int = 0,
                                          relative_df_threshold: float = 0,
                                          exclude_self_loops=True) -> Query:
 
@@ -62,16 +62,11 @@ class AnalysisQueryLibrary:
                                 (c2) 
                                 ON CREATE SET rel2.count=df_freq'''
 
-        classifier_condition = ""
-        if classifiers is not None:
-            classifier_string = "_".join(classifiers)
-            classifier_condition = f"AND c1.classType = '{classifier_string}'"
 
         return Query(query_str=query_str,
                      template_string_parameters={
                          "df_label": entity.get_df_label(),
                          "entity_type": entity.node_type,
-                         "classifier_condition": classifier_condition,
                          "classifier_self_loops": "WHERE c1 <> c2" if exclude_self_loops else "",
                          "dfc_label": AnalysisQueryLibrary.get_dfc_label(entity.node_type, include_label_in_c_df),
                          "df_threshold": df_threshold,
