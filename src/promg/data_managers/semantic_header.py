@@ -54,7 +54,7 @@ class Property:
             if node_name is None:
                 return f"{self.attribute} = {self.value}"
             else:
-                return f"{node_name}.{self.attribute} = {self.value}"
+                return f"{node_name}.{self.attribute} = COALESCE({node_name}.{self.attribute}, {self.value})"
 
     def __repr__(self):
         return self.get_pattern()
