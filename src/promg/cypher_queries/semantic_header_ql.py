@@ -194,14 +194,27 @@ class SemanticHeaderQueryLibrary:
 
     @staticmethod
     def get_create_relation_by_relations_query(relation_constructor: RelationConstructor, batch_size: int) -> Query:
+        if relation_constructor.model_as_node:
+            # language=sql
+            merge_str = '''
+                            MERGE ($from_node_name) -[:FROM] -> (relation:$relation_label_str) - [:TO] -> (
+                            $to_node_name)
+                            '''
+        else:
+            merge_str = "MERGE ($from_node_name) -[$rel_pattern] -> ($to_node_name)"
+
         # language=SQL
         query_str = '''
                 CALL apoc.periodic.iterate(
                 '$relation_queries                        
                 RETURN distinct $from_node_name, $to_node_name',
-                'MERGE ($from_node_name) -[$rel_pattern] -> ($to_node_name)',                        
+                '$merge_str',                        
                 {batchSize: $batch_size})
             '''
+
+        query_str = Template(query_str).safe_substitute({
+            "merge_str": merge_str
+        })
 
         return Query(query_str=query_str,
                      template_string_parameters={
@@ -209,8 +222,10 @@ class SemanticHeaderQueryLibrary:
                          "from_node_name": relation_constructor.from_node.get_name(),
                          "to_node_name": relation_constructor.to_node.get_name(),
                          "rel_pattern": relation_constructor.result.get_pattern(),
-                         "batch_size": batch_size
-                     })
+                         "relation_label_str": relation_constructor.result.get_relation_types_str()
+                     },
+                     parameters={
+                         "batch_size": batch_size})
 
     @staticmethod
     def get_create_relation_using_record_query(relation_constructor: RelationConstructor, batch_size: int) -> Query:
