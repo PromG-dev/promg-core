@@ -196,7 +196,7 @@ class Relationship:
     def get_relation_type(self):
         return self.relation_types[0]
 
-    def get_relation_types_str(self, include_first_colon = False, as_list=False):
+    def get_relation_types_str(self, include_first_colon=False, as_list=False):
         if as_list:
             str = ",".join([f'"{label}"' for label in self.relation_types])
             return f'[{str}]'
@@ -390,6 +390,29 @@ class NodesConstructorByQuery:
         return NodesConstructorByQuery(query=_query)
 
 
+class InferredRelationship:
+    def __init__(self, record_labels: List[str] = None, relation_type: str = "CORR", event: Node = None):
+        self.record_labels = record_labels if record_labels is not None else ["EventRecord"]
+        self.relation_type = relation_type
+        if event is None:
+            event = Node.from_string("(event:Event)")
+        self.event = event
+
+    @staticmethod
+    def from_dict(obj):
+        if obj is None:
+            return None
+
+        _event = Node.from_string(obj.get("event"))
+        _record_labels = obj.get("record_labels").split(":")
+        _relation_type = obj.get("relation_type")
+
+        return InferredRelationship(event=_event, record_labels=_record_labels, relation_type=_relation_type)
+
+    def get_labels_str(self):
+        return ":".join(self.record_labels)
+
+
 class NodeConstructor:
     def __init__(self, prevalent_record: Optional[Union["Relationship", "Node"]],
                  node: Optional["Node"],
@@ -400,6 +423,7 @@ class NodeConstructor:
                  infer_corr_from_event_record: bool = False,
                  infer_corr_from_entity_record: bool = False,
                  infer_corr_from_reified_parents: bool = False,
+                 inferred_relationships: List[InferredRelationship] = None,
                  event_label: str = "Event",
                  corr_type: str = "CORR",
                  infer_reified_relation: bool = False):
@@ -413,6 +437,7 @@ class NodeConstructor:
         self.infer_corr_from_event_record = infer_corr_from_event_record
         self.infer_corr_from_entity_record = infer_corr_from_entity_record
         self.infer_corr_from_reified_parents = infer_corr_from_reified_parents
+        self.inferred_relationships = inferred_relationships
         self.event_label = event_label
         self.corr_type = corr_type
         self.infer_reified_relation = infer_reified_relation
@@ -432,6 +457,8 @@ class NodeConstructor:
         _event_label = replace_undefined_value(obj.get("event_label"), "Event")
         _infer_reified_relation = replace_undefined_value(obj.get("infer_reified_relation"), False)
 
+        _inferred_relations = create_list(InferredRelationship, obj.get("inferred_relationships"))
+
         return NodeConstructor(prevalent_record=_prevalent_record,
                                relation=_relation,
                                node=_node,
@@ -440,6 +467,7 @@ class NodeConstructor:
                                infer_corr_from_event_record=_infer_corr_from_event_record,
                                infer_corr_from_entity_record=_infer_corr_from_entity_record,
                                infer_corr_from_reified_parents=_infer_corr_from_reified_parents,
+                               inferred_relationships=_inferred_relations,
                                corr_type=_corr_type,
                                event_label=_event_label,
                                infer_reified_relation=_infer_reified_relation,
