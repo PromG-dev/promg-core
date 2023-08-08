@@ -8,8 +8,15 @@ from tqdm import tqdm
 
 from ..utilities.context_manager_tqdm import Nostdout
 
+class Singleton(type):
+    _instances = {}
+    def __call__(cls, *args, **kwargs):
+        if cls not in cls._instances:
+            cls._instances[cls] = super(Singleton, cls).__call__(*args, **kwargs)
+        return cls._instances[cls]
 
-class Performance:
+
+class Performance(metaclass=Singleton):
     def __init__(self, perf_path: str, number_of_steps: int):
         self.start = time.time()
         self.last = self.start
@@ -37,6 +44,28 @@ class Performance:
         self.last = end
         self.count += 1
         self.pbar.update(1)
+
+    def performance_tracker(argument:str = None):
+        def performance_tracker_wrapper(func):
+            def wrapper(self, *args, **kwargs):
+                func(self, *args, **kwargs)
+                end = time.time()
+                perf = Performance()
+                if argument is None or argument not in kwargs:
+                    log_message = func.__name__
+                else:
+                    log_message = f"{func.__name__} for {kwargs[argument]}"
+                perf.perf = pd.concat([perf.perf, pd.DataFrame.from_records([
+                    {"name": log_message,
+                     "start": perf.string_time(perf.last),
+                     "end": perf.string_time(end),
+                     "duration": (end - perf.last)}])])
+                perf.pbar.set_description(f"{log_message}: took {round(end - perf.last, 2)} seconds")
+                perf.last = end
+                perf.count += 1
+                perf.pbar.update(1)
+            return wrapper
+        return performance_tracker_wrapper
 
     def finish(self):
         end = time.time()

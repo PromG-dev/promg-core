@@ -40,7 +40,7 @@ class Importer:
                 df_log = structure.read_data_set(file_directory, file_name, use_sample=self.use_sample,
                                                  use_preprocessed_file=self.use_preprocessed_files)
                 df_log["loadStatus"] = 0
-                self._import_nodes_from_data(labels, df_log, file_name)
+                self._import_nodes_from_data(labels=labels, df_log=df_log, file_name=file_name)
 
                 self._write_message_to_performance(f"Imported data from table {structure.name}: {file_name}")
 
@@ -90,6 +90,7 @@ class Importer:
                                        "batch_size": self.batch_size
                                    })
 
+    @Performance.performance_tracker("file_name")
     def _import_nodes_from_data(self, labels, df_log, file_name):
         # start with batch 0 and increment until everything is imported
         batch = 0
@@ -119,7 +120,7 @@ class Importer:
                 intersection = list(set(labels) & set(record_constructor.record_labels))
             else:
                 intersection = record_constructor.record_labels
-            if len(intersection) > 0: # label of record constructor is in intersection or labels is not defined
+            if len(intersection) > 0:  # label of record constructor is in intersection or labels is not defined
                 self.connection.exec_query(di_ql.get_create_record_query,
                                            **{
                                                "record_constructor": record_constructor,
