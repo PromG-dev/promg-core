@@ -25,12 +25,11 @@ class Performance:
     def string_time(self, epoch_time):
         return datetime.utcfromtimestamp(epoch_time).strftime("%H:%M:%S")
 
-    def finished_step(self, activity: str = None, log_message: str = None):
-        log_message = log_message if log_message is not None else activity
+    def finished_step(self, log_message: str = None):
         end = time.time()
-        if activity is None:
+        if log_message is None:
             self.perf = pd.concat([self.perf, pd.DataFrame.from_records([
-                {"name": activity,
+                {"name": log_message,
                  "start": self.string_time(self.last),
                  "end": self.string_time(end),
                  "duration": (end - self.last)}])])

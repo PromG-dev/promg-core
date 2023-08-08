@@ -8,7 +8,7 @@ class InferenceEngine:
 
     def _write_message_to_performance(self, message: str):
         if self.perf is not None:
-            self.perf.finished_step(activity=message)
+            self.perf.finished_step(log_message=message)
 
     def infer_items_propagate_upwards_multiple_levels(self, entity, is_load=True):
         self.connection.exec_query(ie_ql.get_query_infer_items_propagate_upwards_multiple_levels,

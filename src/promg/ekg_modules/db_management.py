@@ -15,7 +15,7 @@ class DBManagement:
 
     def _write_message_to_performance(self, message: str):
         if self.perf is not None:
-            self.perf.finished_step(activity=message)
+            self.perf.finished_step(log_message=message)
 
     def clear_db(self):
         self.connection.exec_query(dbm_ql.get_clear_db_query, **{"db_name": self.db_name})
@@ -32,6 +32,9 @@ class DBManagement:
 
         self.connection.exec_query(dbm_ql.get_constraint_unique_log_id_query)
         self._write_message_to_performance("Constraint on unique log IDs is set")
+
+        self.connection.exec_query(dbm_ql.get_set_sysid_index_query)
+        self._write_message_to_performance("Indexing on sysId for Entity nodes set")
 
     def get_all_rel_types(self) -> List[str]:
         """
