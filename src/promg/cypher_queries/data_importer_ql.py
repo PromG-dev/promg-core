@@ -132,13 +132,6 @@ class DataImporterQueryLibrary:
     @staticmethod
     def get_create_record_query(record_constructor: RecordConstructor, batch_size: int = 5000):
         # language=SQL
-        query_str = '''MATCH ($record) 
-                       WHERE record.loadStatus = 0
-                       AND $required_attributes_not_null
-                       WITH $record_name limit $limit
-                       SET record:$labels
-                    '''
-
         query_str = '''CALL apoc.periodic.commit(
                             'MATCH ($record) 
                                 WHERE $record_name.added_label IS NULL
@@ -148,7 +141,7 @@ class DataImporterQueryLibrary:
                                 SET $record_name:$labels
                                 SET $record_name.added_label = True
                                 RETURN count(*)',
-                            {limit: $limit})
+                            {limit: $limit*5})
                         '''
 
         record_name = "record"
