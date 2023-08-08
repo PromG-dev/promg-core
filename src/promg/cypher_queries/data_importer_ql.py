@@ -7,7 +7,7 @@ from ..database_managers.db_connection import Query
 
 class DataImporterQueryLibrary:
     @staticmethod
-    def get_create_nodes_by_importing_batch_query(batch: List[Dict[str, str]], labels: List[str]) -> Query:
+    def get_create_nodes_by_importing_batch_query(batch: List[Dict[str, str]]) -> Query:
         """
         Create event nodes for each row in the batch with labels
         The properties of each row are also the property of the node
@@ -23,14 +23,14 @@ class DataImporterQueryLibrary:
         # language=SQL
         query_str = '''
                     UNWIND $batch AS row
-                    CALL apoc.create.node($labels, row) YIELD node
+                    CALL apoc.create.node(["Record"], row) YIELD node
                     RETURN count(*)
                 '''
 
-        return Query(query_str=query_str, parameters={"labels": labels, "batch": batch})
+        return Query(query_str=query_str, parameters={"batch": batch})
 
     @staticmethod
-    def get_make_timestamp_date_query(label, attribute, datetime_object, batch_size) -> Query:
+    def get_make_timestamp_date_query(attribute, datetime_object, batch_size) -> Query:
         """
         Convert the strings of the timestamp to the datetime as used in cypher
         Remove the str_timestamp property
@@ -42,7 +42,8 @@ class DataImporterQueryLibrary:
         # language=SQL
         query_str = '''
                 CALL apoc.periodic.iterate(
-                'MATCH (e:$label) WHERE e.$attribute IS NOT NULL AND e.justImported = True 
+                'MATCH (e:Record) WHERE e.$attribute IS NOT NULL AND e.justImported = True 
+                AND NOT apoc.meta.cypher.isType(e.$attribute, "$date_type")
                 WITH e, e.$offset as timezone_dt
                 WITH e, datetime(apoc.date.convertFormat(timezone_dt, "$datetime_object_format", 
                     "$datetime_object_convert_to")) as converted
@@ -53,20 +54,20 @@ class DataImporterQueryLibrary:
 
         return Query(query_str=query_str,
                      template_string_parameters={
-                         "label": label,
                          "datetime_object_format": datetime_object.format,
                          "datetime_object_convert_to": datetime_object.convert_to,
+                         "date_type": datetime_object.get_date_type(),
                          "batch_size": batch_size,
                          "attribute": attribute,
                          "offset": offset
                      })
 
     @staticmethod
-    def get_convert_epoch_to_timestamp_query(label, attribute, datetime_object, batch_size) -> Query:
+    def get_convert_epoch_to_timestamp_query(attribute, datetime_object, batch_size) -> Query:
         # language=SQL
         query_str = '''
                 CALL apoc.periodic.iterate(
-                'MATCH (e:$label) WHERE e.$attribute IS NOT NULL AND e.justImported = True 
+                'MATCH (e:Record) WHERE e.$attribute IS NOT NULL AND e.loadStatus = 1 
                 WITH e, e.$attribute as timezone_dt
                 WITH e, apoc.date.format(timezone_dt, $unit, 
                     $dt_format) as converted
@@ -80,27 +81,25 @@ class DataImporterQueryLibrary:
         return Query(query_str=query_str,
                      template_string_parameters={"attribute": attribute},
                      parameters={
-                         "label": label,
+                         "label": "Record",
                          "batch_size": batch_size,
                          "unit": datetime_object.unit,
                          "datetime_object_format": datetime_object.format
                      })
 
     @staticmethod
-    def get_finalize_import_events_query(labels, batch_size) -> Query:
-        labels = ":".join(labels)
+    def get_finalize_import_events_query(batch_size) -> Query:
         # language=SQL
         query_str = '''
             CALL apoc.periodic.iterate(
-                'MATCH (e:$labels) 
-                WHERE e.justImported = True 
+                'MATCH (e:Record) 
+                WHERE e.loadStatus = 1 
                 RETURN e',
-                'REMOVE e.justImported',
+                'REMOVE e.loadStatus',
                 {batchSize:$batch_size, parallel:false})
             '''
 
         return Query(query_str=query_str,
-                     template_string_parameters={"labels": labels},
                      parameters={"batch_size": batch_size})
 
     @staticmethod
@@ -133,13 +132,21 @@ class DataImporterQueryLibrary:
     @staticmethod
     def get_create_record_query(record_constructor: RecordConstructor, batch_size: int = 5000):
         # language=SQL
+        query_str = '''MATCH ($record) 
+                       WHERE record.loadStatus = 0
+                       AND $required_attributes_not_null
+                       WITH $record_name limit $limit
+                       SET record:$labels
+                    '''
+
         query_str = '''CALL apoc.periodic.commit(
                             'MATCH ($record) 
-                                WHERE record.added_label IS NULL
+                                WHERE $record_name.added_label IS NULL
+                                AND $record_name.loadStatus = 0
                                 AND $required_attributes_not_null
                                 WITH $record_name limit $limit
-                                SET record:$labels
-                                SET record.added_label = True
+                                SET $record_name:$labels
+                                SET $record_name.added_label = True
                                 RETURN count(*)',
                             {limit: $limit})
                         '''
@@ -158,14 +165,14 @@ class DataImporterQueryLibrary:
     @staticmethod
     def get_reset_added_label_query(record_constructor: RecordConstructor, batch_size: int):
         query_str = '''
-                            CALL apoc.periodic.commit(
-                                'MATCH ($record) 
-                                    WHERE record.added_label = True
-                                    WITH record limit $limit
-                                    SET record.added_label = Null
-                                    RETURN count(*)',
-                                    {limit: $limit})
-                            '''
+                                    CALL apoc.periodic.commit(
+                                        'MATCH ($record) 
+                                            WHERE record.added_label = True
+                                            WITH record limit $limit
+                                            SET record.added_label = Null
+                                            RETURN count(*)',
+                                            {limit: $limit})
+                                    '''
         return Query(query_str=query_str,
                      template_string_parameters={
                          "record": record_constructor.get_prevalent_record_pattern(record_name="record"),
@@ -173,14 +180,12 @@ class DataImporterQueryLibrary:
                      parameters={"limit": batch_size * 10})
 
     @staticmethod
-    def get_mark_records_as_done_query(batch_size: int):
-        query_str = '''
-                            CALL apoc.periodic.commit(
-                                'MATCH (record:Record) 
-                                 WITH record limit $limit
-                                 remove record:Record
-                                 RETURN count(*)',
-                                 {limit: $limit})
+    def get_update_load_status_query(current_load_status: int):
+        query_str = '''MATCH (record:Record) 
+                        WHERE record.loadStatus = $old_value
+                        SET record.loadStatus = $new_value
+                                 
                             '''
         return Query(query_str=query_str,
-                     parameters={"limit": batch_size * 10})
+                     parameters={"old_value": current_load_status,
+                                 "new_value": current_load_status+1})

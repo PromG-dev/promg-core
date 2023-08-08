@@ -17,7 +17,7 @@ class EKGUsingSemanticHeaderBuilder:
 
     def _write_message_to_performance(self, message: str):
         if self.perf is not None:
-            self.perf.finished_step(activity=message)
+            self.perf.finished_step(log_message=message)
 
     def create_nodes_by_records(self, node_types: Optional[List[str]]) -> None:
         for node_constructor in self.semantic_header.get_node_by_record_constructors(node_types):
@@ -27,6 +27,7 @@ class EKGUsingSemanticHeaderBuilder:
                                                      "use_record": True
                                                  })
             merge_first = num_ids[0]['num_ids'] < 1000
+            merge_first = True
 
             self.connection.exec_query(sh_ql.get_create_node_by_record_constructor_query,
                                        **{
@@ -121,7 +122,7 @@ class EKGUsingSemanticHeaderBuilder:
             if node.merge_duplicate_df:
                 self.connection.exec_query(sh_ql.get_merge_duplicate_df_entity_query, **{"node": node})
                 self.perf.finished_step(
-                    activity=f"Merged duplicate [:DF] edges for (:{node.get_label_string()}) done")
+                    log_message=f"Merged duplicate [:DF] edges for (:{node.get_label_string()}) done")
 
     def delete_parallel_dfs_derived(self):
         node: ConstructedNodes
