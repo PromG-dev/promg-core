@@ -19,13 +19,16 @@ class Singleton(type):
 
 
 class Performance(metaclass=Singleton):
-    def __init__(self, perf_path: str, number_of_steps: int):
+    def __init__(self, perf_path: str, number_of_steps: int = None):
         self.start = time.time()
         self.last = self.start
         self.perf = pd.DataFrame(columns=["name", "start", "end", "duration"])
         self.path = perf_path
         self.count = 0
-        self.pbar = tqdm(total=number_of_steps, file=sys.stdout)
+        if number_of_steps is not None:
+            self.pbar = tqdm(total=number_of_steps, file=sys.stdout)
+        else:
+            self.pbar = tqdm(file=sys.stdout)
         self.total = None
         # start python trickery
         self.ctx = Nostdout()
