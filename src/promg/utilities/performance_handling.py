@@ -8,8 +8,10 @@ from tqdm import tqdm
 
 from ..utilities.context_manager_tqdm import Nostdout
 
+
 class Singleton(type):
     _instances = {}
+
     def __call__(cls, *args, **kwargs):
         if cls not in cls._instances:
             cls._instances[cls] = super(Singleton, cls).__call__(*args, **kwargs)
@@ -36,16 +38,18 @@ class Performance(metaclass=Singleton):
         end = time.time()
         if log_message is None:
             self.perf = pd.concat([self.perf, pd.DataFrame.from_records([
-                {"name": log_message,
-                 "start": self.string_time(self.last),
-                 "end": self.string_time(end),
-                 "duration": (end - self.last)}])])
+                {
+                    "name": log_message,
+                    "start": self.string_time(self.last),
+                    "end": self.string_time(end),
+                    "duration": (end - self.last)
+                }])])
         self.pbar.set_description(f"{log_message}: took {round(end - self.last, 2)} seconds")
         self.last = end
         self.count += 1
         self.pbar.update(1)
 
-    def performance_tracker(argument:str = None):
+    def track(argument: str = None):
         def performance_tracker_wrapper(func):
             def wrapper(self, *args, **kwargs):
                 func(self, *args, **kwargs)
@@ -56,25 +60,31 @@ class Performance(metaclass=Singleton):
                 else:
                     log_message = f"{func.__name__} for {kwargs[argument]}"
                 perf.perf = pd.concat([perf.perf, pd.DataFrame.from_records([
-                    {"name": log_message,
-                     "start": perf.string_time(perf.last),
-                     "end": perf.string_time(end),
-                     "duration": (end - perf.last)}])])
+                    {
+                        "name": log_message,
+                        "start": perf.string_time(perf.last),
+                        "end": perf.string_time(end),
+                        "duration": (end - perf.last)
+                    }])])
                 perf.pbar.set_description(f"{log_message}: took {round(end - perf.last, 2)} seconds")
                 perf.last = end
                 perf.count += 1
                 perf.pbar.update(1)
+
             return wrapper
+
         return performance_tracker_wrapper
 
     def finish(self):
         end = time.time()
         print(f"{self.count} steps")
         self.perf = pd.concat([self.perf, pd.DataFrame.from_records([
-            {"name": "total",
-             "start": self.string_time(self.start),
-             "end": self.string_time(end),
-             "duration": (end - self.start)}])])
+            {
+                "name": "total",
+                "start": self.string_time(self.start),
+                "end": self.string_time(end),
+                "duration": (end - self.start)
+            }])])
         self.total = round(end - self.start, 2)
         print(f"Total: took {round(end - self.start, 2)} seconds")
         self.pbar.set_description(f"Completed")

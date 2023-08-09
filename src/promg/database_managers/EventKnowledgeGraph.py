@@ -45,15 +45,15 @@ class EventKnowledgeGraph:
                  semantic_header: SemanticHeader = None,
                  perf: Performance = None, custom_module_name=None):
         # classes responsible for executing queries
-        self.ekg_management = DBManagement(db_connection=db_connection, db_name=db_name, perf=perf)
+        self.ekg_management = DBManagement(db_connection=db_connection, db_name=db_name)
         self.data_importer = Importer(db_connection, data_structures=specification_of_data_structures,
                                       records=semantic_header.records,
                                       batch_size=batch_size,
-                                      use_sample=use_sample, use_preprocessed_files=use_preprocessed_files, perf=perf)
+                                      use_sample=use_sample, use_preprocessed_files=use_preprocessed_files)
         self.ekg_builder = EKGUsingSemanticHeaderBuilder(db_connection=db_connection, semantic_header=semantic_header,
-                                                         batch_size=batch_size, perf=perf)
-        self.inference_engine = InferenceEngine(db_connection=db_connection, perf=perf)
-        self.ekg_analysis = EKGAnalysis(db_connection=db_connection, perf=perf)
+                                                         batch_size=batch_size)
+        self.inference_engine = InferenceEngine(db_connection=db_connection)
+        self.ekg_analysis = EKGAnalysis(db_connection=db_connection)
 
         if custom_module_name is not None:
             self.custom_module = custom_module_name(db_connection=db_connection, perf=perf)
@@ -197,7 +197,7 @@ class EventKnowledgeGraph:
         :return: None
 
         """
-        self.ekg_builder.create_relations_using_record(relation_types)
+        self.ekg_builder.create_relations_using_records(relation_types)
 
     def create_relations_using_relations(self, relation_types: Optional[List[str]] = None) -> None:
         """
@@ -354,7 +354,7 @@ class EventKnowledgeGraph:
         entity = self.semantic_header.get_entity(entity_type)
         if entity_type is None:
             raise ValueError(f"{entity_type} is not defined in semantic header")
-        self.ekg_analysis.create_df_process_model(entity)
+        self.ekg_analysis.create_df_process_model(entity=entity)
 
     def do_custom_query(self, query_name: str, **kwargs: Optional[Dict[str, any]]) -> any:
         r"""
@@ -370,4 +370,4 @@ class EventKnowledgeGraph:
         """
         if self.custom_module is None:
             raise ValueError("No custom module has been defined")
-        return self.custom_module.do_custom_query(query_name, **kwargs)
+        return self.custom_module.do_custom_query(query_function=query_name, **kwargs)

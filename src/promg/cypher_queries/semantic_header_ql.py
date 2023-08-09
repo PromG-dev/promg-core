@@ -7,13 +7,12 @@ from ..database_managers.db_connection import Query
 
 class SemanticHeaderQueryLibrary:
     @staticmethod
-    def get_create_node_by_record_constructor_query(node_constructor: NodeConstructor, batch_size: int = 5000,
-                                                    merge=False) -> Query:
+    def get_create_node_by_record_constructor_query(node_constructor: NodeConstructor, batch_size: int = 5000) -> Query:
         # find events that contain the entity as property and not nan
         # save the value of the entity property as id and also whether it is a virtual entity
         # create a new entity node if it not exists yet with properties
-        merge_or_create = 'MERGE' if merge else 'CREATE'
-        if "Event" in  node_constructor.result.labels:
+        merge_or_create = 'MERGE'
+        if "Event" in node_constructor.result.labels:
             merge_or_create = 'CREATE'
         set_label_str = ""
         set_property_str = ""

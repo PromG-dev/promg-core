@@ -8,100 +8,76 @@ from ..cypher_queries.semantic_header_ql import SemanticHeaderQueryLibrary as sh
 
 
 class EKGUsingSemanticHeaderBuilder:
-    def __init__(self, db_connection: DatabaseConnection, semantic_header: SemanticHeader, batch_size: int,
-                 perf: Performance):
+    def __init__(self, db_connection: DatabaseConnection, semantic_header: SemanticHeader, batch_size: int):
         self.connection = db_connection
         self.semantic_header = semantic_header
         self.batch_size = batch_size
-        self.perf = perf
-
-    def _write_message_to_performance(self, message: str):
-        if self.perf is not None:
-            self.perf.finished_step(log_message=message)
 
     def create_nodes_by_records(self, node_types: Optional[List[str]]) -> None:
         for node_constructor in self.semantic_header.get_node_by_record_constructors(node_types):
-            num_ids = self.connection.exec_query(sh_ql.get_number_of_ids_query,
-                                                 **{
-                                                     "node_constructor": node_constructor,
-                                                     "use_record": True
-                                                 })
-            merge_first = num_ids[0]['num_ids'] < 1000
-            merge_first = True
+            self._create_node_by_record(node_constructor=node_constructor)
 
-            self.connection.exec_query(sh_ql.get_create_node_by_record_constructor_query,
-                                       **{
-                                           "node_constructor": node_constructor,
-                                           "batch_size": self.batch_size,
-                                           "merge": merge_first
-                                       })
-            if merge_first:
-                self._write_message_to_performance(
-                    f"Node ({node_constructor.get_pattern(with_properties=False)})"
-                    f"using ({node_constructor.get_prevalent_record_pattern()} merged")
-            else:
-                self._write_message_to_performance(f"Node ({node_constructor.get_pattern(with_properties=False)}) "
-                                                   f"using ({node_constructor.get_prevalent_record_pattern()}) "
-                                                   f"created")
-
-            self.connection.exec_query(sh_ql.get_reset_created_record_query,
-                                       **{
-                                           "node_constructor": node_constructor,
-                                           "batch_size": self.batch_size
-                                       }
-                                       )
-            if not merge_first:
-                max_limit = self.connection.exec_query(sh_ql.get_number_of_ids_query,
-                                                       **{"node_constructor": node_constructor})
-                self.connection.exec_query(sh_ql.get_merge_nodes_with_same_id_query,
-                                           **{
-                                               "node_constructor": node_constructor,
-                                               "batch_size": max(self.batch_size * 10, max_limit[0]['num_ids'] * 2)
-                                           }
-                                           )
-
-            self._write_message_to_performance(f"Node ({node_constructor.get_pattern(with_properties=False)}) merged")
+    @Performance.track("node_constructor")
+    def _create_node_by_record(self, node_constructor: NodeConstructor):
+        self.connection.exec_query(sh_ql.get_create_node_by_record_constructor_query,
+                                   **{
+                                       "node_constructor": node_constructor,
+                                       "batch_size": self.batch_size
+                                   })
+        self.connection.exec_query(sh_ql.get_reset_created_record_query,
+                                   **{
+                                       "node_constructor": node_constructor,
+                                       "batch_size": self.batch_size
+                                   }
+                                   )
 
     def create_nodes_by_relations(self, node_types: Optional[List[str]]) -> None:
         for node_constructors in self.semantic_header.get_nodes_constructed_by_relations(node_types).values():
             for node_constructor in node_constructors:
-                self.connection.exec_query(sh_ql.get_create_nodes_by_relations_query,
-                                           **{
-                                               "node_constructor": node_constructor,
-                                               "batch_size": self.batch_size
-                                           })
-                self._write_message_to_performance(
-                    message=f"Relation [{node_constructor.relation.get_pattern()}] reified as "
-                            f"({node_constructor.get_pattern(with_properties=False)}) node")
+                self._create_node_by_record(node_constructor=node_constructor)
 
-    def create_relations_using_record(self, relation_types: Optional[List[str]]) -> None:
+    @Performance.track("node_constructor")
+    def _create_nodes_by_relation(self, node_constructor):
+        self.connection.exec_query(sh_ql.get_create_nodes_by_relations_query,
+                                   **{
+                                       "node_constructor": node_constructor,
+                                       "batch_size": self.batch_size
+                                   })
+
+    def create_relations_using_records(self, relation_types: Optional[List[str]]) -> None:
         # find events that are related to different entities of which one event also has a reference to the other entity
         # create a relation between these two entities
         relation: ConstructedRelation
         for relation_constructor in self.semantic_header.get_relations_constructed_by_record(relation_types):
-            self.connection.exec_query(sh_ql.get_create_relation_using_record_query,
-                                       **{
-                                           "relation_constructor": relation_constructor,
-                                           "batch_size": self.batch_size
-                                       })
-            self.connection.exec_query(sh_ql.get_reset_created_relation_query,
-                                       **{
-                                           "relation_constructor": relation_constructor,
-                                           "batch_size": self.batch_size
-                                       })
-            self._write_message_to_performance(
-                message=f"Relation {relation_constructor.get_pattern()} done")
+            self._create_relations_using_record(relation_constructor=relation_constructor)
+
+    @Performance.track("relation_constructor")
+    def _create_relations_using_record(self, relation_constructor):
+        self.connection.exec_query(sh_ql.get_create_relation_using_record_query,
+                                   **{
+                                       "relation_constructor": relation_constructor,
+                                       "batch_size": self.batch_size
+                                   })
+        self.connection.exec_query(sh_ql.get_reset_created_relation_query,
+                                   **{
+                                       "relation_constructor": relation_constructor,
+                                       "batch_size": self.batch_size
+                                   })
 
     def create_relations_using_relations(self, relation_types: Optional[List[str]]) -> None:
         relation: ConstructedRelation
         for relation_constructor in self.semantic_header.get_relations_constructed_by_relations(relation_types):
-            self.connection.exec_query(sh_ql.get_create_relation_by_relations_query,
-                                       **{
-                                           "relation_constructor": relation_constructor,
-                                           "batch_size": self.batch_size
-                                       })
+            self._create_relations_using_relation(relation_constructor=relation_constructor)
 
-    def create_df_edges(self, entity_types, event_label) -> None:
+    @Performance.track("relation_constructor")
+    def _create_relations_using_relation(self, relation_constructor):
+        self.connection.exec_query(sh_ql.get_create_relation_by_relations_query,
+                                   **{
+                                       "relation_constructor": relation_constructor,
+                                       "batch_size": self.batch_size
+                                   })
+
+    def create_df_edges(self, entity_types: List[str], event_label: str) -> None:
         entity: ConstructedNodes
 
         if entity_types is None:
@@ -109,20 +85,25 @@ class EKGUsingSemanticHeaderBuilder:
 
         for entity in self.semantic_header.nodes:
             if entity.infer_df and entity.node_type in entity_types:
-                self.connection.exec_query(sh_ql.get_create_directly_follows_query,
-                                           **{
-                                               "entity": entity, "batch_size": self.batch_size,
-                                               "event_label": event_label
-                                           })
-                self._write_message_to_performance(f"Created [:DF] edge for (:{entity.get_label_string()})")
+                self._create_df_edges_for_entity(entity=entity, event_label=event_label)
+
+    @Performance.track("entity")
+    def _create_df_edges_for_entity(self, entity: ConstructedNodes, event_label):
+        self.connection.exec_query(sh_ql.get_create_directly_follows_query,
+                                   **{
+                                       "entity": entity, "batch_size": self.batch_size,
+                                       "event_label": event_label
+                                   })
 
     def merge_duplicate_df(self):
         node: ConstructedNodes
         for node in self.semantic_header.nodes:
             if node.merge_duplicate_df:
-                self.connection.exec_query(sh_ql.get_merge_duplicate_df_entity_query, **{"node": node})
-                self.perf.finished_step(
-                    log_message=f"Merged duplicate [:DF] edges for (:{node.get_label_string()}) done")
+                self._merge_duplicate_df_for_node(node=node)
+
+    @Performance.track("node")
+    def _merge_duplicate_df_for_node(self, node: ConstructedNodes):
+        self.connection.exec_query(sh_ql.get_merge_duplicate_df_entity_query, **{"node": node})
 
     def delete_parallel_dfs_derived(self):
         node: ConstructedNodes
@@ -131,17 +112,19 @@ class EKGUsingSemanticHeaderBuilder:
         node_constructor: NodeConstructor
         for _type, node_constructor in self.semantic_header.get_nodes_constructed_by_relations(
                 only_include_delete_parallel_df=True).items():
-            from_node = node_constructor.relation.from_node
-            to_node = node_constructor.relation.to_node
-            for node in [from_node, to_node]:
-                self.connection.exec_query(sh_ql.delete_parallel_directly_follows_derived,
-                                           **{
-                                               "type": _type,
-                                               "node": node
-                                           })
-                self._write_message_to_performance(
-                    f"Deleted parallel DF of (:{node.get_label_string()}) and (:"
-                    f"{type})")
+            self._delete_parallel_dfs_derived_for_node(node=node_constructor, type=_type)
+
+    @Performance.track("type")
+    def _delete_parallel_dfs_derived_for_node(self, node: NodeConstructor, type: str):
+        from_node = node.relation.from_node
+        to_node = node.relation.to_node
+        for node in [from_node, to_node]:
+            self.connection.exec_query(sh_ql.delete_parallel_directly_follows_derived,
+                                       **{
+                                           "type": type,
+                                           "node": node
+                                       })
 
     def create_static_nodes_and_relations(self):
-        self._write_message_to_performance("No implementation yet")
+        print("No implementation yet")
+        pass

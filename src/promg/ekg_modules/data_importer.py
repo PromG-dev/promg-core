@@ -15,8 +15,7 @@ import pandas as pd
 class Importer:
     def __init__(self, db_connection: DatabaseConnection, data_structures: ImportedDataStructures,
                  records: List["RecordConstructor"], batch_size: int,
-                 use_sample: bool = False, use_preprocessed_files: bool = False,
-                 perf: Performance = None):
+                 use_sample: bool = False, use_preprocessed_files: bool = False):
         self.connection = db_connection
         self.structures = data_structures.structures
         self.records = records
@@ -24,11 +23,6 @@ class Importer:
         self.batch_size = batch_size
         self.use_sample = use_sample
         self.use_preprocessed_files = use_preprocessed_files
-        self.perf = perf
-
-    def _write_message_to_performance(self, message: str):
-        if self.perf is not None:
-            self.perf.finished_step(log_message=message)
 
     def import_data(self) -> None:
         for structure in self.structures:
@@ -42,23 +36,15 @@ class Importer:
                 df_log["loadStatus"] = 0
                 self._import_nodes_from_data(labels=labels, df_log=df_log, file_name=file_name)
 
-                self._write_message_to_performance(f"Imported data from table {structure.name}: {file_name}")
-
             if structure.has_datetime_attribute():
                 # once all events are imported, we convert the string timestamp to the timestamp as used in Cypher
-                self._reformat_timestamps(structure)
-                self._write_message_to_performance(
-                    f"Reformatted timestamps from events from event table {structure.name}: {file_name}")
+                self._reformat_timestamps(structure=structure)
 
             self._filter_nodes(structure=structure)  # filter nodes according to the structure
-            self._write_message_to_performance(
-                f"Filtered the nodes from table {structure.name}: {file_name}")
 
-            self._finalize_import()  # removes temporary properties
+            self._finalize_import(structure=structure)  # removes temporary properties
 
-            self._write_message_to_performance(
-                f"Finalized the import from table {structure.name}: {file_name}")
-
+    @Performance.track("structure")
     def _reformat_timestamps(self, structure):
         datetime_formats = structure.get_datetime_formats()
         for attribute, datetime_format in datetime_formats.items():
@@ -76,6 +62,7 @@ class Importer:
                                            "batch_size": self.batch_size
                                        })
 
+    @Performance.track("structure")
     def _filter_nodes(self, structure):
         for boolean in (True, False):
             attribute_values_pairs_filtered = structure.get_attribute_value_pairs_filtered(exclude=boolean)
@@ -83,14 +70,15 @@ class Importer:
                 self.connection.exec_query(di_ql.get_filter_events_by_property_query,
                                            **{"prop": name, "values": values, "exclude": boolean})
 
-    def _finalize_import(self):
+    @Performance.track("structure")
+    def _finalize_import(self, structure):
         # finalize the import
         self.connection.exec_query(di_ql.get_finalize_import_events_query,
                                    **{
                                        "batch_size": self.batch_size
                                    })
 
-    @Performance.performance_tracker("file_name")
+    @Performance.track("file_name")
     def _import_nodes_from_data(self, labels, df_log, file_name):
         # start with batch 0 and increment until everything is imported
         batch = 0

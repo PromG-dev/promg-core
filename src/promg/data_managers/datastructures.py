@@ -162,6 +162,9 @@ class DataStructure:
         self.attributes = attributes
         self.split_combined_events = split_combined_events
 
+    def __repr__(self):
+        return self.name
+
     def has_datetime_attribute(self):
         return any([attribute.is_datetime for attribute in self.attributes.values()])
         # return "Event" in self.labels or "EventRecord" in self.labels
