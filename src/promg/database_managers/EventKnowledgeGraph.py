@@ -40,10 +40,9 @@ class EventKnowledgeGraph:
     """
 
     def __init__(self, db_connection: DatabaseConnection, db_name: str,
-                 specification_of_data_structures: ImportedDataStructures,
+                 specification_of_data_structures: ImportedDataStructures, perf_path: str,
                  batch_size: int = 5000, use_sample: bool = False, use_preprocessed_files: bool = False,
-                 semantic_header: SemanticHeader = None,
-                 perf: Performance = None, custom_module_name=None):
+                 semantic_header: SemanticHeader = None, custom_module_name=None, number_of_steps: int = None):
         # classes responsible for executing queries
         self.ekg_management = DBManagement(db_connection=db_connection, db_name=db_name)
         self.data_importer = Importer(db_connection, data_structures=specification_of_data_structures,
@@ -56,11 +55,13 @@ class EventKnowledgeGraph:
         self.ekg_analysis = EKGAnalysis(db_connection=db_connection)
 
         if custom_module_name is not None:
-            self.custom_module = custom_module_name(db_connection=db_connection, perf=perf)
+            self.custom_module = custom_module_name(db_connection=db_connection)
         else:
             self.custom_module = None
 
         self.semantic_header = semantic_header
+
+        self.perf = Performance(perf_path=perf_path, number_of_steps=number_of_steps)
 
     # region EKG management
     """Define all queries and return their results (if required)"""
@@ -371,3 +372,8 @@ class EventKnowledgeGraph:
         if self.custom_module is None:
             raise ValueError("No custom module has been defined")
         return self.custom_module.do_custom_query(query_function=query_name, **kwargs)
+
+
+    def save_perf(self):
+        self.perf.finish()
+        self.perf.save()
