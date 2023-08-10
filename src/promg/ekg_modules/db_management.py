@@ -12,11 +12,11 @@ class DBManagement:
         self.connection = db_connection
         self.db_name = db_name
 
-    @Performance.track
+    @Performance.track()
     def clear_db(self):
         self.connection.exec_query(dbm_ql.get_clear_db_query, **{"db_name": self.db_name})
 
-    @Performance.track
+    @Performance.track()
     def set_constraints(self):
         # for implementation only (not required by schema or patterns)
         self.connection.exec_query(dbm_ql.get_constraint_unique_event_id_query)

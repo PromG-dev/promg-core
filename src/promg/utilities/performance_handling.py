@@ -97,4 +97,4 @@ class Performance(metaclass=Singleton):
 
     def save(self):
         os.makedirs(os.path.dirname(self.path), exist_ok=True)
-        self.perf.to_csv(self.path)
+        self.perf.to_csv(self.path, sep=";",decimal=",")
