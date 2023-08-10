@@ -1,4 +1,5 @@
 from typing import Dict, Optional, List
+from string import Template
 
 from ..data_managers.datastructures import DataStructure
 from ..data_managers.semantic_header import RecordConstructor
@@ -7,7 +8,7 @@ from ..database_managers.db_connection import Query
 
 class DataImporterQueryLibrary:
     @staticmethod
-    def get_create_nodes_by_importing_batch_query(batch: List[Dict[str, str]]) -> Query:
+    def get_create_nodes_by_importing_batch_query(batch: List[Dict[str, str]], record_constructors: List[RecordConstructor]) -> Query:
         """
         Create event nodes for each row in the batch with labels
         The properties of each row are also the property of the node
@@ -16,18 +17,40 @@ class DataImporterQueryLibrary:
         @return: None,
         """
 
+        record_name = "record"
+        get_labels_str = ""
+        for index, record_constructor in enumerate(record_constructors):
+            with_str = '''
+                CALL apoc.when($required_attributes_not_null $attributes_match, 'RETURN $labels as labels', 'RETURN [] as labels')
+                YIELD value as labels$i'''
+            with_str = Template(with_str).safe_substitute({
+                "attributes_match": record_constructor.get_additional_conditions(),
+                "required_attributes_not_null": record_constructor.get_required_attributes_is_not_null_pattern(
+                             record_name=record_name),
+                "labels": record_constructor.get_label_list(as_str=True),
+                "record_name": record_name,
+                "i": index
+            })
+            get_labels_str += with_str
+
         # $batch is a variable we can add in tx.run, this allows us to use string properties
         # (keys in our dictionary are string)
         # return is required when using call and yield
-
         # language=SQL
         query_str = '''
                     UNWIND $batch AS row
-                    CALL apoc.create.node(["Record"], row) YIELD node
+                    CALL apoc.create.node(["Record"], row) YIELD node AS $record_name
+                    $assign_labels_str
+                    CALL apoc.create.addLabels($record_name, $labels_list)
+                    YIELD node as record_with_labels
                     RETURN count(*)
                 '''
 
-        return Query(query_str=query_str, parameters={"batch": batch})
+        return Query(query_str=query_str,
+                     template_string_parameters={"record_name": record_name,
+                     "assign_labels_str": get_labels_str,
+                     "labels_list": "+".join([f"labels{i}['labels']" for i in range(index)])},
+                     parameters={"batch": batch})
 
     @staticmethod
     def get_make_timestamp_date_query(attribute, datetime_object, batch_size) -> Query:
@@ -130,36 +153,46 @@ class DataImporterQueryLibrary:
                      template_string_parameters=template_string_parameters)
 
     @staticmethod
-    def get_create_record_query(record_constructor: RecordConstructor, batch_size: int = 5000):
+    def get_create_record_query(record_constructors: List[RecordConstructor], batch_size: int = 5000):
+        assign_labels_str = ""
+        record_name = "record"
+        for index, record_constructor in enumerate(record_constructors):
+            with_str = '''
+                CALL apoc.do.when($required_attributes_not_null, \"SET $record_name:$labels  RETURN $record_name\", \"\", {$record_name:$record_name})
+                YIELD value as ignored$i'''
+            with_str = Template(with_str).safe_substitute({
+                "required_attributes_not_null": record_constructor.get_required_attributes_is_not_null_pattern(
+                             record_name=record_name),
+                "labels": record_constructor.get_record_labels_pattern(),
+                "record_name": record_name,
+                "i": index
+            })
+            assign_labels_str += with_str
+
+
+
         # language=SQL
         query_str = '''CALL apoc.periodic.commit(
-                            'MATCH ($record) 
+                            'MATCH ($record_name:Record) 
                                 WHERE $record_name.added_label IS NULL
                                 AND $record_name.loadStatus = 0
-                                AND $required_attributes_not_null
                                 WITH $record_name limit $limit
-                                SET $record_name:$labels
+                                $assign_labels_str
                                 SET $record_name.added_label = True
                                 RETURN count(*)',
-                            {limit: $limit*5})
+                            {limit: $limit})
                         '''
 
-        record_name = "record"
         return Query(query_str=query_str,
-                     template_string_parameters={
-                         "record": record_constructor.get_prevalent_record_pattern(record_name=record_name),
-                         "record_name": "record",
-                         "required_attributes_not_null": record_constructor.get_required_attributes_is_not_null_pattern(
-                             record_name=record_name),
-                         "labels": record_constructor.get_record_labels_pattern()
-                     },
+                     template_string_parameters={"record_name": record_name,
+                     "assign_labels_str": assign_labels_str},
                      parameters={"limit": batch_size})
 
     @staticmethod
-    def get_reset_added_label_query(record_constructor: RecordConstructor, batch_size: int):
+    def get_reset_added_label_query(batch_size: int):
         query_str = '''
                                     CALL apoc.periodic.commit(
-                                        'MATCH ($record) 
+                                        'MATCH (record:Record) 
                                             WHERE record.added_label = True
                                             WITH record limit $limit
                                             SET record.added_label = Null
@@ -167,9 +200,6 @@ class DataImporterQueryLibrary:
                                             {limit: $limit})
                                     '''
         return Query(query_str=query_str,
-                     template_string_parameters={
-                         "record": record_constructor.get_prevalent_record_pattern(record_name="record"),
-                     },
                      parameters={"limit": batch_size * 10})
 
     @staticmethod

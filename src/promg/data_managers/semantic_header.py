@@ -786,12 +786,23 @@ class RecordConstructor:
     def get_prevalent_record_pattern(self, record_name: str = "record"):
         return self.prevalent_record.get_pattern(record_name)
 
+    def get_additional_conditions(self, record_name: str = "record"):
+        cond = self.prevalent_record.get_condition_string(with_brackets=False, with_where=False)
+        if cond != "":
+            return f"AND {self.prevalent_record.get_condition_string(with_brackets=False, with_where=False)}"
+        return ""
+
     def get_required_attributes_is_not_null_pattern(self, record_name: str = "record"):
         return " AND ".join(
             [f'''{record_name}.{attribute} IS NOT NULL''' for attribute in self.required_attributes])
 
     def get_record_labels_pattern(self):
         return ":".join(self.record_labels)
+
+    def get_label_list(self, as_str=True):
+        if as_str:
+            return "[" + ",".join([f'"{label}"' for label in self.record_labels]) + "]"
+        return self.record_labels
 
 
 class SemanticHeader:

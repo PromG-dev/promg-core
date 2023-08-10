@@ -154,6 +154,8 @@ class DataStructure:
         self.seperator = seperator
         self.decimal = decimal
         self.labels = labels
+        if self.labels == ["Record"]:
+            self.labels = None
         self.true_values = true_values
         self.false_values = false_values
         self.add_log = add_log

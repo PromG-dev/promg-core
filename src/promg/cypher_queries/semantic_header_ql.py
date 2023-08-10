@@ -76,7 +76,7 @@ class SemanticHeaderQueryLibrary:
                             $infer_corr_str
                             $infer_observed_str
                             RETURN count(*)',
-                            {limit: $limit*5})
+                            {limit: $limit})
                     '''
 
         query_str = Template(query_str).safe_substitute({

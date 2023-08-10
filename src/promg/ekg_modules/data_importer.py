@@ -84,6 +84,7 @@ class Importer:
         batch = 0
         print("\n")
         pbar = tqdm(total=math.ceil(len(df_log) / self.batch_size), position=0)
+        record_constructors = self._get_record_constructors_by_labels(labels)
         while batch * self.batch_size < len(df_log):
             pbar.set_description(f"Loading data from {file_name} from batch {batch}")
 
@@ -94,31 +95,39 @@ class Importer:
                                   df_log[batch * self.batch_size:(batch + 1) * self.batch_size].to_dict(
                                       orient='records')]
             self.connection.exec_query(di_ql.get_create_nodes_by_importing_batch_query,
-                                       **{"batch": batch_without_nans})
+                                       **{"batch": batch_without_nans,
+                                          "record_constructors": record_constructors})
 
             pbar.update(1)
             batch += 1
-            if (batch % 10) == 0:
-                self._create_records(labels)
+        #     if (batch % 100) == 0:
+        #         self._create_records(labels)
+        #
+        # self._create_records(labels)
         pbar.close()
 
-    def _create_records(self, labels) -> None:
+    def _get_record_constructors_by_labels(self, labels):
+        constructors = []
         for record_constructor in self.records:
             if labels is not None:
                 intersection = list(set(labels) & set(record_constructor.record_labels))
             else:
                 intersection = record_constructor.record_labels
-            if len(intersection) > 0:  # label of record constructor is in intersection or labels is not defined
-                self.connection.exec_query(di_ql.get_create_record_query,
-                                           **{
-                                               "record_constructor": record_constructor,
-                                               "batch_size": self.batch_size
-                                           })
-                self.connection.exec_query(di_ql.get_reset_added_label_query,
-                                           **{
-                                               "record_constructor": record_constructor,
-                                               "batch_size": self.batch_size
-                                           })
+            if len(intersection) > 0: # label of record constructor is in intersection or labels is not defined
+                constructors.append(record_constructor)
+        return constructors
+
+    def _create_records(self, labels) -> None:
+        record_constructors = self._get_record_constructors_by_labels(labels)
+        self.connection.exec_query(di_ql.get_create_record_query,
+                                   **{
+                                       "record_constructors": record_constructors,
+                                       "batch_size": self.batch_size
+                                   })
+        self.connection.exec_query(di_ql.get_reset_added_label_query,
+                                   **{
+                                       "batch_size": self.batch_size
+                                   })
         self.connection.exec_query(di_ql.get_update_load_status_query,
                                    **{
                                        "current_load_status": 0
