@@ -7,11 +7,11 @@ from ..database_managers.db_connection import Query
 
 class SemanticHeaderQueryLibrary:
     @staticmethod
-    def get_create_node_by_record_constructor_query(node_constructor: NodeConstructor, batch_size: int = 5000) -> Query:
+    def get_create_node_by_record_constructor_query(node_constructor: NodeConstructor, batch_size: int = 5000, merge=True) -> Query:
         # find events that contain the entity as property and not nan
         # save the value of the entity property as id and also whether it is a virtual entity
         # create a new entity node if it not exists yet with properties
-        merge_or_create = 'MERGE'
+        merge_or_create = 'MERGE' if merge else 'CREATE'
         if "Event" in node_constructor.result.labels:
             merge_or_create = 'CREATE'
         set_label_str = ""
@@ -66,10 +66,10 @@ class SemanticHeaderQueryLibrary:
         query_str = '''
                     CALL apoc.periodic.commit(
                         'MATCH ($record) 
-                            WHERE record.created IS NULL
+                        WHERE NOT record:RecordCreated
                             WITH $record_name limit $limit
                             $merge_or_create ($result_node)
-                            SET record.created = True
+                            SET $record_name:RecordCreated
                             $set_label_str
                             $set_property_str
                             MERGE (record) <- [:PREVALENCE] - ($result_node_name)
@@ -99,23 +99,19 @@ class SemanticHeaderQueryLibrary:
                          "corr_type": node_constructor.corr_type,
                          "event_label": node_constructor.event_label
                      },
-                     parameters={"limit": batch_size})
+                     parameters={"limit": batch_size*10})
 
     @staticmethod
-    def get_reset_created_record_query(node_constructor: NodeConstructor, batch_size: int):
+    def get_reset_created_record_query(batch_size: int):
         query_str = '''
                     CALL apoc.periodic.commit(
-                        'MATCH ($record) 
-                            WHERE record.created = True
+                        'MATCH (record:RecordCreated) 
                             WITH record limit $limit
-                            SET record.created = Null
+                            REMOVE record:RecordCreated
                             RETURN count(*)',
                             {limit: $limit})
                     '''
         return Query(query_str=query_str,
-                     template_string_parameters={
-                         "record": node_constructor.get_prevalent_record_pattern(node_name="record"),
-                     },
                      parameters={"limit": batch_size * 5})
 
     @staticmethod
@@ -131,6 +127,17 @@ class SemanticHeaderQueryLibrary:
                      template_string_parameters={
                          "labels": node_constructor.get_label_string(),
                          "attribute": node_constructor.result.required_properties[0].ref_attribute,
+                         "record": node_constructor.get_prevalent_record_pattern(node_name="record")
+                     })
+
+    @staticmethod
+    def get_number_of_records_query(node_constructor: NodeConstructor, use_record: bool = False):
+
+        query_str = '''MATCH ($record) 
+                           RETURN count(record) as count'''
+
+        return Query(query_str=query_str,
+                     template_string_parameters={
                          "record": node_constructor.get_prevalent_record_pattern(node_name="record")
                      })
 
@@ -273,12 +280,12 @@ class SemanticHeaderQueryLibrary:
 
         query_str = '''     CALL apoc.periodic.commit('
                             MATCH (record:$record_labels)
-                            WHERE record.rel_created IS NULL
+                            WHERE NOT record:RecordCreated
                             WITH  record limit $limit
                             MATCH ($from_node) - [:PREVALENCE] -> (record)
                             MATCH ($to_node) - [:PREVALENCE] -> (record)
                             $merge_str
-                            SET record.rel_created = True
+                            SET record:RecordCreated
                             $add_str
                             RETURN COUNT(*)',
                             {limit:$limit})

@@ -19,17 +19,42 @@ class EKGUsingSemanticHeaderBuilder:
 
     @Performance.track("node_constructor")
     def _create_node_by_record(self, node_constructor: NodeConstructor):
+        num_ids = self.connection.exec_query(sh_ql.get_number_of_ids_query,
+                                             **{
+                                                 "node_constructor": node_constructor,
+                                                 "use_record": True
+                                             })
+        merge_first = num_ids[0]['num_ids'] < 1000
+
         self.connection.exec_query(sh_ql.get_create_node_by_record_constructor_query,
                                    **{
                                        "node_constructor": node_constructor,
-                                       "batch_size": self.batch_size
+                                       "batch_size": self.batch_size,
+                                       "merge": merge_first
                                    })
+        if merge_first:
+            print(
+                f"Node ({node_constructor.get_pattern(with_properties=False)})"
+                f"using ({node_constructor.get_prevalent_record_pattern()} merged")
+        else:
+            print(f"Node ({node_constructor.get_pattern(with_properties=False)}) "
+                                               f"using ({node_constructor.get_prevalent_record_pattern()}) "
+                                               f"created")
+
         self.connection.exec_query(sh_ql.get_reset_created_record_query,
                                    **{
-                                       "node_constructor": node_constructor,
                                        "batch_size": self.batch_size
                                    }
                                    )
+        if not merge_first:
+            max_limit = self.connection.exec_query(sh_ql.get_number_of_ids_query,
+                                                   **{"node_constructor": node_constructor})
+            self.connection.exec_query(sh_ql.get_merge_nodes_with_same_id_query,
+                                       **{
+                                           "node_constructor": node_constructor,
+                                           "batch_size": max(self.batch_size * 10, max_limit[0]['num_ids'] * 2)
+                                       }
+                                       )
 
     def create_nodes_by_relations(self, node_types: Optional[List[str]]) -> None:
         for node_constructors in self.semantic_header.get_nodes_constructed_by_relations(node_types).values():
@@ -58,9 +83,8 @@ class EKGUsingSemanticHeaderBuilder:
                                        "relation_constructor": relation_constructor,
                                        "batch_size": self.batch_size
                                    })
-        self.connection.exec_query(sh_ql.get_reset_created_relation_query,
+        self.connection.exec_query(sh_ql.get_reset_created_record_query,
                                    **{
-                                       "relation_constructor": relation_constructor,
                                        "batch_size": self.batch_size
                                    })
 

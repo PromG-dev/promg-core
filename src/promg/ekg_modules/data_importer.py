@@ -27,6 +27,7 @@ class Importer:
     def import_data(self) -> None:
         for structure in self.structures:
             labels = structure.labels
+            record_constructors = self._get_record_constructors_by_labels(structure=structure, labels=labels)
             file_directory = structure.file_directory
             # read in all file names that match this structure
             for file_name in structure.file_names:
@@ -34,7 +35,8 @@ class Importer:
                 df_log = structure.read_data_set(file_directory, file_name, use_sample=self.use_sample,
                                                  use_preprocessed_file=self.use_preprocessed_files)
                 df_log["loadStatus"] = 0
-                self._import_nodes_from_data(labels=labels, df_log=df_log, file_name=file_name)
+                self._import_nodes_from_data(labels=labels, df_log=df_log, file_name=file_name,
+                                             record_constructors=record_constructors)
 
             if structure.has_datetime_attribute():
                 # once all events are imported, we convert the string timestamp to the timestamp as used in Cypher
@@ -79,12 +81,14 @@ class Importer:
                                    })
 
     @Performance.track("file_name")
-    def _import_nodes_from_data(self, labels, df_log, file_name):
+    def _import_nodes_from_data(self, labels, df_log, file_name, record_constructors):
         # start with batch 0 and increment until everything is imported
         batch = 0
         print("\n")
         pbar = tqdm(total=math.ceil(len(df_log) / self.batch_size), position=0)
-        record_constructors = self._get_record_constructors_by_labels(labels)
+
+        labels_constructor = di_ql.get_label_constructors(record_constructors)
+
         while batch * self.batch_size < len(df_log):
             pbar.set_description(f"Loading data from {file_name} from batch {batch}")
 
@@ -94,9 +98,10 @@ class Importer:
                                   for m in
                                   df_log[batch * self.batch_size:(batch + 1) * self.batch_size].to_dict(
                                       orient='records')]
+
             self.connection.exec_query(di_ql.get_create_nodes_by_importing_batch_query,
                                        **{"batch": batch_without_nans,
-                                          "record_constructors": record_constructors})
+                                          "labels_constructors": labels_constructor})
 
             pbar.update(1)
             batch += 1
@@ -106,7 +111,7 @@ class Importer:
         # self._create_records(labels)
         pbar.close()
 
-    def _get_record_constructors_by_labels(self, labels):
+    def _get_record_constructors_by_labels(self, structure, labels):
         constructors = []
         for record_constructor in self.records:
             if labels is not None:
@@ -114,7 +119,17 @@ class Importer:
             else:
                 intersection = record_constructor.record_labels
             if len(intersection) > 0: # label of record constructor is in intersection or labels is not defined
-                constructors.append(record_constructor)
+                required = True
+                if record_constructor.prevalent_record.where_condition != "":
+                    required = False
+                else:
+                    for required_attribute in record_constructor.required_attributes:
+                        if required_attribute == "index":
+                            continue
+                        attribute_in_structure = structure.attributes[required_attribute]
+                        if attribute_in_structure.optional:
+                            required = False
+                constructors.append({"required": required, "record_constructor": record_constructor})
         return constructors
 
     def _create_records(self, labels) -> None:

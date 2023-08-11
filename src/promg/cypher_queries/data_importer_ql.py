@@ -1,4 +1,4 @@
-from typing import Dict, Optional, List
+from typing import Dict, Optional, List, Union
 from string import Template
 
 from ..data_managers.datastructures import DataStructure
@@ -8,7 +8,62 @@ from ..database_managers.db_connection import Query
 
 class DataImporterQueryLibrary:
     @staticmethod
-    def get_create_nodes_by_importing_batch_query(batch: List[Dict[str, str]], record_constructors: List[RecordConstructor]) -> Query:
+    def get_optional_label_str(get_labels_str, optional_labels):
+        record_name = "record"
+        optional_label_str = ""
+        if len(optional_labels) > 0:
+            # language=SQL
+            optional_label_str = '''
+                    $assign_labels_str
+                    CALL apoc.create.addLabels($record_name, $optional_labels_list)
+                    YIELD node as record_with_labels
+                    '''
+        optional_label_str = Template(optional_label_str).safe_substitute({
+            "record_name": record_name,
+            "assign_labels_str": get_labels_str,
+            "optional_labels_list": "+".join(optional_labels)
+        })
+
+        return optional_label_str
+
+    @staticmethod
+    def get_label_constructors(record_constructors: List[Dict[bool, RecordConstructor]]):
+        required_labels = ['Record']
+        optional_labels = []
+        record_name = "record"
+        get_labels_str = ""
+        for index, record_constructor_dict in enumerate(record_constructors):
+            record_constructor = record_constructor_dict["record_constructor"]
+            if record_constructor_dict["required"]:
+                required_labels.extend(record_constructor.record_labels)
+            else:
+                with_str = '''
+                            CALL apoc.when($required_attributes_not_null $attributes_match, 'RETURN $labels as 
+                            labels', 'RETURN [] as labels')
+                            YIELD value as labels$i'''
+                with_str = Template(with_str).safe_substitute({
+                    "attributes_match": record_constructor.get_additional_conditions(),
+                    "required_attributes_not_null": record_constructor.get_required_attributes_is_not_null_pattern(
+                        record_name=record_name),
+                    "labels": record_constructor.get_label_list(as_str=True),
+                    "record_name": record_name,
+                    "i": index
+                })
+                get_labels_str += with_str
+                optional_labels.append(f"labels{index}['labels']")
+
+
+        optional_labels_str = DataImporterQueryLibrary.get_optional_label_str(optional_labels=optional_labels, get_labels_str=get_labels_str)
+
+        label_constructor = {
+            "required_labels": required_labels,
+            "optional_labels_str": optional_labels_str
+        }
+
+        return label_constructor
+
+    @staticmethod
+    def get_create_nodes_by_importing_batch_query(batch: List[Dict[str, str]], labels_constructors: Dict[str, Union[List[str], str]]) -> Query:
         """
         Create event nodes for each row in the batch with labels
         The properties of each row are also the property of the node
@@ -18,20 +73,8 @@ class DataImporterQueryLibrary:
         """
 
         record_name = "record"
-        get_labels_str = ""
-        for index, record_constructor in enumerate(record_constructors):
-            with_str = '''
-                CALL apoc.when($required_attributes_not_null $attributes_match, 'RETURN $labels as labels', 'RETURN [] as labels')
-                YIELD value as labels$i'''
-            with_str = Template(with_str).safe_substitute({
-                "attributes_match": record_constructor.get_additional_conditions(),
-                "required_attributes_not_null": record_constructor.get_required_attributes_is_not_null_pattern(
-                             record_name=record_name),
-                "labels": record_constructor.get_label_list(as_str=True),
-                "record_name": record_name,
-                "i": index
-            })
-            get_labels_str += with_str
+        required_labels = labels_constructors["required_labels"]
+        optional_labels_str = labels_constructors["optional_labels_str"]
 
         # $batch is a variable we can add in tx.run, this allows us to use string properties
         # (keys in our dictionary are string)
@@ -39,17 +82,15 @@ class DataImporterQueryLibrary:
         # language=SQL
         query_str = '''
                     UNWIND $batch AS row
-                    CALL apoc.create.node(["Record"], row) YIELD node AS $record_name
-                    $assign_labels_str
-                    CALL apoc.create.addLabels($record_name, $labels_list)
-                    YIELD node as record_with_labels
+                    CALL apoc.create.node($required_labels, row) YIELD node AS $record_name
+                    $optional_label_str
                     RETURN count(*)
                 '''
 
         return Query(query_str=query_str,
                      template_string_parameters={"record_name": record_name,
-                     "assign_labels_str": get_labels_str,
-                     "labels_list": "+".join([f"labels{i}['labels']" for i in range(index)])},
+                      "required_labels": required_labels,
+                     "optional_label_str": optional_labels_str},
                      parameters={"batch": batch})
 
     @staticmethod
