@@ -12,8 +12,6 @@ class SemanticHeaderQueryLibrary:
         # save the value of the entity property as id and also whether it is a virtual entity
         # create a new entity node if it not exists yet with properties
         merge_or_create = 'MERGE' if merge else 'CREATE'
-        if "Event" in node_constructor.result.labels:
-            merge_or_create = 'CREATE'
         set_label_str = ""
         set_property_str = ""
         infer_corr_str = ""
@@ -145,6 +143,7 @@ class SemanticHeaderQueryLibrary:
     def get_merge_nodes_with_same_id_query(node_constructor: NodeConstructor, batch_size: int):
         if "Event" in node_constructor.get_labels():
             return None
+
 
         query_str = '''
                     CALL apoc.periodic.commit(
