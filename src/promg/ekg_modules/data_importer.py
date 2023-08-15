@@ -126,6 +126,8 @@ class Importer:
                     for required_attribute in record_constructor.required_attributes:
                         if required_attribute == "index":
                             continue
+                        if required_attribute not in structure.attributes:
+                            continue
                         attribute_in_structure = structure.attributes[required_attribute]
                         if attribute_in_structure.optional:
                             required = False
