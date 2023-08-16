@@ -53,8 +53,14 @@ class EKGUsingSemanticHeaderBuilder:
                 self.connection.exec_query(sh_ql.get_merge_nodes_with_same_id_query,
                                            **{
                                                "node_constructor": node_constructor,
-                                               "batch_size": max(self.batch_size * 10, max_limit[0]['num_ids'] * 2)
+                                               "batch_size": self.batch_size
                                            }
+                                           )
+
+                self.connection.exec_query(sh_ql.get_reset_merged_in_nodes_query,
+                                           **{
+                                               "node_constructor": node_constructor,
+                                               "batch_size": self.batch_size}
                                            )
 
 

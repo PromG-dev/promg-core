@@ -97,7 +97,7 @@ class SemanticHeaderQueryLibrary:
                          "corr_type": node_constructor.corr_type,
                          "event_label": node_constructor.event_label
                      },
-                     parameters={"limit": batch_size*10})
+                     parameters={"limit": batch_size})
 
     @staticmethod
     def get_reset_created_record_query(batch_size: int):
@@ -110,7 +110,7 @@ class SemanticHeaderQueryLibrary:
                             {limit: $limit})
                     '''
         return Query(query_str=query_str,
-                     parameters={"limit": batch_size * 5})
+                     parameters={"limit": batch_size})
 
     @staticmethod
     def get_number_of_ids_query(node_constructor: NodeConstructor, use_record: bool = False):
@@ -140,6 +140,24 @@ class SemanticHeaderQueryLibrary:
                      })
 
     @staticmethod
+    def get_reset_merged_in_nodes_query(node_constructor: NodeConstructor, batch_size: int):
+        query_str = '''
+                           CALL apoc.periodic.commit(
+                                  'MATCH (n:$labels)
+                                  WHERE n.merged = True
+                                  WITH n LIMIT $limit
+                                  SET n.merged = Null
+                           RETURN COUNT(*)',
+                           {limit:$limit})
+                       '''
+
+        return Query(query_str=query_str,
+                     template_string_parameters={
+                         "labels": node_constructor.get_label_string(),
+                     },
+                     parameters={"limit": batch_size})
+
+    @staticmethod
     def get_merge_nodes_with_same_id_query(node_constructor: NodeConstructor, batch_size: int):
         if "Event" in node_constructor.get_labels():
             return None
@@ -148,16 +166,28 @@ class SemanticHeaderQueryLibrary:
         query_str = '''
                     CALL apoc.periodic.commit(
                            'MATCH (n:$labels)
-                           WITH n LIMIT $limit
-                           WITH $idt_properties, collect(n) as same_nodes
+                           WHERE n.merged IS NULL
+                           // we order by sysId
+                           WITH n ORDER BY n.sysId LIMIT $limit
+                           WITH collect(n) as collection
+                           WITH collection, last(collection) as last_node, size(collection) as count
+                           UNWIND collection as n
+                           WITH $idt_properties, collect(n) as same_nodes, last_node, count
+                           CALL {WITH same_nodes, last_node
+                                MATCH (last_node)
+                                // last node could be the first of the list of same_nodes, we do not set to merged = true
+                                // for this node
+                                 WHERE size(same_nodes) = 1 and  head(same_nodes) <> last_node
+                                 SET head(same_nodes).merged = True}             
+                           WITH same_nodes, count                   
                            WHERE size(same_nodes) > 1
                            UNWIND range(0, toInteger(floor(size(same_nodes)/100))) as i
                            WITH same_nodes, i*100 as min_range, apoc.coll.min([(i+1)*100, size(same_nodes)]) AS 
-                           max_range
-                           WITH same_nodes[min_range..max_range] as lim_nodes
+                           max_range, count
+                           WITH same_nodes[min_range..max_range] as lim_nodes, count
                            CALL apoc.refactor.mergeNodes(lim_nodes, {properties: "discard", mergeRels: true})
                            YIELD node
-                           RETURN COUNT(*)',
+                           RETURN count',
                            {limit:$limit})
                        '''
         return Query(query_str=query_str,
@@ -308,7 +338,7 @@ class SemanticHeaderQueryLibrary:
                          "relation_label_str": relation_constructor.result.get_relation_types_str()
                      },
                      parameters={
-                         "limit": batch_size * 10
+                         "limit": batch_size
                      })
 
     @staticmethod
@@ -329,7 +359,7 @@ class SemanticHeaderQueryLibrary:
                      template_string_parameters={
                          "record_labels": relation_constructor.prevalent_record.get_label_str(
                              include_first_colon=False),
-                         "limit": batch_size * 10
+                         "limit": batch_size
                      })
 
     @staticmethod

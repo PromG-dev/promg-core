@@ -21,6 +21,7 @@ class Importer:
         self.records = records
 
         self.batch_size = batch_size
+        self.load_batch_size = 10000
         self.use_sample = use_sample
         self.use_preprocessed_files = use_preprocessed_files
 
@@ -85,18 +86,18 @@ class Importer:
         # start with batch 0 and increment until everything is imported
         batch = 0
         print("\n")
-        pbar = tqdm(total=math.ceil(len(df_log) / self.batch_size), position=0)
+        pbar = tqdm(total=math.ceil(len(df_log) / self.load_batch_size), position=0)
 
         labels_constructor = di_ql.get_label_constructors(record_constructors)
 
-        while batch * self.batch_size < len(df_log):
+        while batch * self.load_batch_size < len(df_log):
             pbar.set_description(f"Loading data from {file_name} from batch {batch}")
 
             # import the events in batches, use the records of the log
             batch_without_nans = [{k: int(v) if isinstance(v, np.integer) else v for k, v in m.items()
                                    if (isinstance(v, list) and len(v) > 0) or (not pd.isna(v) and v is not None)}
                                   for m in
-                                  df_log[batch * self.batch_size:(batch + 1) * self.batch_size].to_dict(
+                                  df_log[batch * self.load_batch_size:(batch + 1) * self.load_batch_size].to_dict(
                                       orient='records')]
 
             self.connection.exec_query(di_ql.get_create_nodes_by_importing_batch_query,
@@ -126,10 +127,7 @@ class Importer:
                     for required_attribute in record_constructor.required_attributes:
                         if required_attribute == "index":
                             continue
-                        if required_attribute not in structure.attributes:
-                            continue
-                        attribute_in_structure = structure.attributes[required_attribute]
-                        if attribute_in_structure.optional:
+                        if required_attribute not in structure.attributes or structure.attributes[required_attribute].optional:
                             required = False
                 constructors.append({"required": required, "record_constructor": record_constructor})
         return constructors
