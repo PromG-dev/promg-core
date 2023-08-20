@@ -190,6 +190,8 @@ class SemanticHeaderQueryLibrary:
                            RETURN count',
                            {limit:$limit})
                        '''
+
+
         return Query(query_str=query_str,
                      template_string_parameters={
                          "labels": node_constructor.get_label_string(),

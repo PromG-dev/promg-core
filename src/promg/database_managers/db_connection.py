@@ -51,7 +51,7 @@ class DatabaseConnection(object):
             while failed_batches > 0 and attempts <= 10:
                 result = self._exec_query(query, database, **kwargs)
                 failed_batches = result[0]['failedBatches']
-                kwargs["limit"] -= int(limit/10)
+                kwargs["limit"] = int(limit/2)
                 kwargs["limit"] = max(10000, kwargs["limit"])
                 attempts +=1
             if failed_batches > 0:

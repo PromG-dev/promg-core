@@ -21,7 +21,7 @@ class Importer:
         self.records = records
 
         self.batch_size = batch_size
-        self.load_batch_size = 10000
+        self.load_batch_size = 20000
         self.use_sample = use_sample
         self.use_preprocessed_files = use_preprocessed_files
 
