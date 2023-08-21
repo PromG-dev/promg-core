@@ -199,51 +199,39 @@ class SemanticHeaderQueryLibrary:
                      },
                      parameters={"limit": batch_size})
 
+
+
     @staticmethod
-    def get_create_nodes_by_relations_query(node_constructor: NodeConstructor, batch_size: int) -> Query:
-        if node_constructor.infer_reified_relation:
-            # language=sql
-            apoc_str = '''apoc.refactor.extractNode(rel, $result_labels, "TO", "FROM")'''
+    def get_infer_corr_from_parent_query(batch_size, relation_constructor, use_from):
+        if use_from:
+            node =  relation_constructor.from_node.get_pattern()
+            from_or_to = "FROM"
         else:
-            # language=sql
-            apoc_str = '''apoc.refactor.extractNode(rel, $result_labels)'''
-        if node_constructor.infer_corr_from_reified_parents:
-            # language=sql
-            add_str = '''WITH $from_node_name, $to_node_name, output
-                                MATCH ($from_node_name) <- [:CORR] - (e:Event)
-                                MATCH ($to_node_name) <- [:CORR] - (f:Event)
-                                MERGE (output) <- [:CORR] - (e)
-                                MERGE (output) <- [:CORR] - (f)
-                   '''
+            node  = relation_constructor.to_node.get_pattern()
+            from_or_to = "TO"
 
         query_str = '''
-            CALL apoc.periodic.commit(
-                'MATCH ($from_node) - [rel:$rel_type] -> ($to_node)
-                WITH $from_node_name, $to_node_name, rel limit $limit
-                CALL $apoc_str
-                YIELD input, output
-                $add_str
-                RETURN count(*)',
-                {limit: $limit}
-            )
-        '''
+            CALL apoc.periodic.commit('
+                MATCH (e:Event) --> ($node) - [:$from_or_to] - (relation:$relation_label_str)
+                WHERE NOT EXISTS ((e) - [:CORR] -> (relation))
+                WITH DISTINCT relation, e limit $limit
+                MERGE (e) - [:CORR] -> (relation)
+                RETURN COUNT(*)',
+                {limit:$limit}
+                )       
+            '''
 
-        query_str = Template(query_str).safe_substitute({
-            "apoc_str": apoc_str,
-            "add_str": add_str
-        })
-
-        # TODO from node
         return Query(query_str=query_str,
                      template_string_parameters={
-                         "from_node": node_constructor.relation.from_node.get_pattern(),
-                         "to_node": node_constructor.relation.to_node.get_pattern(),
-                         "from_node_name": node_constructor.relation.from_node.get_name(),
-                         "to_node_name": node_constructor.relation.to_node.get_name(),
-                         "rel_type": node_constructor.relation.get_relation_type(),
-                         "result_labels": node_constructor.result.get_label_str(as_list=True)
+                         "node": node,
+                         "from_or_to": from_or_to,
+                         "relation_label_str": relation_constructor.result.get_relation_types_str()
                      },
-                     parameters={"limit": batch_size})
+                     parameters={
+                         "limit": batch_size
+                     })
+
+
 
     @staticmethod
     def get_create_relation_by_relations_query(relation_constructor: RelationConstructor, batch_size: int) -> Query:
@@ -285,7 +273,6 @@ class SemanticHeaderQueryLibrary:
     def get_create_relation_using_record_query(relation_constructor: RelationConstructor, batch_size: int) -> Query:
         # find events that are related to different entities of which one event also has a reference to the other entity
         # create a relation between these two entities
-        add_str = ""
         if relation_constructor.model_as_node:
             # language=sql
             merge_str = '''
@@ -293,19 +280,6 @@ class SemanticHeaderQueryLibrary:
                             $to_node_name)
                             MERGE (relation)  - [:PREVALENCE] -> (record)
                             '''
-            if relation_constructor.infer_corr_from_reified_parents:
-                # language=sql
-                add_str = '''
-                            WITH $from_node_name, $to_node_name, relation
-                            CALL {WITH $from_node_name, relation
-                                    MATCH ($from_node_name) <- [:CORR] - (e:Event)
-                                    MERGE (relation) <- [:CORR] - (e)}
-                            CALL {WITH $to_node_name, relation
-                                    MATCH ($to_node_name) <- [:CORR] - (f:Event)
-                                    MERGE (relation) <- [:CORR] - (f)
-                             }                                
-                                    
-                       '''
         else:
             merge_str = "MERGE ($from_node_name) -[$rel_pattern] -> ($to_node_name)"
 
@@ -317,14 +291,12 @@ class SemanticHeaderQueryLibrary:
                             MATCH ($to_node) - [:PREVALENCE] -> (record)
                             $merge_str
                             SET record:RecordCreated
-                            $add_str
                             RETURN COUNT(*)',
                             {limit:$limit})
                         '''
 
         query_str = Template(query_str).safe_substitute({
-            "merge_str": merge_str,
-            "add_str": add_str
+            "merge_str": merge_str
         })
 
         return Query(query_str=query_str,

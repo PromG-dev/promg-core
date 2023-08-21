@@ -71,13 +71,7 @@ class EKGUsingSemanticHeaderBuilder:
             for node_constructor in node_constructors:
                 self._create_node_by_record(node_constructor=node_constructor)
 
-    @Performance.track("node_constructor")
-    def _create_nodes_by_relation(self, node_constructor):
-        self.connection.exec_query(sh_ql.get_create_nodes_by_relations_query,
-                                   **{
-                                       "node_constructor": node_constructor,
-                                       "batch_size": self.batch_size
-                                   })
+
 
     def create_relations_using_records(self, relation_types: Optional[List[str]]) -> None:
         # find events that are related to different entities of which one event also has a reference to the other entity
@@ -97,6 +91,7 @@ class EKGUsingSemanticHeaderBuilder:
                                    **{
                                        "batch_size": self.batch_size
                                    })
+        self._create_corr_from_parents(relation_constructor=relation_constructor)
 
     def create_relations_using_relations(self, relation_types: Optional[List[str]]) -> None:
         relation: ConstructedRelation
@@ -110,6 +105,19 @@ class EKGUsingSemanticHeaderBuilder:
                                        "relation_constructor": relation_constructor,
                                        "batch_size": self.batch_size
                                    })
+        self._create_corr_from_parents(relation_constructor=relation_constructor)
+
+
+    def _create_corr_from_parents(self, relation_constructor):
+        if relation_constructor.infer_corr_from_reified_parents:
+            for use_from in [True, False]:
+                self.connection.exec_query(sh_ql.get_infer_corr_from_parent_query,
+                                           **{
+                                               "relation_constructor": relation_constructor,
+                                               "use_from": use_from,
+                                               "batch_size": self.batch_size
+                                           })
+
 
     def create_df_edges(self, entity_types: List[str], event_label: str) -> None:
         entity: ConstructedNodes
