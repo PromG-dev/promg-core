@@ -55,7 +55,7 @@ class DBManagementQueryLibrary:
         # language=SQL
         query_str = '''
             CREATE CONSTRAINT unique_entity_ids IF NOT EXISTS 
-            FOR (en:Entity) REQUIRE en.uID IS UNIQUE
+            FOR (en:Entity) REQUIRE en.sysId IS UNIQUE
         '''
         return Query(query_str=query_str,
                      template_string_parameters={},

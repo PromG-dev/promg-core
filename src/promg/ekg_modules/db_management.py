@@ -18,13 +18,13 @@ class DBManagement:
 
     @Performance.track()
     def set_constraints(self):
-        # for implementation only (not required by schema or patterns)
-        self.connection.exec_query(dbm_ql.get_constraint_unique_event_id_query)
-
+        # # for implementation only (not required by schema or patterns)
+        # self.connection.exec_query(dbm_ql.get_constraint_unique_event_id_query)
+        #
         # required by core pattern
-        self.connection.exec_query(dbm_ql.get_constraint_unique_entity_uid_query)
-
-        self.connection.exec_query(dbm_ql.get_constraint_unique_log_id_query)
+        # self.connection.exec_query(dbm_ql.get_constraint_unique_entity_uid_query)
+        #
+        # self.connection.exec_query(dbm_ql.get_constraint_unique_log_id_query)
 
         self.connection.exec_query(dbm_ql.get_set_sysid_index_query)
 
