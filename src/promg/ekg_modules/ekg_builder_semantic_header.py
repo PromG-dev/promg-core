@@ -24,7 +24,9 @@ class EKGUsingSemanticHeaderBuilder:
                                                  "node_constructor": node_constructor,
                                                  "use_record": True
                                              })
-        merge_first = num_ids[0]['num_ids'] < 1000 and "Event" not in node_constructor.get_labels()
+        merge_first = num_ids[0]['num_ids'] < 1000 \
+                        and "Event" not in node_constructor.get_labels() \
+                        and "EntityAttribute" not in node_constructor.get_labels()
 
         self.connection.exec_query(sh_ql.get_create_node_by_record_constructor_query,
                                    **{
@@ -47,7 +49,7 @@ class EKGUsingSemanticHeaderBuilder:
             print(f"Node ({node_constructor.get_pattern(with_properties=False)}) "
                                                f"using ({node_constructor.get_prevalent_record_pattern()}) "
                                                f"created")
-            if not "Event" in node_constructor.get_labels():
+            if not ("Event" in node_constructor.get_labels() or "EntityAttribute" in node_constructor.get_labels()):
                 max_limit = self.connection.exec_query(sh_ql.get_number_of_ids_query,
                                                        **{"node_constructor": node_constructor})
                 self.connection.exec_query(sh_ql.get_merge_nodes_with_same_id_query,
