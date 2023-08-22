@@ -171,6 +171,20 @@ class EventKnowledgeGraph:
         self.data_importer.import_data()
 
     # endregion
+    
+    def create_nodes(self, node_types: Optional[List[str]] = None) -> None:
+        """
+        Pass on method to ekg_builder to create relations between entities based on nodes as specified in the
+        semantic header
+
+        :param node_types: list of entity types that should be created based on nodes. In case of None,
+        all entities based on nodes are created as specified in the semantic header
+        :type node_types: List[str], optional
+        :return: None
+
+        """
+
+        self.create_nodes_by_records(node_types)
 
     # region EKG builder using semantic header
     def create_nodes_by_records(self, node_types: Optional[List[str]] = None) -> None:
@@ -186,6 +200,10 @@ class EventKnowledgeGraph:
         """
 
         self.ekg_builder.create_nodes_by_records(node_types)
+        
+    def create_relations(self,  relation_types: Optional[List[str]] = None) -> None:
+        self.create_relations_using_record(relation_types)
+        self.create_relations_using_relations(relation_types)
 
     def create_relations_using_record(self, relation_types: Optional[List[str]] = None) -> None:
         """
