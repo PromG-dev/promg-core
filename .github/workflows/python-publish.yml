@@ -39,18 +39,6 @@ jobs:
         token: ${{ secrets.CODECOV_TOKEN }}
         file: coverage.xml
         name: ${{ matrix.os }}, python ${{ matrix.python-version }}
-    - name: 'Automated Version Bump'
-      uses: 'phips28/gh-action-bump-version@master'
-      env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      with:
-        minor-wording:  'add,Adds,new, feat'
-        major-wording:  'MAJOR,cut-major'
-        patch-wording:  'patch,fixes'     # Providing patch-wording will override commits
-                                          # defaulting to a patch bump.
-        rc-wording:     'RELEASE,alpha'
-        commit-message: 'CI: bumps version to {{version}} [skip ci]'
-        tag-prefix:  'v'
     - name: Install pypa/build
       run: >-
         python3 -m
