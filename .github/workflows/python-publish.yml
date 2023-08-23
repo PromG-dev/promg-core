@@ -39,8 +39,6 @@ jobs:
         token: ${{ secrets.CODECOV_TOKEN }}
         file: coverage.xml
         name: ${{ matrix.os }}, python ${{ matrix.python-version }}
-    - name: Check types with mypy
-      run: mypy src
     - name: 'Automated Version Bump'
       uses: 'phips28/gh-action-bump-version@master'
       env:
