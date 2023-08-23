@@ -208,13 +208,13 @@ class DataImporterQueryLibrary:
             'MATCH (record:Record) 
             WHERE record.loadStatus = $old_value
             WITH record LIMIT $limit
-            SET record.loadStatus = $new_value'
-            RETURN COUNT(*),
-            {limit:$limit})
+            SET record.loadStatus = record.loadStatus + 1
+            RETURN COUNT(*)',
+            {old_value: $old_value,
+            limit: $limit})
                             '''
         return Query(query_str=query_str,
                      parameters={
                          "old_value": current_load_status,
-                         "new_value": current_load_status + 1,
                          "limit": batch_size
                      })
