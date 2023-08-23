@@ -24,6 +24,12 @@ class DatetimeObject:
     is_epoch: bool
     unit: str
 
+    def get_date_type(self):
+        if self.convert_to == "ISO_DATE":
+            return "DATE"
+        else:
+            return "DATE_TIME"
+
     @staticmethod
     def from_dict(obj: Any) -> 'DatetimeObject':
         if obj is None:
@@ -148,6 +154,8 @@ class DataStructure:
         self.seperator = seperator
         self.decimal = decimal
         self.labels = labels
+        if self.labels == ["Record"]:
+            self.labels = None
         self.true_values = true_values
         self.false_values = false_values
         self.add_log = add_log
@@ -155,6 +163,9 @@ class DataStructure:
         self.samples = samples
         self.attributes = attributes
         self.split_combined_events = split_combined_events
+
+    def __repr__(self):
+        return self.name
 
     def has_datetime_attribute(self):
         return any([attribute.is_datetime for attribute in self.attributes.values()])
@@ -341,8 +352,6 @@ class DataStructure:
                 df_log = DataStructure.replace_nan_values_based_on_na_rep_columns(df_log, attribute)
             if attribute.na_rep_value is not None:
                 df_log = DataStructure.replace_nan_values_based_on_na_rep_value(df_log, attribute)
-            if not attribute.optional:
-                df_log = DataStructure.replace_nan_values_with_unknown(df_log, attribute)
 
             df_log = DataStructure.combine_attribute_columns(df_log, attribute)
 

@@ -8,30 +8,25 @@ from ..utilities.performance_handling import Performance
 
 
 class DBManagement:
-    def __init__(self, db_connection: DatabaseConnection, db_name, perf: Performance):
+    def __init__(self, db_connection: DatabaseConnection, db_name):
         self.connection = db_connection
         self.db_name = db_name
-        self.perf = perf
 
-    def _write_message_to_performance(self, message: str):
-        if self.perf is not None:
-            self.perf.finished_step(activity=message)
-
+    @Performance.track()
     def clear_db(self):
         self.connection.exec_query(dbm_ql.get_clear_db_query, **{"db_name": self.db_name})
-        self._write_message_to_performance("DB is cleared")
 
+    @Performance.track()
     def set_constraints(self):
-        # for implementation only (not required by schema or patterns)
-        self.connection.exec_query(dbm_ql.get_constraint_unique_event_id_query)
-        self._write_message_to_performance("Constraint on unique event IDs is set")
-
+        # # for implementation only (not required by schema or patterns)
+        # self.connection.exec_query(dbm_ql.get_constraint_unique_event_id_query)
+        #
         # required by core pattern
-        self.connection.exec_query(dbm_ql.get_constraint_unique_entity_uid_query)
-        self._write_message_to_performance("Constraint on unique entity uIDs is set")
+        # self.connection.exec_query(dbm_ql.get_constraint_unique_entity_uid_query)
+        #
+        # self.connection.exec_query(dbm_ql.get_constraint_unique_log_id_query)
 
-        self.connection.exec_query(dbm_ql.get_constraint_unique_log_id_query)
-        self._write_message_to_performance("Constraint on unique log IDs is set")
+        self.connection.exec_query(dbm_ql.get_set_sysid_index_query)
 
     def get_all_rel_types(self) -> List[str]:
         """
@@ -86,5 +81,6 @@ class DBManagement:
                                           **{"entity": entity,
                                                "additional_event_attributes": additional_event_attributes})
 
+    @Performance.track("query_function")
     def do_custom_query(self, query_function, **kwargs):
         return self.connection.exec_query(query_function, **kwargs)

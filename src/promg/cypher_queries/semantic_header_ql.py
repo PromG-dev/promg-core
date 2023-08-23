@@ -7,8 +7,7 @@ from ..database_managers.db_connection import Query
 
 class SemanticHeaderQueryLibrary:
     @staticmethod
-    def get_create_node_by_record_constructor_query(node_constructor: NodeConstructor, batch_size: int = 5000,
-                                                    merge=False) -> Query:
+    def get_create_node_by_record_constructor_query(node_constructor: NodeConstructor, batch_size: int = 5000, merge=True) -> Query:
         # find events that contain the entity as property and not nan
         # save the value of the entity property as id and also whether it is a virtual entity
         # create a new entity node if it not exists yet with properties
@@ -24,7 +23,21 @@ class SemanticHeaderQueryLibrary:
         if len(node_constructor.result.optional_properties) > 0:
             set_property_str = 'SET $set_result_properties'
 
-        if node_constructor.infer_corr_from_event_record:
+        if len(node_constructor.inferred_relationships) > 0:
+            infer_corr_str = '''WITH record, $result_node_name'''
+            for relationship in node_constructor.inferred_relationships:
+                infer_rel_str = '''
+                    CALL {WITH record, $result_node_name
+                            MATCH ($event_node) - [:PREVALENCE] -> (record:$record_labels) <- [:PREVALENCE] - (
+                                $result_node_name)
+                                MERGE (event) - [:$relation_type] -> ($result_node_name)}'''
+                infer_rel_str = Template(infer_rel_str).safe_substitute({
+                    "event_node": relationship.event.get_pattern(name="event"),
+                    "record_labels": relationship.get_labels_str(),
+                    "relation_type": relationship.relation_type
+                })
+                infer_corr_str += infer_rel_str
+        elif node_constructor.infer_corr_from_event_record:
             # language=SQL
             infer_corr_str = '''
             WITH record, $result_node_name
@@ -51,17 +64,17 @@ class SemanticHeaderQueryLibrary:
         query_str = '''
                     CALL apoc.periodic.commit(
                         'MATCH ($record) 
-                            WHERE record.created IS NULL
+                        WHERE NOT record:RecordCreated
                             WITH $record_name limit $limit
                             $merge_or_create ($result_node)
-                            SET record.created = True
+                            SET $record_name:RecordCreated
                             $set_label_str
                             $set_property_str
                             MERGE (record) <- [:PREVALENCE] - ($result_node_name)
                             $infer_corr_str
                             $infer_observed_str
                             RETURN count(*)',
-                            {limit: $limit*10})
+                            {limit: $limit})
                     '''
 
         query_str = Template(query_str).safe_substitute({
@@ -87,21 +100,17 @@ class SemanticHeaderQueryLibrary:
                      parameters={"limit": batch_size})
 
     @staticmethod
-    def get_reset_created_record_query(node_constructor: NodeConstructor, batch_size: int):
+    def get_reset_created_record_query(batch_size: int):
         query_str = '''
                     CALL apoc.periodic.commit(
-                        'MATCH ($record) 
-                            WHERE record.created = True
+                        'MATCH (record:RecordCreated) 
                             WITH record limit $limit
-                            SET record.created = Null
+                            REMOVE record:RecordCreated
                             RETURN count(*)',
                             {limit: $limit})
                     '''
         return Query(query_str=query_str,
-                     template_string_parameters={
-                         "record": node_constructor.get_prevalent_record_pattern(node_name="record"),
-                     },
-                     parameters={"limit": batch_size * 10})
+                     parameters={"limit": batch_size})
 
     @staticmethod
     def get_number_of_ids_query(node_constructor: NodeConstructor, use_record: bool = False):
@@ -120,25 +129,69 @@ class SemanticHeaderQueryLibrary:
                      })
 
     @staticmethod
+    def get_number_of_records_query(node_constructor: NodeConstructor, use_record: bool = False):
+
+        query_str = '''MATCH ($record) 
+                           RETURN count(record) as count'''
+
+        return Query(query_str=query_str,
+                     template_string_parameters={
+                         "record": node_constructor.get_prevalent_record_pattern(node_name="record")
+                     })
+
+    @staticmethod
+    def get_reset_merged_in_nodes_query(node_constructor: NodeConstructor, batch_size: int):
+        query_str = '''
+                           CALL apoc.periodic.commit(
+                                  'MATCH (n:$labels)
+                                  WHERE n.merged = True
+                                  WITH n LIMIT $limit
+                                  SET n.merged = Null
+                           RETURN COUNT(*)',
+                           {limit:$limit})
+                       '''
+
+        return Query(query_str=query_str,
+                     template_string_parameters={
+                         "labels": node_constructor.get_label_string(),
+                     },
+                     parameters={"limit": batch_size})
+
+    @staticmethod
     def get_merge_nodes_with_same_id_query(node_constructor: NodeConstructor, batch_size: int):
         if "Event" in node_constructor.get_labels():
             return None
 
+
         query_str = '''
                     CALL apoc.periodic.commit(
                            'MATCH (n:$labels)
-                           WITH n LIMIT $limit
-                           WITH $idt_properties, collect(n) as same_nodes
+                           WHERE n.merged IS NULL
+                           // we order by sysId
+                           WITH n ORDER BY n.sysId LIMIT $limit
+                           WITH collect(n) as collection
+                           WITH collection, last(collection) as last_node, size(collection) as count
+                           UNWIND collection as n
+                           WITH $idt_properties, collect(n) as same_nodes, last_node, count
+                           CALL {WITH same_nodes, last_node
+                                MATCH (last_node)
+                                // last node could be the first of the list of same_nodes, we do not set to merged = true
+                                // for this node
+                                 WHERE size(same_nodes) = 1 and  head(same_nodes) <> last_node
+                                 SET head(same_nodes).merged = True}             
+                           WITH same_nodes, count                   
                            WHERE size(same_nodes) > 1
                            UNWIND range(0, toInteger(floor(size(same_nodes)/100))) as i
                            WITH same_nodes, i*100 as min_range, apoc.coll.min([(i+1)*100, size(same_nodes)]) AS 
-                           max_range
-                           WITH same_nodes[min_range..max_range] as lim_nodes
+                           max_range, count
+                           WITH same_nodes[min_range..max_range] as lim_nodes, count
                            CALL apoc.refactor.mergeNodes(lim_nodes, {properties: "discard", mergeRels: true})
                            YIELD node
-                           RETURN COUNT(*)',
+                           RETURN count',
                            {limit:$limit})
                        '''
+
+
         return Query(query_str=query_str,
                      template_string_parameters={
                          "labels": node_constructor.get_label_string(),
@@ -146,51 +199,39 @@ class SemanticHeaderQueryLibrary:
                      },
                      parameters={"limit": batch_size})
 
+
+
     @staticmethod
-    def get_create_nodes_by_relations_query(node_constructor: NodeConstructor, batch_size: int) -> Query:
-        if node_constructor.infer_reified_relation:
-            # language=sql
-            apoc_str = '''apoc.refactor.extractNode(rel, $result_labels, "TO", "FROM")'''
+    def get_infer_corr_from_parent_query(batch_size, relation_constructor, use_from):
+        if use_from:
+            node =  relation_constructor.from_node.get_pattern()
+            from_or_to = "FROM"
         else:
-            # language=sql
-            apoc_str = '''apoc.refactor.extractNode(rel, $result_labels)'''
-        if node_constructor.infer_corr_from_reified_parents:
-            # language=sql
-            add_str = '''WITH $from_node_name, $to_node_name, output
-                                MATCH ($from_node_name) <- [:CORR] - (e:Event)
-                                MATCH ($to_node_name) <- [:CORR] - (f:Event)
-                                MERGE (output) <- [:CORR] - (e)
-                                MERGE (output) <- [:CORR] - (f)
-                   '''
+            node  = relation_constructor.to_node.get_pattern()
+            from_or_to = "TO"
 
         query_str = '''
-            CALL apoc.periodic.commit(
-                'MATCH ($from_node) - [rel:$rel_type] -> ($to_node)
-                WITH $from_node_name, $to_node_name, rel limit $limit
-                CALL $apoc_str
-                YIELD input, output
-                $add_str
-                RETURN count(*)',
-                {limit: $limit}
-            )
-        '''
+            CALL apoc.periodic.commit('
+                MATCH (e:Event) --> ($node) - [:$from_or_to] - (relation:$relation_label_str)
+                WHERE NOT EXISTS ((e) - [:CORR] -> (relation))
+                WITH DISTINCT relation, e limit $limit
+                MERGE (e) - [:CORR] -> (relation)
+                RETURN COUNT(*)',
+                {limit:$limit}
+                )       
+            '''
 
-        query_str = Template(query_str).safe_substitute({
-            "apoc_str": apoc_str,
-            "add_str": add_str
-        })
-
-        # TODO from node
         return Query(query_str=query_str,
                      template_string_parameters={
-                         "from_node": node_constructor.relation.from_node.get_pattern(),
-                         "to_node": node_constructor.relation.to_node.get_pattern(),
-                         "from_node_name": node_constructor.relation.from_node.get_name(),
-                         "to_node_name": node_constructor.relation.to_node.get_name(),
-                         "rel_type": node_constructor.relation.get_relation_type(),
-                         "result_labels": node_constructor.result.get_label_str(as_list=True)
+                         "node": node,
+                         "from_or_to": from_or_to,
+                         "relation_label_str": relation_constructor.result.get_relation_types_str()
                      },
-                     parameters={"limit": batch_size})
+                     parameters={
+                         "limit": batch_size
+                     })
+
+
 
     @staticmethod
     def get_create_relation_by_relations_query(relation_constructor: RelationConstructor, batch_size: int) -> Query:
@@ -225,53 +266,37 @@ class SemanticHeaderQueryLibrary:
                          "relation_label_str": relation_constructor.result.get_relation_types_str()
                      },
                      parameters={
-                         "batch_size": batch_size})
+                         "batch_size": batch_size
+                     })
 
     @staticmethod
     def get_create_relation_using_record_query(relation_constructor: RelationConstructor, batch_size: int) -> Query:
         # find events that are related to different entities of which one event also has a reference to the other entity
         # create a relation between these two entities
-        add_str = ""
         if relation_constructor.model_as_node:
             # language=sql
             merge_str = '''
-                            MERGE ($from_node_name) -[:FROM] -> (relation:$relation_label_str) - [:TO] -> ($to_node_name)
+                            MERGE ($from_node_name) -[:FROM] -> (relation:$relation_label_str) - [:TO] -> (
+                            $to_node_name)
                             MERGE (relation)  - [:PREVALENCE] -> (record)
                             '''
-            if relation_constructor.infer_corr_from_reified_parents:
-                # language=sql
-                add_str = '''
-                            WITH $from_node_name, $to_node_name, relation
-                            CALL {WITH $from_node_name, relation
-                                    MATCH ($from_node_name) <- [:CORR] - (e:Event)
-                                    MERGE (relation) <- [:CORR] - (e)}
-                            CALL {WITH $to_node_name, relation
-                                    MATCH ($to_node_name) <- [:CORR] - (f:Event)
-                                    MERGE (relation) <- [:CORR] - (f)
-                             }                                
-                                    
-                       '''
         else:
             merge_str = "MERGE ($from_node_name) -[$rel_pattern] -> ($to_node_name)"
 
-
-
         query_str = '''     CALL apoc.periodic.commit('
                             MATCH (record:$record_labels)
-                            WHERE record.rel_created IS NULL
+                            WHERE NOT record:RecordCreated
                             WITH  record limit $limit
                             MATCH ($from_node) - [:PREVALENCE] -> (record)
                             MATCH ($to_node) - [:PREVALENCE] -> (record)
                             $merge_str
-                            SET record.rel_created = True
-                            $add_str
+                            SET record:RecordCreated
                             RETURN COUNT(*)',
                             {limit:$limit})
                         '''
 
         query_str = Template(query_str).safe_substitute({
-            "merge_str": merge_str,
-            "add_str": add_str
+            "merge_str": merge_str
         })
 
         return Query(query_str=query_str,
@@ -282,12 +307,13 @@ class SemanticHeaderQueryLibrary:
                          "to_node_name": relation_constructor.to_node.get_name(),
                          "record_labels": relation_constructor.prevalent_record.get_label_str(
                              include_first_colon=False),
-                         "rel_pattern": relation_constructor.result.get_pattern("r"),
+                         "rel_pattern": relation_constructor.result.get_pattern("relation"),
                          "relation_labels": relation_constructor.result.get_relation_types_str(as_list=True),
                          "relation_label_str": relation_constructor.result.get_relation_types_str()
                      },
                      parameters={
-                         "limit": batch_size * 10})
+                         "limit": batch_size
+                     })
 
     @staticmethod
     def get_reset_created_relation_query(relation_constructor: RelationConstructor, batch_size: int) -> Query:
@@ -307,7 +333,7 @@ class SemanticHeaderQueryLibrary:
                      template_string_parameters={
                          "record_labels": relation_constructor.prevalent_record.get_label_str(
                              include_first_colon=False),
-                         "limit": batch_size * 10
+                         "limit": batch_size
                      })
 
     @staticmethod
