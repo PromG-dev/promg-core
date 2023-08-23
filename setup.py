@@ -8,7 +8,7 @@ long_description = (this_directory / "README.md").read_text()
 
 setup(
     name='promg',
-    version='0.1.8',
+    version='0.1.9',
     description='Pyhton library to build Event Knowledge Graphs',
     author='A. Swevels, D.Fahland',
     python_requires='>=3.7',
