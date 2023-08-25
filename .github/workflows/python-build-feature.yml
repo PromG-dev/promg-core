@@ -13,11 +13,7 @@ on:
     branches-ignore:
       - master
 jobs:
-  build:
-    name: Build Python 🐍 distributions
-    runs-on: ubuntu-latest
-    steps:
-    - name: Set up Python
-      uses: Ava-S/promg-core/.github/workflows/call-python-setup.yml@main
-    - name: Build Python 🐍 distributions
-      uses: Ava-S/promg-core/.github/workflows/call-python-build.yml@main
+  set-up-python:
+    uses: Ava-S/promg-core/.github/workflows/call-python-setup.yml@main
+  build-python-distribution:
+    uses: Ava-S/promg-core/.github/workflows/call-python-build.yml@main

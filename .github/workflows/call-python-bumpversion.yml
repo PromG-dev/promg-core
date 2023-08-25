@@ -10,10 +10,11 @@ name: Set up
 
 on: workflow_call
 jobs:
-  build:
+  bump-version:
     name: Bump Version 🤜
     runs-on: ubuntu-latest
     steps:
+    - uses: actions/checkout@v3
     - name: current_version
       run: echo "current_version=$(grep '# version' version.md | cut -d ' ' -f3)" >> $GITHUB_ENV
   # You may pin to the exact commit or the version.
