@@ -24,6 +24,15 @@ class Importer:
         self.load_batch_size = 20000
         self.use_sample = use_sample
         self.use_preprocessed_files = use_preprocessed_files
+        self.load_status = 0
+
+    def update_load_status(self):
+        self.connection.exec_query(di_ql.get_update_load_status_query,
+                                   **{
+                                       "current_load_status": self.load_status,
+                                       "batch_size": self.batch_size
+                                   })
+        self.load_status += 1
 
     def import_data(self) -> None:
         for structure in self.structures:
@@ -35,17 +44,18 @@ class Importer:
                 # read and import the nodes
                 df_log = structure.read_data_set(file_directory, file_name, use_sample=self.use_sample,
                                                  use_preprocessed_file=self.use_preprocessed_files)
-                df_log["loadStatus"] = 0
-                self._import_nodes_from_data(labels=labels, df_log=df_log, file_name=file_name,
+                df_log["loadStatus"] = self.load_status
+                self._import_nodes_from_data(df_log=df_log, file_name=file_name,
                                              record_constructors=record_constructors)
 
             if structure.has_datetime_attribute():
                 # once all events are imported, we convert the string timestamp to the timestamp as used in Cypher
                 self._reformat_timestamps(structure=structure)
+                self.update_load_status()
 
             self._filter_nodes(structure=structure)  # filter nodes according to the structure
 
-            self._finalize_import(structure=structure)  # removes temporary properties
+            self._finalize_import()  # removes temporary properties
 
     @Performance.track("structure")
     def _reformat_timestamps(self, structure):
@@ -62,7 +72,8 @@ class Importer:
             self.connection.exec_query(di_ql.get_make_timestamp_date_query,
                                        **{
                                            "attribute": attribute, "datetime_object": datetime_format,
-                                           "batch_size": self.batch_size
+                                           "batch_size": self.batch_size,
+                                           "load_status": self.load_status
                                        })
 
     @Performance.track("structure")
@@ -71,10 +82,13 @@ class Importer:
             attribute_values_pairs_filtered = structure.get_attribute_value_pairs_filtered(exclude=boolean)
             for name, values in attribute_values_pairs_filtered.items():
                 self.connection.exec_query(di_ql.get_filter_events_by_property_query,
-                                           **{"prop": name, "values": values, "exclude": boolean})
+                                           **{
+                                               "prop": name, "values": values, "exclude": boolean,
+                                               "load_status": self.load_status
+                                           })
 
     @Performance.track("structure")
-    def _finalize_import(self, structure):
+    def _finalize_import(self):
         # finalize the import
         self.connection.exec_query(di_ql.get_finalize_import_events_query,
                                    **{
@@ -82,7 +96,7 @@ class Importer:
                                    })
 
     @Performance.track("file_name")
-    def _import_nodes_from_data(self, labels, df_log, file_name, record_constructors):
+    def _import_nodes_from_data(self, df_log, file_name, record_constructors):
         # start with batch 0 and increment until everything is imported
         batch = 0
         print("\n")
@@ -101,15 +115,13 @@ class Importer:
                                       orient='records')]
 
             self.connection.exec_query(di_ql.get_create_nodes_by_importing_batch_query,
-                                       **{"batch": batch_without_nans,
-                                          "labels_constructors": labels_constructor})
+                                       **{
+                                           "batch": batch_without_nans,
+                                           "labels_constructors": labels_constructor
+                                       })
 
             pbar.update(1)
             batch += 1
-        #     if (batch % 100) == 0:
-        #         self._create_records(labels)
-        #
-        # self._create_records(labels)
         pbar.close()
 
     def _get_record_constructors_by_labels(self, structure, labels):
@@ -119,7 +131,7 @@ class Importer:
                 intersection = list(set(labels) & set(record_constructor.record_labels))
             else:
                 intersection = record_constructor.record_labels
-            if len(intersection) > 0: # label of record constructor is in intersection or labels is not defined
+            if len(intersection) > 0:  # label of record constructor is in intersection or labels is not defined
                 required = True
                 if record_constructor.prevalent_record.where_condition != "":
                     required = False
@@ -127,23 +139,8 @@ class Importer:
                     for required_attribute in record_constructor.required_attributes:
                         if required_attribute == "index":
                             continue
-                        if required_attribute not in structure.attributes or structure.attributes[required_attribute].optional:
+                        if required_attribute not in structure.attributes or structure.attributes[
+                            required_attribute].optional:
                             required = False
                 constructors.append({"required": required, "record_constructor": record_constructor})
         return constructors
-
-    def _create_records(self, labels) -> None:
-        record_constructors = self._get_record_constructors_by_labels(labels)
-        self.connection.exec_query(di_ql.get_create_record_query,
-                                   **{
-                                       "record_constructors": record_constructors,
-                                       "batch_size": self.batch_size
-                                   })
-        self.connection.exec_query(di_ql.get_reset_added_label_query,
-                                   **{
-                                       "batch_size": self.batch_size
-                                   })
-        self.connection.exec_query(di_ql.get_update_load_status_query,
-                                   **{
-                                       "current_load_status": 0
-                                   })
