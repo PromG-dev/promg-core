@@ -6,7 +6,7 @@
 # separate terms of service, privacy policy, and support
 # documentation.
 
-name: Set up
+name: Bump Version
 
 on: workflow_call
 jobs:
