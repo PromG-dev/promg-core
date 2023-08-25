@@ -30,5 +30,7 @@ jobs:
         commit_name: VersionBumpBot
         # Email of the identity that is used in the commit's author signature.
         commit_email: ava.swevels@gmail.com
+        # GitHub user name of the identity. `bump-version` uses it together with `token` to push to the repository.
+        login: your-bot-login
         # GitHub personal access token of the identity. `bump-version` uses it together with `login` to push to the repository.
         token: "${{ secrets.BOT_TOKEN }}"
