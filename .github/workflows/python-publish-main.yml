@@ -26,7 +26,6 @@ jobs:
     needs: build-python-distribution
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@v3
     - name: Download dist artifact
       uses: actions/download-artifact@v3
       with:
