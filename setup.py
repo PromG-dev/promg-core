@@ -8,7 +8,7 @@ this_directory = Path(__file__).parent
 long_description = (this_directory / "README.md").read_text()
 
 
-VERSIONFILE=f"{this_description}/version.md"
+VERSIONFILE=f"{this_directory}/version.md"
 verstrline = open(VERSIONFILE, "rt").read()
 VSRE = r"^# version [\d]+.[\d]+.[\d]*"
 mo = re.search(VSRE, verstrline, re.M)
