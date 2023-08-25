@@ -129,7 +129,7 @@ class SemanticHeaderQueryLibrary:
                      })
 
     @staticmethod
-    def get_number_of_records_query(node_constructor: NodeConstructor, use_record: bool = False):
+    def get_number_of_records_query(node_constructor: NodeConstructor):
 
         query_str = '''MATCH ($record) 
                            RETURN count(record) as count'''
@@ -170,24 +170,24 @@ class SemanticHeaderQueryLibrary:
                            // we order by sysId
                            WITH n ORDER BY n.sysId LIMIT $limit
                            WITH collect(n) as collection
-                           WITH collection, last(collection) as last_node, size(collection) as count
+                           WITH collection, last(collection) as last_node, size(collection) as collection_size
                            UNWIND collection as n
-                           WITH $idt_properties, collect(n) as same_nodes, last_node, count
+                           WITH $idt_properties, collect(n) as same_nodes, last_node, collection_size
                            CALL {WITH same_nodes, last_node
                                 MATCH (last_node)
                                 // last node could be the first of the list of same_nodes, we do not set to merged = true
                                 // for this node
                                  WHERE size(same_nodes) = 1 and  head(same_nodes) <> last_node
                                  SET head(same_nodes).merged = True}             
-                           WITH same_nodes, count                   
+                           WITH same_nodes, collection_size                   
                            WHERE size(same_nodes) > 1
                            UNWIND range(0, toInteger(floor(size(same_nodes)/100))) as i
                            WITH same_nodes, i*100 as min_range, apoc.coll.min([(i+1)*100, size(same_nodes)]) AS 
-                           max_range, count
-                           WITH same_nodes[min_range..max_range] as lim_nodes, count
+                           max_range, collection_size
+                           WITH same_nodes[min_range..max_range] as lim_nodes, collection_size
                            CALL apoc.refactor.mergeNodes(lim_nodes, {properties: "discard", mergeRels: true})
                            YIELD node
-                           RETURN count',
+                           RETURN collection_size',
                            {limit:$limit})
                        '''
 
