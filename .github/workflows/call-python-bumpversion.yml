@@ -33,4 +33,4 @@ jobs:
         # GitHub user name of the identity. `bump-version` uses it together with `token` to push to the repository.
         login: Ava-S
         # GitHub personal access token of the identity. `bump-version` uses it together with `login` to push to the repository.
-        token: "${{ secrets.BOT_TOKEN }}"
+        token: "${{ secrets.BUMPVERSION_TOKEN }}"
