@@ -6,19 +6,15 @@
 # separate terms of service, privacy policy, and support
 # documentation.
 
-name: Publish Python 🐍 distributions 📦 to TestPyPI
+name: Build
 
-on: push
+on: workflow_call
 jobs:
-  build-n-publish:
-    name: Build and publish Python 🐍 distributions 📦 to TestPyPI
+  build:
+    name: Build Python 🐍 distributions
     runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@v3
-    - name: Set up Python
-      uses: actions/setup-python@v4
-      with:
-        python-version: "3.7"
     - name: Install pypa/build
       run: >-
         python3 -m
@@ -33,8 +29,3 @@ jobs:
         --wheel
         --outdir dist/
         .
-    - name: Publish distribution 📦 to Test PyPI
-      uses: pypa/gh-action-pypi-publish@release/v1
-      with:
-        password: ${{ secrets.TEST_PYPI_API_TOKEN }}
-        repository-url: https://test.pypi.org/legacy/
