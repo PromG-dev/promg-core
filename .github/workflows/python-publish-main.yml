@@ -17,10 +17,13 @@ jobs:
     uses: Ava-S/promg-core/.github/workflows/call-python-setup.yml@main
   bump-version:
     uses: Ava-S/promg-core/.github/workflows/call-python-bumpversion.yml@main
+    needs: set-up-python
   build-python-distribution:
     uses: Ava-S/promg-core/.github/workflows/call-python-build.yml@main
+    needs: bump-version
   build-n-publish:
     name: Build, bump and publish Python 🐍 distributions 📦 to PyPI
+    needs: build-python-distribution
     runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@v3
