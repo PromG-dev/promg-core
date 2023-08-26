@@ -12,6 +12,7 @@ on:
   push:
     branches:
       - main
+  workflow_dispatch:
 jobs:
   set-up-python:
     uses: Ava-S/promg-core/.github/workflows/call-python-setup.yml@main
