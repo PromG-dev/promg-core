@@ -15,22 +15,12 @@ jobs:
     runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@v3
-    - name: current_version
+    - name: Grab current_version
       run: echo "current_version=$(grep '# version' version.md | cut -d ' ' -f3)" >> $GITHUB_ENV
-  # You may pin to the exact commit or the version.
-  # uses: FragileTech/bump-version@c022e89bf1b6c4753bd39bc1f9c979da7fabe2f8
-    - name: Bump Version
-      uses: FragileTech/bump-version@v1.0.4
-      with:
-        # Version of the project *before* the bump.
-        current_version: "${{ env.current_version }}"
-        # List of files in which to bump the version. The format is a concatenation of paths separated by a whitespace character.
-        files: version.md
-        # # Name of the identity that is used in the commit's author signature.
-        # commit_name: VersionBumpBot
-        # # Email of the identity that is used in the commit's author signature.
-        #commit_email: ava.swevels@gmail.com
-        # GitHub user name of the identity. `bump-version` uses it together with `token` to push to the repository.
-        login: Ava-S
-        # GitHub personal access token of the identity. `bump-version` uses it together with `login` to push to the repository.
-        token: "${{ secrets.BUMPVERSION_TOKEN }}"
+    - shell: bash
+      run: |
+        set -x
+        pip install --no-cache-dir bump2version
+         ~/.local/bin/bumpversion --allow-dirty --no-tag --no-commit --current-version ${{ env.current_version }} patch version.md
+    - name: Read bumped version
+      run: echo "grep '# version' version.md | cut -d ' ' -f3"
