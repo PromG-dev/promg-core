@@ -24,3 +24,15 @@ jobs:
          ~/.local/bin/bumpversion --allow-dirty --no-tag --no-commit --current-version ${{ env.current_version }} patch version.md
     - name: Read bumped version
       run: echo "$(grep '# version' version.md | cut -d ' ' -f3)"
+    - name: Save source directory after updating version
+      uses: actions/upload-artifact@v3
+      with:
+        name: source
+        path: |
+          src
+          documentation
+          setup.py
+          version.md
+          README.md
+          LICENSE
+          
