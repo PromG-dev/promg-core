@@ -1,10 +1,5 @@
-# This workflow will upload a Python Package using Twine when a release is created
-# For more information see: https://docs.github.com/en/actions/automating-builds-and-tests/building-and-testing-python#publishing-to-package-registries
-
-# This workflow uses actions that are not certified by GitHub.
-# They are provided by a third-party and are governed by
-# separate terms of service, privacy policy, and support
-# documentation.
+# This workflow will build a new python package with a bumped version and uploads it to PyPI.
+# Lastly, it will update the version number with a commit so it's up to date on the branch
 
 name: Publish Python 🐍 distributions 📦 to PyPI
 
