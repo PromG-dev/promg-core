@@ -11,7 +11,7 @@ name: Build
 on: 
   workflow_call:
     inputs:
-        should-read-source-from-artifacts:
+        read-source-from-artifacts:
           description: 'If true, the source code to build is read from an artifact instead of checked out from the repo'
           default: false
           required: false
@@ -29,9 +29,9 @@ jobs:
     steps:
     - name: Checkout latest source code
       uses: actions/checkout@v3 # We either checkout the latest source code
-      if: inputs.should-read-source-from-artifacts == false
+      if: inputs.read-source-from-artifacts == false
     - name: Download sources from artifact # Or we download the source code as artifact
-      if: inputs.should-read-source-from-artifacts
+      if: inputs.read-source-from-artifacts
       uses: actions/download-artifact@v3
       with:
         name: ${{ inputs.source-directory }}
