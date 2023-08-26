@@ -28,9 +28,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
     - name: Checkout latest source code
-      uses: actions/checkout@v3 # We either checkout the latest source code
-      if: inputs.read-source-from-artifacts == false
-    - name: Download sources from artifact # Or we download the source code as artifact
+      uses: actions/checkout@v3
+    - name: Download version file from artifact # Download the adjust version file
       if: inputs.read-source-from-artifacts
       uses: actions/download-artifact@v3
       with:
