@@ -25,7 +25,7 @@ jobs:
     uses: ./.github/workflows/call-python-build.yml
     needs: bump-version
     with:
-      read-version-from-artifactss: true
+      read-version-from-artifacts: true
       artifact-name-version-file: "version-file" # Read version file with bumped version from this artifact
   build-n-publish:
     name: Build and publish Python 🐍 distributions 📦 to PyPI
