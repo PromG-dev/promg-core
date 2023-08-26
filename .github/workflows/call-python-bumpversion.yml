@@ -23,4 +23,4 @@ jobs:
         pip install --no-cache-dir bump2version
          ~/.local/bin/bumpversion --allow-dirty --no-tag --no-commit --current-version ${{ env.current_version }} patch version.md
     - name: Read bumped version
-      run: echo "grep '# version' version.md | cut -d ' ' -f3"
+      run: echo "$(grep '# version' version.md | cut -d ' ' -f3)"
