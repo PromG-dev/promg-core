@@ -20,13 +20,13 @@ jobs:
     uses: ./.github/workflows/call-python-bumpversion.yml
     needs: set-up-python
     with:
-      artifact-name-source-directory: "version-file" # Store adjusted version file in this artifact
+      artifact-name-version-file: "version-file" # Store adjusted version file in this artifact
   build-python-distribution:
     uses: ./.github/workflows/call-python-build.yml
     needs: bump-version
     with:
       read-source-from-artifacts: true
-      source-directory: "version-file" # Read version with bumped version from this artifact
+      source-directory: "version-file" # Read version file with bumped version from this artifact
   build-n-publish:
     name: Build, bump and publish Python 🐍 distributions 📦 to PyPI
     needs: build-python-distribution
