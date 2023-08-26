@@ -8,13 +8,28 @@
 
 name: Build
 
-on: workflow_call
+on: 
+  workflow_call:
+    inputs:
+        should_read_source_from_artifact:
+          description: 'If true, the source code to build is read from an artifact instead of checked out from the repo'
+          default: false
+          required: false
+          type: boolean
 jobs:
   build:
     name: Build Python 🐍 distributions
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@v3
+    - name: Checkout latest source code
+      uses: actions/checkout@v3 # We either checkout the latest source code
+      if: ! inputs.should_read_source_from_artifacts
+    - name: Download sources from artifact # Or we download the source code as artifact
+      if: inputs.should_read_source_from_artifacts
+      uses: actions/download-artifact@v3
+      with:
+        name: source
+        path: source
     - name: Install pypa/build
       run: >-
         python3 -m
