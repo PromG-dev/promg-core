@@ -20,7 +20,7 @@ jobs:
     uses: ./.github/workflows/call-python-bumpversion.yml
     needs: set-up-python
     with:
-      artifact-name-source-directory: "source" # Store adjusted source code in this artifact
+      artifact-name-source-directory: "version-file" # Store adjusted source code in this artifact
   build-python-distribution:
     uses: ./.github/workflows/call-python-build.yml
     needs: bump-version
