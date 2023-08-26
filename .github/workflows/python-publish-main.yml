@@ -15,12 +15,12 @@ on:
   workflow_dispatch:
 jobs:
   set-up-python:
-    uses: Ava-S/promg-core/.github/workflows/call-python-setup.yml@main
+    uses: ./.github/workflows/call-python-setup.yml
   bump-version:
-    uses: Ava-S/promg-core/.github/workflows/call-python-bumpversion.yml@main
+    uses: ./.github/workflows/call-python-bumpversion.yml
     needs: set-up-python
   build-python-distribution:
-    uses: Ava-S/promg-core/.github/workflows/call-python-build.yml@main
+    uses: ./.github/workflows/call-python-build.yml
     needs: bump-version
   build-n-publish:
     name: Build, bump and publish Python 🐍 distributions 📦 to PyPI
