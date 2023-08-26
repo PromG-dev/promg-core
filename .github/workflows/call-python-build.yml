@@ -1,4 +1,5 @@
-# This workflow builds the python package and stores it in an artifact for later use
+# This workflow builds the python package and stores it in an artifact for later use.
+# Optionally, it may read a version.md file from the artifacts so it can retrieve a bumped version from somewhere else.
 
 name: Build
 
