@@ -28,7 +28,7 @@ jobs:
       read-source-from-artifacts: true
       source-directory: "version-file" # Read version file with bumped version from this artifact
   build-n-publish:
-    name: Build, bump and publish Python 🐍 distributions 📦 to PyPI
+    name: Build and publish Python 🐍 distributions 📦 to PyPI
     needs: build-python-distribution
     runs-on: ubuntu-latest
     steps:
@@ -41,3 +41,22 @@ jobs:
       uses: pypa/gh-action-pypi-publish@release/v1
       with:
         password: ${{ secrets.PYPI_API_TOKEN }}
+    - name: See git diff
+      run: echo "$(git diff)"
+    - name: Update branch with new version number
+      uses: EndBug/add-and-commit@v9 # You can change this to use a specific version.
+      with:
+        add: 'version.md'
+        author_name: Ava Swevels
+        author_email: ava.swevels@gmail.com
+        commit: --signoff
+        default_author: github_actor
+        message: 'Updated version number (from workflow)'
+        pathspec_error_handling: exitImmediately
+        push: true
+        # Arguments for the git tag command (the tag name always needs to be the first word not preceded by an hyphen)
+        # Default: ''
+        # tag: 'v1.0.0 --force'
+        # Arguments for the git push --tags command (any additional argument will be added after --tags)
+        # Default: ''
+        # tag_push: '--force'
