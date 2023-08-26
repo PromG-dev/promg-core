@@ -23,7 +23,7 @@ jobs:
     uses: ./.github/workflows/call-python-build.yml
     needs: bump-version
     with:
-      should_read_source_from_artifacts: true
+      should-read-source-from-artifacts: true
   build-n-publish:
     name: Build, bump and publish Python 🐍 distributions 📦 to PyPI
     needs: build-python-distribution
