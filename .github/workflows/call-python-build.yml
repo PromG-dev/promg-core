@@ -29,7 +29,6 @@ jobs:
       uses: actions/download-artifact@v3
       with:
         name: source
-        path: source
     - name: Install pypa/build
       run: >-
         python3 -m
