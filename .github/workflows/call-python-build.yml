@@ -16,6 +16,12 @@ on:
           default: false
           required: false
           type: boolean
+        source-directory:
+          description: 'If read-source-from-artifacts is true, this parameter provides the directory where it should look for the source files'
+          default: "source" 
+          required: false
+          type: string
+        
 jobs:
   build:
     name: Build Python 🐍 distributions
@@ -28,7 +34,7 @@ jobs:
       if: inputs.should-read-source-from-artifacts
       uses: actions/download-artifact@v3
       with:
-        name: source
+        name: ${{ inputs.source-directory }}
     - name: Install pypa/build
       run: >-
         python3 -m
