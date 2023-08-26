@@ -19,12 +19,14 @@ jobs:
   bump-version:
     uses: ./.github/workflows/call-python-bumpversion.yml
     needs: set-up-python
+    with:
+      artifact-name-source-directory: "source" # Store adjusted source code in this artifact
   build-python-distribution:
     uses: ./.github/workflows/call-python-build.yml
     needs: bump-version
     with:
       read-source-from-artifacts: true
-      source-directory: "source"
+      source-directory: "source" # Read source code with bumped version from this artifact
   build-n-publish:
     name: Build, bump and publish Python 🐍 distributions 📦 to PyPI
     needs: build-python-distribution
