@@ -30,7 +30,7 @@ jobs:
     - name: Checkout latest source code
       uses: actions/checkout@v3
     - name: Download version file from artifact # Download the adjust version file
-      if: inputs.read-version-from-artifact
+      if: inputs.read-version-from-artifacts
       uses: actions/download-artifact@v3
       with:
         name: ${{ inputs.artifact-name-version-file }}
