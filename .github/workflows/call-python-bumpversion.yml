@@ -6,8 +6,8 @@ name: Bump Version
 on: 
  workflow_call:
   inputs:
-     artifact-name-source-directory:
-        description: 'Name of the artifact to where the adjusted source code is uploaded'
+     artifact-name-version-file:
+        description: 'Name of the artifact to where the adjusted version file is uploaded'
         default: "source" 
         required: false
         type: string
@@ -29,6 +29,6 @@ jobs:
     - name: Save source directory after updating version
       uses: actions/upload-artifact@v3
       with:
-        name: ${{ inputs.artifact-name-source-directory }} 
+        name: ${{ inputs.artifact-name-version-file }} 
         path: version.md
           
