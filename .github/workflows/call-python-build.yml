@@ -23,7 +23,7 @@ jobs:
     steps:
     - name: Checkout latest source code
       uses: actions/checkout@v3 # We either checkout the latest source code
-      if: ! inputs.should-read-source-from-artifacts
+      if: inputs.should-read-source-from-artifacts == false
     - name: Download sources from artifact # Or we download the source code as artifact
       if: inputs.should-read-source-from-artifacts
       uses: actions/download-artifact@v3
