@@ -41,6 +41,12 @@ jobs:
       uses: pypa/gh-action-pypi-publish@release/v1
       with:
         password: ${{ secrets.PYPI_API_TOKEN }}
+    - name: Checkout latest source code
+      uses: actions/checkout@v3
+    - name: Download version file from artifact # Download the adjust version file
+      uses: actions/download-artifact@v3
+      with:
+        name: "version-file"
     - name: See git diff
       run: echo "$(git diff)"
     - name: Update branch with new version number
