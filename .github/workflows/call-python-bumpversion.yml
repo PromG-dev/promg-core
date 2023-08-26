@@ -30,11 +30,5 @@ jobs:
       uses: actions/upload-artifact@v3
       with:
         name: ${{ inputs.artifact-name-source-directory }} 
-        path: |
-          src
-          documentation
-          setup.py
-          version.md
-          README.md
-          LICENSE
+        path: version.md
           
