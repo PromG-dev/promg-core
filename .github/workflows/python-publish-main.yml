@@ -43,8 +43,6 @@ jobs:
     steps:
       - name: Checkout latest source code
         uses: actions/checkout@v3
-        with:
-          token: ${{secrets.BUMPVERSION_TOKEN}}
       - name: Download version file from artifact # Download the adjust version file
         uses: actions/download-artifact@v3
         with:
