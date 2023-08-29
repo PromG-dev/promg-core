@@ -1,11 +1,24 @@
-# Using Graph Databases to Create an Event Knowledge Graph
+# PromG Library
 
-## Description
+This repository collects queries for modeling, importing, enriching and analyzing event data as Event Knowledge Graphs (EKGs).
+The queries are run against a Neo4j instance. 
 
-This repository collects queries for modeling and importing incomplete event data as Event Knowledge Graphs using the Labeled
-Property Graph data model of graph databases.
 All scripts and queries are licensed under LGPL v3.0, see LICENSE.
 Copyright information is provided within each Project.
+
+## Installation
+### PromG
+The library can be installed in Pyhton using pip
+`pip install neo4j`.
+
+### Neo4j
+The library assumes that Neo4j is installed.
+
+Install [Neo4j](https://neo4j.com/download/):
+
+- Use the [Neo4j Desktop](https://neo4j.com/download-center/#desktop)  (recommended), or
+- [Neo4j Community Server](https://neo4j.com/download-center/#community)
+
 
 ## Requirements
 This repository should be used as a submodule in another project to build an event knowledge graph.
@@ -13,28 +26,8 @@ To add the submodule to your project, run the following command in the root fold
 `git submodule https://github.com/Ava-S/ekg_creator` 
 
 For more information about submodule, have a look at [Git submodules](https://www.atlassian.com/git/tutorials/git-submodule).
-For example projects that use this repository, have a look at [EKG BPI Challenges](https://github.com/Ava-S/ekg_bpi_challenges), [EKG Inferring missing identifiers](https://github.com/Ava-S/ekg_inference) and [EKG for AutoTwin EU GA n. 101092021.](https://github.com/Ava-S/ekg_autotwin)
 
 Furthermore, we assume the following packages/databases to be installed.
-
-### Neo4j
-Install the neo4j-python-driver
-
-`pip install neo4j`
-OR
-`conda install -c conda-forge neo4j-python-driver`
-
-Install [Neo4j](https://neo4j.com/download/):
-
-- Use the [Neo4j Desktop](https://neo4j.com/download-center/#desktop)  (recommended), or
-- [Neo4j Community Server](https://neo4j.com/download-center/#community)
-
-### Other packages
-- `numpy`
-- `pandas`
-- `tabulate`
-- `tqdm`
-
 ## Get started
 
 ### Create a new graph database
@@ -46,9 +39,19 @@ Install [Neo4j](https://neo4j.com/download/):
 - the script expects the `Neo4j APOC library` to be installed as a plugin, see https://neo4j.com/labs/apoc/
 
 
+For example projects that use this repository, have a look at [EKG BPI Challenges](https://github.com/Ava-S/ekg_bpi_challenges), [EKG Inferring missing identifiers](https://github.com/Ava-S/ekg_inference) and [EKG for AutoTwin EU GA n. 101092021.](https://github.com/Ava-S/ekg_autotwin)
+
+
 ## Projects
 
 The following projects are part of this repository
+
+## OCED-PG: A declarative extract-load-transformT framework, that maps the raw data to a corresponding EKG, using the semantic header as a basis
+We developed a reference implementation for [OCED](https://icpmconference.org/2022/program/xes-symposium/).
+We proposed a three-layer approach to create a semantic-aware representation and storage system for OCED. 
+- _Base ontology_: The OCED proposal is formalized as a PG-schema \[1\] providing a common interface for process querying. The schema defines a \emph{base ontology} for representing and transforming OCED, which includes a _semantic layer_ (defining the OCED concepts) and a _record layer_ (defining concepts for generic data records from a legacy system and how they are related to the semantic layer). 
+- _Reference ontology_: The base ontology is specialed into a domain-specific reference ontology using PG-schema's inheritance mechanism. The reference ontology includes a _semantic layer_ (defining the domain's semantic objects, events, and relations), and a _record layer_ (defining in which legacy records the domain-level concepts are stored). The structural definitions are extended with rules to transform data in the record layer into nodes and relationships of the semantic layer, similar to \emph{ontology-based data access}~\cite{XCKL18}.
+- _OCED-PG: declarative \emph{extract-load-transform} (ELT) framework_. OCED-PG load the legacy data records into the graph DB as a record layer. We then transform the data records into OCED by automatically translating the transformation rules of step (2) into queries over the record layer.
 
 ### Missing Case Identifiers Inference
 Method to infer missing case identifiers in event data by exploiting knowledge about the activities and their locations.
