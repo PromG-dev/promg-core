@@ -28,7 +28,7 @@ class SemanticHeaderQueryLibrary:
             for relationship in node_constructor.inferred_relationships:
                 infer_rel_str = '''
                     CALL {WITH record, $result_node_name
-                            MATCH ($event_node) - [:PREVALENCE] -> (record:$record_labels) <- [:PREVALENCE] - (
+                            MATCH ($event_node) - [:EXTRACTED_FROM] -> (record:$record_labels) <- [:EXTRACTED_FROM] - (
                                 $result_node_name)
                                 MERGE (event) - [:$relation_type] -> ($result_node_name)}'''
                 infer_rel_str = Template(infer_rel_str).safe_substitute({
@@ -41,21 +41,21 @@ class SemanticHeaderQueryLibrary:
             # language=SQL
             infer_corr_str = '''
             WITH record, $result_node_name
-                                MATCH (event:$event_label) - [:PREVALENCE] -> (record) <- [:PREVALENCE] - (
+                                MATCH (event:$event_label) - [:EXTRACTED_FROM] -> (record) <- [:EXTRACTED_FROM] - (
                                 $result_node_name)
                                 MERGE (event) - [:$corr_type] -> ($result_node_name)'''
         elif node_constructor.infer_corr_from_entity_record:  # TODO update such that only correct events are considered
             # language=SQL
             infer_corr_str = '''
                         WITH record, $result_node_name
-                                MATCH (event:$event_label) - [:PREVALENCE] -> (record) <- [:PREVALENCE] - (
+                                MATCH (event:$event_label) - [:EXTRACTED_FROM] -> (record) <- [:EXTRACTED_FROM] - (
                                 $result_node_name)
                                 MERGE (event) - [:$corr_type] -> ($result_node_name)'''
         elif node_constructor.infer_observed:
             # language=SQL
             infer_observed_str = '''
             WITH record, $result_node_name
-                                MATCH (event:$event_label) - [:PREVALENCE] -> (record) <- [:PREVALENCE] - (
+                                MATCH (event:$event_label) - [:EXTRACTED_FROM] -> (record) <- [:EXTRACTED_FROM] - (
                                 $result_node_name)
                                 CREATE (event) <- [:OBSERVED] - ($result_node_name)
                                 '''
@@ -70,7 +70,7 @@ class SemanticHeaderQueryLibrary:
                             SET $record_name:RecordCreated
                             $set_label_str
                             $set_property_str
-                            MERGE (record) <- [:PREVALENCE] - ($result_node_name)
+                            MERGE (record) <- [:EXTRACTED_FROM] - ($result_node_name)
                             $infer_corr_str
                             $infer_observed_str
                             RETURN count(*)',
@@ -278,7 +278,7 @@ class SemanticHeaderQueryLibrary:
             merge_str = '''
                             MERGE ($from_node_name) -[:FROM] -> (relation:$relation_label_str) - [:TO] -> (
                             $to_node_name)
-                            MERGE (relation)  - [:PREVALENCE] -> (record)
+                            MERGE (relation)  - [:EXTRACTED_FROM] -> (record)
                             '''
         else:
             merge_str = "MERGE ($from_node_name) -[$rel_pattern] -> ($to_node_name)"
@@ -287,8 +287,8 @@ class SemanticHeaderQueryLibrary:
                             MATCH (record:$record_labels)
                             WHERE NOT record:RecordCreated
                             WITH  record limit $limit
-                            MATCH ($from_node) - [:PREVALENCE] -> (record)
-                            MATCH ($to_node) - [:PREVALENCE] -> (record)
+                            MATCH ($from_node) - [:EXTRACTED_FROM] -> (record)
+                            MATCH ($to_node) - [:EXTRACTED_FROM] -> (record)
                             $merge_str
                             SET record:RecordCreated
                             RETURN COUNT(*)',
