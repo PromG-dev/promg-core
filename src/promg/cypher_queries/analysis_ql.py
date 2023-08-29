@@ -7,9 +7,9 @@ class AnalysisQueryLibrary:
     @staticmethod
     def get_dfc_label(entity_type: str, include_label_in_dfc: bool) -> str:
         if include_label_in_dfc:
-            return f'DF_C_{entity_type.upper()}'
+            return f'DF_A_{entity_type.upper()}'
         else:
-            return f'DF_C'
+            return f'DF_A'
 
     @staticmethod
     def get_aggregate_df_relations_query(entity: ConstructedNodes,
@@ -33,7 +33,7 @@ class AnalysisQueryLibrary:
                                 WITH c1, count(df) AS df_freq,c2
                                 MERGE 
                                 (c1) 
-                                    -[rel2:$dfc_label {entityType: '$entity_type', type:'DF_C'}]-> 
+                                    -[rel2:$dfc_label {entityType: '$entity_type', type:'DF_A'}]-> 
                                 (c2) 
                                 ON CREATE SET rel2.count=df_freq'''
         else:
@@ -58,7 +58,7 @@ class AnalysisQueryLibrary:
                                 WHERE (df_freq*$relative_df_threshold > df_freq2)
                                 MERGE 
                                 (c1) 
-                                    -[rel2:$dfc_label {entityType: '$entity_type', type:'DF_C'}]-> 
+                                    -[rel2:$dfc_label {entityType: '$entity_type', type:'DF_A'}]-> 
                                 (c2) 
                                 ON CREATE SET rel2.count=df_freq'''
 
