@@ -9,6 +9,7 @@ from ..ekg_modules.ekg_builder_semantic_header import EKGUsingSemanticHeaderBuil
 from ..ekg_modules.db_management import DBManagement
 from ..ekg_modules.data_importer import Importer
 from ..ekg_modules.inference_engine import InferenceEngine
+from ..ekg_modules.task_identification import TaskIdentification
 from ..utilities.performance_handling import Performance
 
 from tabulate import tabulate
@@ -53,6 +54,7 @@ class EventKnowledgeGraph:
                                                          batch_size=batch_size)
         self.inference_engine = InferenceEngine(db_connection=db_connection)
         self.ekg_analysis = EKGAnalysis(db_connection=db_connection)
+        self.task_identifier = TaskIdentification(db_connection=db_connection)
 
         if custom_module_name is not None:
             self.custom_module = custom_module_name(db_connection=db_connection)
@@ -171,7 +173,7 @@ class EventKnowledgeGraph:
         self.data_importer.import_data()
 
     # endregion
-    
+
     def create_nodes(self, node_types: Optional[List[str]] = None) -> None:
         """
         Pass on method to ekg_builder to create relations between entities based on nodes as specified in the
@@ -200,8 +202,8 @@ class EventKnowledgeGraph:
         """
 
         self.ekg_builder.create_nodes_by_records(node_types)
-        
-    def create_relations(self,  relation_types: Optional[List[str]] = None) -> None:
+
+    def create_relations(self, relation_types: Optional[List[str]] = None) -> None:
         self.create_relations_using_record(relation_types)
         self.create_relations_using_relations(relation_types)
 
@@ -391,7 +393,9 @@ class EventKnowledgeGraph:
             raise ValueError("No custom module has been defined")
         return self.custom_module.do_custom_query(query_function=query_name, **kwargs)
 
-
     def save_perf(self):
         self.perf.finish()
         self.perf.save()
+
+    def identify_task(self):
+        self.task_identifier.identify_tasks()
