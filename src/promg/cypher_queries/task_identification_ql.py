@@ -8,6 +8,7 @@ class TaskIdentifierLibrary:
     def get_task_identifier_query() -> Query:
         # language = SQL
         query_str = ""
+        test = ""
         return Query(query_str=query_str,
                      template_string_parameters={},
                      parameters={})
