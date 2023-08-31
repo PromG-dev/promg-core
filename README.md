@@ -9,7 +9,7 @@ Copyright information is provided within each Project.
 ## Installation
 ### PromG
 The library can be installed in Pyhton using pip
-`pip install neo4j`.
+`pip install promg`.
 
 ### Neo4j
 The library assumes that Neo4j is installed.
