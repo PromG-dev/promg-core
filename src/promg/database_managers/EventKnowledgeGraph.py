@@ -17,32 +17,31 @@ import pandas as pd
 
 # ensure to allocate enough memory to your database: dbms.memory.heap.max_size=5G advised
 class EventKnowledgeGraph:
-    """
-    This is a Class that acts as an interface between the user and the different supported modules
 
-    :param db_connection: A connection to the db
-    :type db_connection: DatabaseConnection
-    :param db_name: The name of the database
-    :type db_name: str
-    :param specification_of_data_structures: A specification of how the data sets are structured
-    :type specification_of_data_structures: ImportedDataStructures
-    :param semantic_header: a :class:SemanticHeader class describing the semantics of the EKG
-    :type semantic_header: SemanticHeader
-    :param perf: a :class:Performance to keep track of the running time of the EKG construction
-    :type perf: Performance
-    :param batch_size: the batch_size used when calling apoc.periodic.iterate --> reduce required memory, defaults to
-    5000
-    :type batch_size: int
-    :param use_sample: boolean indicating whether the DB should be build using a sample as specified in the
-    ImportedDataStructures, defaults to False
-    :type use_sample: bool
-
-    """
 
     def __init__(self, db_connection: DatabaseConnection, db_name: str,
                  specification_of_data_structures: ImportedDataStructures, perf_path: str,
                  batch_size: int = 5000, use_sample: bool = False, use_preprocessed_files: bool = False,
                  semantic_header: SemanticHeader = None, custom_module_name=None, number_of_steps: int = None):
+        """
+        This is a Class that acts as an interface between the user and the different supported modules
+
+        Args:
+            db_connection: A connection to the db
+            db_name: The name of the database
+            specification_of_data_structures: A specification of how the data sets are structured
+
+            perf_path: The location (path) of the performance file
+            batch_size: the batch_size used when calling apoc.periodic.iterate --> reduce required memory
+            use_sample: boolean indicating whether the DB should be build using a sample as specified in the
+            ImportedDataStructures
+            semantic_header: a SemanticHeader class describing the semantics of the EKG
+            custom_module_name: name of the custom module class
+            number_of_steps: integer indicating the number of steps taken in the pipeline
+
+        Returns:
+            EventKnowledgeGraph object that can be used to call different modules
+        """
         # classes responsible for executing queries
         self.ekg_management = DBManagement(db_connection=db_connection, db_name=db_name)
         self.data_importer = Importer(db_connection, data_structures=specification_of_data_structures,
@@ -68,48 +67,49 @@ class EventKnowledgeGraph:
 
     def clear_db(self) -> None:
         """
-        Pass on method to ekg_management to clear the entire database
-
-        :return: None
+        Clears the entire database
         """
 
         self.ekg_management.clear_db()
 
     def set_constraints(self) -> None:
         """
-        Pass on method to ekg_management to set the constraints on the model
-
-        :return: None
+        Set constraints on the Neo4j instance
+            - sysId acts as an index for (:Entity) nodes
         """
 
         self.ekg_management.set_constraints()
 
     def get_all_rel_types(self) -> List[str]:
         """
-        Pass on method to ekg_management to get all possible rel types
+        Method to get all relationship types that are present in Neo4j instance
 
-        :return: Set of strings
+        Returns:
+            A list of strings with all relationship types present in the Neo4j instance
         """
         return self.ekg_management.get_all_rel_types()
 
-    def get_all_node_labels(self) -> Set[str]:
+    def get_all_node_labels(self) -> List[str]:
         """
-        Pass on method to ekg_management to get all possible node labels
-        :return: Set of strings
+        Method to get all node labels that are present in Neo4j instance
+
+        Returns:
+            A list of strings with all node labels present in the Neo4j instance
         """
         return self.ekg_management.get_all_node_labels()
 
-    def get_statistics(self) -> List[Dict[str, str]]:
+    def get_statistics(self) -> List[Dict[str, int]]:
         """
-        Pass on method to ekg_management to get the count of nodes per label and (aggregated) relation types
-        :return:  List[Dict[str, str]]
+        Method to get the count of nodes per label and the count of relationships per type
+
+        Returns:
+            A list containing dictionaries with the label/relationship and its count
         """
         return self.ekg_management.get_statistics()
 
     def print_statistics(self) -> None:
         """
-        Print the statistics nicely using tabulate
-        :return: None
+        Method to print the statistics nicely using tabulate
         """
         print(tabulate(self.get_statistics()))
 
@@ -171,7 +171,7 @@ class EventKnowledgeGraph:
         self.data_importer.import_data()
 
     # endregion
-    
+
     def create_nodes(self, node_types: Optional[List[str]] = None) -> None:
         """
         Pass on method to ekg_builder to create relations between entities based on nodes as specified in the
@@ -200,8 +200,8 @@ class EventKnowledgeGraph:
         """
 
         self.ekg_builder.create_nodes_by_records(node_types)
-        
-    def create_relations(self,  relation_types: Optional[List[str]] = None) -> None:
+
+    def create_relations(self, relation_types: Optional[List[str]] = None) -> None:
         self.create_relations_using_record(relation_types)
         self.create_relations_using_relations(relation_types)
 
@@ -390,7 +390,6 @@ class EventKnowledgeGraph:
         if self.custom_module is None:
             raise ValueError("No custom module has been defined")
         return self.custom_module.do_custom_query(query_function=query_name, **kwargs)
-
 
     def save_perf(self):
         self.perf.finish()
