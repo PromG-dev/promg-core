@@ -44,7 +44,7 @@ class DBManagement:
         result = [record["rel_type"] for record in result]
         return result
 
-    def get_all_node_labels(self) -> Set[str]:
+    def get_all_node_labels(self) -> List[str]:
         """
         Find all possible node labels
         @return: Set of strings
@@ -54,14 +54,14 @@ class DBManagement:
         result = self.connection.exec_query(dbm_ql.get_all_node_labels_query)
         # in case there are no labels, return an empty set
         if result is None:
-            return set([])
+            return []
         # some nodes have multiple labels, which are returned as a list of labels
         # therefore we need to flatten the result and take the set
-        result = set([record for sublist in result for record in sublist["label"]])
+        result = list(set([record for sublist in result for record in sublist["label"]]))
         return result
 
-    def get_statistics(self) -> List[Dict[str, any]]:
-        def make_empty_list_if_none(_list: Optional[List[Dict[str, str]]]):
+    def get_statistics(self) -> List[Dict[str, int]]:
+        def make_empty_list_if_none(_list: Optional[List[Dict[str, int]]]):
             if _list is not None:
                 return _list
             else:
