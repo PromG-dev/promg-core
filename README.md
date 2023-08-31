@@ -19,15 +19,6 @@ Install [Neo4j](https://neo4j.com/download/):
 - Use the [Neo4j Desktop](https://neo4j.com/download-center/#desktop)  (recommended), or
 - [Neo4j Community Server](https://neo4j.com/download-center/#community)
 
-
-## Requirements
-This repository should be used as a submodule in another project to build an event knowledge graph.
-To add the submodule to your project, run the following command in the root folder of your project.
-`git submodule https://github.com/Ava-S/ekg_creator` 
-
-For more information about submodule, have a look at [Git submodules](https://www.atlassian.com/git/tutorials/git-submodule).
-
-Furthermore, we assume the following packages/databases to be installed.
 ## Get started
 
 ### Create a new graph database
@@ -39,34 +30,19 @@ Furthermore, we assume the following packages/databases to be installed.
 - the script expects the `Neo4j APOC library` to be installed as a plugin, see https://neo4j.com/labs/apoc/
 
 
-For example projects that use this repository, have a look at [EKG BPI Challenges](https://github.com/Ava-S/ekg_bpi_challenges), [EKG Inferring missing identifiers](https://github.com/Ava-S/ekg_inference) and [EKG for AutoTwin EU GA n. 101092021.](https://github.com/Ava-S/ekg_autotwin)
+For example projects that use this library, have a look at [EKG BPI Challenges](https://github.com/Ava-S/ekg_bpi_challenges), [EKG Inferring missing identifiers](https://github.com/Ava-S/ekg_inference) and [EKG for AutoTwin EU GA n. 101092021.](https://github.com/Ava-S/ekg_autotwin)
 
 
 ## Projects
 
 The following projects are part of this repository
 
-## OCED-PG: A declarative extract-load-transformT framework, that maps the raw data to a corresponding EKG, using the semantic header as a basis
-We developed a reference implementation for [OCED](https://icpmconference.org/2022/program/xes-symposium/).
-We proposed a three-layer approach to create a semantic-aware representation and storage system for OCED. 
-- _Base ontology_: The OCED proposal is formalized as a PG-schema \[1\] providing a common interface for process querying. The schema defines a \emph{base ontology} for representing and transforming OCED, which includes a _semantic layer_ (defining the OCED concepts) and a _record layer_ (defining concepts for generic data records from a legacy system and how they are related to the semantic layer). 
-- _Reference ontology_: The base ontology is specialed into a domain-specific reference ontology using PG-schema's inheritance mechanism. The reference ontology includes a _semantic layer_ (defining the domain's semantic objects, events, and relations), and a _record layer_ (defining in which legacy records the domain-level concepts are stored). The structural definitions are extended with rules to transform data in the record layer into nodes and relationships of the semantic layer, similar to \emph{ontology-based data access}~\cite{XCKL18}.
-- _OCED-PG: declarative \emph{extract-load-transform} (ELT) framework_. OCED-PG load the legacy data records into the graph DB as a record layer. We then transform the data records into OCED by automatically translating the transformation rules of step (2) into queries over the record layer.
-
-### Missing Case Identifiers Inference
-Method to infer missing case identifiers in event data by exploiting knowledge about the activities and their locations.
-
-### Semantic Header (json files)
-First version for semantic header for system/event knowledge graphs: https://multiprocessmining.org/2022/10/26/data-storage-vs-data-semantics-for-object-centric-event-data/
-
 ### Event Knowledge Graphs
 
-Data model and generic query templates for translating and integrating a set of related CSV event logs into single event
-graph over multiple behavioral dimensions, stored as labeled property graph in [Neo4J](https://neo4j.com/).
-See [csv_to_eventgraph_neo4j/README.txt](ekg_creator/README.txt)
+We use Event Knowledge Graphs as basis for our data model as they already naturally model Events, Activities, Entities and their relations for Process Mining.
+The EKGs are stored in a labeled property graph in [Neo4J](https://neo4j.com/).
 
-Publications:
-
+#### Publications
 - Stefan Esser, Dirk Fahland: Multi-Dimensional Event Data in Graph
   Databases. [CoRR abs/2005.14552](https://arxiv.org/abs/2005.14552), [Journal on Data Semantics, DOI: 10.1007/s13740-021-00122-1](https://dx.doi.org/10.1007/s13740-021-00122-1) (
   2020)
@@ -74,18 +50,38 @@ Publications:
   Technology. https://doi.org/10.5281/zenodo.3820037
 
 
+## OCED-PG: A declarative extract-load-transformT framework, that maps the raw data to a corresponding EKG, using the semantic header as a basis
+We developed a reference implementation for Object-Centric Event Data [OCED](https://icpmconference.org/2022/program/xes-symposium/).
+We proposed a three-layer approach to create a semantic-aware representation and storage system for OCED. 
+- _Base ontology_: The OCED proposal is formalized as a PG-schema \[1\] providing a common interface for process querying. The schema defines a \emph{base ontology} for representing and transforming OCED, which includes a _semantic layer_ (defining the OCED concepts) and a _record layer_ (defining concepts for generic data records from a legacy system and how they are related to the semantic layer). 
+- _Reference ontology_: The base ontology is specialed into a domain-specific reference ontology using PG-schema's inheritance mechanism. The reference ontology includes a _semantic layer_ (defining the domain's semantic objects, events, and relations), and a _record layer_ (defining in which legacy records the domain-level concepts are stored). The structural definitions are extended with rules to transform data in the record layer into nodes and relationships of the semantic layer, similar to \emph{ontology-based data access}~\cite{XCKL18}.
+- _OCED-PG: declarative \emph{extract-load-transform} (ELT) framework_. OCED-PG load the legacy data records into the graph DB as a record layer. We then transform the data records into OCED by automatically translating the transformation rules of step (2) into queries over the record layer.
 
-## Scripts of submodule
+### Multi-process Discovery and Analysis
+
+#### Publications
+
+### Task Identification
+
+#### Publications
+
+### Custom Modules
+
+### Missing Case Identifiers Inference
+Method to infer missing case identifiers in event data by exploiting knowledge about the activities and their locations.
+
+#### Publications
+
+## Scripts
 
 ### Main script
-There is one script (orchestrator) that is used by applications to create an Event Knowledge graph. This script makes use of this submodule.
+There is one script (orchestrator) that is used by applications to create an Event Knowledge graph. This script makes use of the library.
 
 #### Data_managers
 
 - data_managers/datastructures.py --> transforms the JSON file describing the different datasets into a class + additional methods
 - data_managers/semantic_header.py --> transforms the JSON file describing the semantic header into a class + additional methods
 - data_managers/interpreters.py --> Class that contains information about in what query language the semantic header and data structures should be interpreter
-
 
 #### Database_managers
 - database_managers/authentication.py  --> class containing the credentials to create connection to database. Local credentials are includes.
