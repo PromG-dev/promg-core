@@ -139,3 +139,12 @@ class OcedPg:
         :return: None
         """
         self.ekg_builder.delete_parallel_dfs_derived()
+
+    def create_static_nodes_and_relations(self) -> None:
+        """
+        Pass on method to ekg_builder to create static nodes and relations
+        No implementation yet
+
+        :return: None
+        """
+        self.ekg_builder.create_static_nodes_and_relations()
