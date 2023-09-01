@@ -8,10 +8,9 @@ from ..cypher_queries.semantic_header_ql import SemanticHeaderQueryLibrary as sh
 
 
 class EKGUsingSemanticHeaderBuilder:
-    def __init__(self, semantic_header: SemanticHeader, batch_size: int):
+    def __init__(self, semantic_header: SemanticHeader):
         self.connection = DatabaseConnection()
         self.semantic_header = semantic_header
-        self.batch_size = batch_size
 
     def create_nodes_by_records(self, node_types: Optional[List[str]]) -> None:
         for node_constructor in self.semantic_header.get_node_by_record_constructors(node_types):
@@ -31,15 +30,10 @@ class EKGUsingSemanticHeaderBuilder:
         self.connection.exec_query(sh_ql.get_create_node_by_record_constructor_query,
                                    **{
                                        "node_constructor": node_constructor,
-                                       "batch_size": self.batch_size,
                                        "merge": merge_first
                                    })
 
-        self.connection.exec_query(sh_ql.get_reset_created_record_query,
-                                   **{
-                                       "batch_size": self.batch_size
-                                   }
-                                   )
+        self.connection.exec_query(sh_ql.get_reset_created_record_query)
 
         if merge_first:
             print(
@@ -54,15 +48,13 @@ class EKGUsingSemanticHeaderBuilder:
                                                        **{"node_constructor": node_constructor})
                 self.connection.exec_query(sh_ql.get_merge_nodes_with_same_id_query,
                                            **{
-                                               "node_constructor": node_constructor,
-                                               "batch_size": self.batch_size
+                                               "node_constructor": node_constructor
                                            }
                                            )
 
                 self.connection.exec_query(sh_ql.get_reset_merged_in_nodes_query,
                                            **{
-                                               "node_constructor": node_constructor,
-                                               "batch_size": self.batch_size}
+                                               "node_constructor": node_constructor}
                                            )
 
 
@@ -86,13 +78,9 @@ class EKGUsingSemanticHeaderBuilder:
     def _create_relations_using_record(self, relation_constructor):
         self.connection.exec_query(sh_ql.get_create_relation_using_record_query,
                                    **{
-                                       "relation_constructor": relation_constructor,
-                                       "batch_size": self.batch_size
+                                       "relation_constructor": relation_constructor
                                    })
-        self.connection.exec_query(sh_ql.get_reset_created_record_query,
-                                   **{
-                                       "batch_size": self.batch_size
-                                   })
+        self.connection.exec_query(sh_ql.get_reset_created_record_query)
         self._create_corr_from_parents(relation_constructor=relation_constructor)
 
     def create_relations_using_relations(self, relation_types: Optional[List[str]]) -> None:
@@ -104,8 +92,7 @@ class EKGUsingSemanticHeaderBuilder:
     def _create_relations_using_relation(self, relation_constructor):
         self.connection.exec_query(sh_ql.get_create_relation_by_relations_query,
                                    **{
-                                       "relation_constructor": relation_constructor,
-                                       "batch_size": self.batch_size
+                                       "relation_constructor": relation_constructor
                                    })
         self._create_corr_from_parents(relation_constructor=relation_constructor)
 
@@ -116,8 +103,7 @@ class EKGUsingSemanticHeaderBuilder:
                 self.connection.exec_query(sh_ql.get_infer_corr_from_parent_query,
                                            **{
                                                "relation_constructor": relation_constructor,
-                                               "use_from": use_from,
-                                               "batch_size": self.batch_size
+                                               "use_from": use_from
                                            })
 
 
@@ -135,7 +121,7 @@ class EKGUsingSemanticHeaderBuilder:
     def _create_df_edges_for_entity(self, entity: ConstructedNodes, event_label):
         self.connection.exec_query(sh_ql.get_create_directly_follows_query,
                                    **{
-                                       "entity": entity, "batch_size": self.batch_size,
+                                       "entity": entity,
                                        "event_label": event_label
                                    })
 

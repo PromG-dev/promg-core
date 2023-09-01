@@ -37,16 +37,14 @@ class EventKnowledgeGraph:
     """
 
     def __init__(self, specification_of_data_structures: ImportedDataStructures, perf_path: str,
-                 batch_size: int = 5000, use_sample: bool = False, use_preprocessed_files: bool = False,
+                 use_sample: bool = False, use_preprocessed_files: bool = False,
                  semantic_header: SemanticHeader = None, custom_module_name=None, number_of_steps: int = None):
         # classes responsible for executing queries
-        self.ekg_management = DBManagement(batch_size=batch_size)
+        self.ekg_management = DBManagement()
         self.data_importer = Importer(data_structures=specification_of_data_structures,
                                       records=semantic_header.records,
-                                      batch_size=batch_size,
                                       use_sample=use_sample, use_preprocessed_files=use_preprocessed_files)
-        self.ekg_builder = EKGUsingSemanticHeaderBuilder(semantic_header=semantic_header,
-                                                         batch_size=batch_size)
+        self.ekg_builder = EKGUsingSemanticHeaderBuilder(semantic_header=semantic_header)
         self.inference_engine = InferenceEngine()
         self.ekg_analysis = EKGAnalysis()
         self.task_identifier = TaskIdentification()

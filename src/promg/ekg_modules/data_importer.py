@@ -14,13 +14,12 @@ import pandas as pd
 
 class Importer:
     def __init__(self, data_structures: ImportedDataStructures,
-                 records: List["RecordConstructor"], batch_size: int,
+                 records: List["RecordConstructor"],
                  use_sample: bool = False, use_preprocessed_files: bool = False):
         self.connection = DatabaseConnection()
         self.structures = data_structures.structures
         self.records = records
 
-        self.batch_size = batch_size
         self.load_batch_size = 20000
         self.use_sample = use_sample
         self.use_preprocessed_files = use_preprocessed_files
@@ -29,8 +28,7 @@ class Importer:
     def update_load_status(self):
         self.connection.exec_query(di_ql.get_update_load_status_query,
                                    **{
-                                       "current_load_status": self.load_status,
-                                       "batch_size": self.batch_size
+                                       "current_load_status": self.load_status
                                    })
         self.load_status += 1
 
@@ -65,14 +63,13 @@ class Importer:
                 self.connection.exec_query(di_ql.get_convert_epoch_to_timestamp_query,
                                            **{
                                                "attribute": attribute,
-                                               "datetime_object": datetime_format,
-                                               "batch_size": self.batch_size
+                                               "datetime_object": datetime_format
                                            })
 
             self.connection.exec_query(di_ql.get_make_timestamp_date_query,
                                        **{
-                                           "attribute": attribute, "datetime_object": datetime_format,
-                                           "batch_size": self.batch_size,
+                                           "attribute": attribute,
+                                           "datetime_object": datetime_format,
                                            "load_status": self.load_status
                                        })
 
@@ -90,10 +87,7 @@ class Importer:
     @Performance.track("structure")
     def _finalize_import(self):
         # finalize the import
-        self.connection.exec_query(di_ql.get_finalize_import_events_query,
-                                   **{
-                                       "batch_size": self.batch_size
-                                   })
+        self.connection.exec_query(di_ql.get_finalize_import_events_query)
 
     @Performance.track("file_name")
     def _import_nodes_from_data(self, df_log, file_name, record_constructors):
