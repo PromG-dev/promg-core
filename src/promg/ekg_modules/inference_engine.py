@@ -4,8 +4,8 @@ from ..database_managers.db_connection import DatabaseConnection
 
 
 class InferenceEngine:
-    def __init__(self, db_connection: DatabaseConnection):
-        self.connection = db_connection
+    def __init__(self):
+        self.connection = DatabaseConnection()
 
     @Performance.track("entity")
     def infer_items_propagate_upwards_multiple_levels(self, entity, is_load=True):

@@ -20,10 +20,6 @@ class EventKnowledgeGraph:
     """
     This is a Class that acts as an interface between the user and the different supported modules
 
-    :param db_connection: A connection to the db
-    :type db_connection: DatabaseConnection
-    :param db_name: The name of the database
-    :type db_name: str
     :param specification_of_data_structures: A specification of how the data sets are structured
     :type specification_of_data_structures: ImportedDataStructures
     :param semantic_header: a :class:SemanticHeader class describing the semantics of the EKG
@@ -39,23 +35,22 @@ class EventKnowledgeGraph:
 
     """
 
-    def __init__(self, db_connection: DatabaseConnection, db_name: str,
-                 specification_of_data_structures: ImportedDataStructures, perf_path: str,
+    def __init__(self, specification_of_data_structures: ImportedDataStructures, perf_path: str,
                  batch_size: int = 5000, use_sample: bool = False, use_preprocessed_files: bool = False,
                  semantic_header: SemanticHeader = None, custom_module_name=None, number_of_steps: int = None):
         # classes responsible for executing queries
-        self.ekg_management = DBManagement(db_connection=db_connection, db_name=db_name)
-        self.data_importer = Importer(db_connection, data_structures=specification_of_data_structures,
+        self.ekg_management = DBManagement()
+        self.data_importer = Importer(data_structures=specification_of_data_structures,
                                       records=semantic_header.records,
                                       batch_size=batch_size,
                                       use_sample=use_sample, use_preprocessed_files=use_preprocessed_files)
-        self.ekg_builder = EKGUsingSemanticHeaderBuilder(db_connection=db_connection, semantic_header=semantic_header,
+        self.ekg_builder = EKGUsingSemanticHeaderBuilder(semantic_header=semantic_header,
                                                          batch_size=batch_size)
-        self.inference_engine = InferenceEngine(db_connection=db_connection)
-        self.ekg_analysis = EKGAnalysis(db_connection=db_connection)
+        self.inference_engine = InferenceEngine()
+        self.ekg_analysis = EKGAnalysis()
 
         if custom_module_name is not None:
-            self.custom_module = custom_module_name(db_connection=db_connection)
+            self.custom_module = custom_module_name()
         else:
             self.custom_module = None
 

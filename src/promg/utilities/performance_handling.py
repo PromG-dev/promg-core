@@ -6,16 +6,8 @@ from datetime import datetime
 import pandas as pd
 from tqdm import tqdm
 
+from .singleton import Singleton
 from ..utilities.context_manager_tqdm import Nostdout
-
-
-class Singleton(type):
-    _instances = {}
-
-    def __call__(cls, *args, **kwargs):
-        if cls not in cls._instances:
-            cls._instances[cls] = super(Singleton, cls).__call__(*args, **kwargs)
-        return cls._instances[cls]
 
 
 class Performance(metaclass=Singleton):
@@ -97,4 +89,4 @@ class Performance(metaclass=Singleton):
 
     def save(self):
         os.makedirs(os.path.dirname(self.path), exist_ok=True)
-        self.perf.to_csv(self.path, sep=";",decimal=",")
+        self.perf.to_csv(self.path, sep=";", decimal=",")
