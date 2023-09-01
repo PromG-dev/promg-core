@@ -59,8 +59,8 @@ class DatabaseConnection(metaclass=Singleton):
             while failed_batches > 0 and attempts <= 10:
                 result = self._exec_query(query, database, **kwargs)
                 failed_batches = result[0]['failedBatches']
-                kwargs["limit"] = int(limit / 2)
-                kwargs["limit"] = max(10000, kwargs["limit"])
+                kwargs["batch_size"] = int(limit / 2)
+                kwargs["batch_size"] = max(10000, kwargs["batch_size"])
                 attempts += 1
             if failed_batches > 0:
                 raise Exception(f"Maximum attempts reached: {result[0]['batchErrors']}")
