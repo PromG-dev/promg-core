@@ -119,21 +119,14 @@ class OcedPg:
         """
         self.ekg_builder.create_nodes_by_relations(node_types)
 
-    def merge_duplicate_df(self) -> None:
+    def create_df_edges(self) -> None:
         """
         Pass on method to ekg_builder to merge parallel directly follows in between batching events
 
         :return: None
         """
+        self.ekg_builder.create_df_edges()
         self.ekg_builder.merge_duplicate_df()
-
-    def delete_parallel_dfs_derived(self) -> None:
-        """
-        Pass on method to ekg_builder to delete parallel directly follows that have been derived when reifying new
-        entities
-
-        :return: None
-        """
         self.ekg_builder.delete_parallel_dfs_derived()
 
     def create_static_nodes_and_relations(self) -> None:
