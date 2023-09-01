@@ -3,8 +3,8 @@ from typing import List, Optional
 
 from ..data_managers.semantic_header import SemanticHeader
 from ..data_managers.datastructures import DatasetDescriptions
-from ..ekg_modules.ekg_builder_semantic_header import EKGUsingSemanticHeaderBuilder
-from ..ekg_modules.data_importer import Importer
+from ..modules.ekg_builder_semantic_header import EKGUsingSemanticHeaderBuilder
+from ..modules.data_importer import Importer
 from ..utilities.performance_handling import Performance
 
 
