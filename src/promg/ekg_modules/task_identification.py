@@ -4,8 +4,8 @@ from ..database_managers.db_connection import DatabaseConnection
 
 
 class TaskIdentification:
-    def __init__(self, db_connection: DatabaseConnection):
-        self.connection = db_connection
+    def __init__(self):
+        self.connection = DatabaseConnection()
 
     @Performance.track("resource")
     def identify_tasks(self, resource, case):
