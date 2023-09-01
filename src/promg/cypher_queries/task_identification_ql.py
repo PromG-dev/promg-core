@@ -14,15 +14,14 @@ class TaskIdentifierLibrary:
                  RETURN e1,e2",
                 "WITH e1,e2
                     MERGE (e1)-[:DF_JOINT]->(e2)",
-                    {batchSize:100})
+                    {batchSize:$batch_size})
                 '''
 
         return Query(query_str=query_str,
                      template_string_parameters={
                          "df_resource": resource.get_df_label(),
                          "df_case": case.get_df_label()
-                     },
-                     parameters={})
+                     })
 
     @staticmethod
     def get_create_task_instances_query(resource):
@@ -47,14 +46,13 @@ class TaskIdentifierLibrary:
                     WITH ti, events
                     UNWIND events AS e
                         CREATE (e)<-[:CONTAINS]-(ti)",
-                {batchSize:100})
+                {batchSize:$batch_size})
                 '''
 
         return Query(query_str=query_str,
                      template_string_parameters={
                          "resource_node_label": resource.node_type
-                     },
-                     parameters={})
+                     })
 
     @staticmethod
     def get_split_ti_nodes_create_new_1_query():
@@ -76,12 +74,10 @@ class TaskIdentifierLibrary:
                     WITH ti, events
                     UNWIND events AS e
                     CREATE (e)<-[:CONTAINS]-(ti)",
-                {batchSize:100})
+                {batchSize:$batch_size})
                 '''
 
-        return Query(query_str=query_str,
-                     template_string_parameters={},
-                     parameters={})
+        return Query(query_str=query_str)
 
     @staticmethod
     def get_split_ti_nodes_create_new_2_query():
@@ -104,12 +100,10 @@ class TaskIdentifierLibrary:
                  WITH ti, events
                  UNWIND events AS e
                  CREATE (e)<-[:CONTAINS]-(ti)",
-                {batchSize:100})
+                {batchSize:$batch_size})
                 '''
 
-        return Query(query_str=query_str,
-                     template_string_parameters={},
-                     parameters={})
+        return Query(query_str=query_str)
 
     @staticmethod
     def get_split_ti_nodes_remove_old_query():
@@ -121,13 +115,11 @@ class TaskIdentifierLibrary:
                  RETURN ti",
                 "WITH ti
                  DETACH DELETE ti",
-                {batchSize:100})
+                {batchSize:$batch_size})
                 '''
         print(query_str)
 
-        return Query(query_str=query_str,
-                     template_string_parameters={},
-                     parameters={})
+        return Query(query_str=query_str)
 
     @staticmethod
     def get_remove_df_joint_query():
@@ -139,9 +131,7 @@ class TaskIdentifierLibrary:
                 '''
         print(query_str)
 
-        return Query(query_str=query_str,
-                     template_string_parameters={},
-                     parameters={})
+        return Query(query_str=query_str)
 
     @staticmethod
     def get_correlate_ti_to_entity_query(entity):
@@ -153,15 +143,14 @@ class TaskIdentifierLibrary:
                  RETURN DISTINCT ti, n",
                 "WITH ti, n
                     CREATE (ti)-[:CORR]->(n)",
-                {batchSize:100})
+                {batchSize:$batch_size})
                     '''
         print(query_str)
 
         return Query(query_str=query_str,
                      template_string_parameters={
                          "entity_node_label": entity.node_type
-                     },
-                     parameters={})
+                     })
 
     @staticmethod
     def get_lift_df_to_task_instances_query(entity):
@@ -177,15 +166,14 @@ class TaskIdentifierLibrary:
                  RETURN n, nodeList[i] as ti_first, nodeList[i+1] as ti_second",
                 "WITH n, ti_first, ti_second
                     MERGE (ti_first)-[df:DF_TI_$entity_node_label]->(ti_second)",
-                {batchSize:100})
+                {batchSize:$batch_size})
                     '''
         print(query_str)
 
         return Query(query_str=query_str,
                      template_string_parameters={
                          "entity_node_label": entity.node_type
-                     },
-                     parameters={})
+                     })
 
     @staticmethod
     def get_aggregate_task_instances_query(property):
@@ -197,15 +185,14 @@ class TaskIdentifierLibrary:
                  RETURN DISTINCT ti.$property AS id, count(*) AS count",
                  "WITH id, count
                   MERGE (ta:TaskAggregation {Type:'$property', id:id, count:count})",
-                {batchSize:100})
+                {batchSize:$batch_size})
                 '''
         print(query_str)
 
         return Query(query_str=query_str,
                      template_string_parameters={
                          "property": property
-                     },
-                     parameters={})
+                     })
 
     @staticmethod
     def get_link_task_instances_to_aggregations_query(property):
@@ -218,14 +205,13 @@ class TaskIdentifierLibrary:
                  RETURN ta, ti",
                 "WITH ta, ti
                  CREATE (ti)-[:OBSERVED]->(ta)",
-                {batchSize:100})
+                {batchSize:$batch_size})
                 '''
 
         return Query(query_str=query_str,
                      template_string_parameters={
                          "property": property
-                     },
-                     parameters={})
+                     })
 
     @staticmethod
     def get_lift_df_to_task_aggregations_query(property, entity):
@@ -244,5 +230,4 @@ class TaskIdentifierLibrary:
                      template_string_parameters={
                          "property": property,
                          "entity_node_label": entity.node_type
-                     },
-                     parameters={})
+                     })
