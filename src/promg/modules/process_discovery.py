@@ -1,10 +1,10 @@
 from .. import SemanticHeader
 from ..database_managers.db_connection import DatabaseConnection
 from ..utilities.performance_handling import Performance
-from ..cypher_queries.analysis_ql import AnalysisQueryLibrary as analysis_ql
+from ..cypher_queries.process_discovery_ql import AnalysisQueryLibrary as analysis_ql
 
 
-class EKGAnalysis:
+class ProcessDiscovery:
     def __init__(self):
         self.connection = DatabaseConnection()
 
