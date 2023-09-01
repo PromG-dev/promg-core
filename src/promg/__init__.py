@@ -8,4 +8,4 @@ from .database_managers.db_connection import Query
 from .utilities.performance_handling import Performance
 
 __all__ = [SemanticHeader, EventKnowledgeGraph, DatabaseConnection, authentication, DatasetDescriptions, Query,
-           Performance]
+           Performance, OcedPg]
