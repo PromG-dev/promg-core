@@ -25,8 +25,8 @@ class EKGUsingSemanticHeaderBuilder:
                                                  "use_record": True
                                              })
         merge_first = num_ids[0]['num_ids'] < 1000 \
-                        and "Event" not in node_constructor.get_labels() \
-                        and "EntityAttribute" not in node_constructor.get_labels()
+                      and "Event" not in node_constructor.get_labels() \
+                      and "EntityAttribute" not in node_constructor.get_labels()
 
         self.connection.exec_query(sh_ql.get_create_node_by_record_constructor_query,
                                    **{
@@ -47,11 +47,9 @@ class EKGUsingSemanticHeaderBuilder:
                 f"using ({node_constructor.get_prevalent_record_pattern()}) merged")
         else:
             print(f"Node ({node_constructor.get_pattern(with_properties=False)}) "
-                                               f"using ({node_constructor.get_prevalent_record_pattern()}) "
-                                               f"created")
+                  f"using ({node_constructor.get_prevalent_record_pattern()}) "
+                  f"created")
             if not ("Event" in node_constructor.get_labels() or "EntityAttribute" in node_constructor.get_labels()):
-                max_limit = self.connection.exec_query(sh_ql.get_number_of_ids_query,
-                                                       **{"node_constructor": node_constructor})
                 self.connection.exec_query(sh_ql.get_merge_nodes_with_same_id_query,
                                            **{
                                                "node_constructor": node_constructor,
@@ -62,18 +60,18 @@ class EKGUsingSemanticHeaderBuilder:
                 self.connection.exec_query(sh_ql.get_reset_merged_in_nodes_query,
                                            **{
                                                "node_constructor": node_constructor,
-                                               "batch_size": self.batch_size}
+                                               "batch_size": self.batch_size
+                                           }
                                            )
-
-
-
 
     def create_nodes_by_relations(self, node_types: Optional[List[str]]) -> None:
         for node_constructors in self.semantic_header.get_nodes_constructed_by_relations(node_types).values():
             for node_constructor in node_constructors:
-                self._create_node_by_record(node_constructor=node_constructor)
+                self._create_node_by_relation(node_constructor=node_constructor)
 
-
+    @Performance.track("node_constructor")
+    def _create_node_by_relation(self, node_constructor: NodeConstructor):
+        pass
 
     def create_relations_using_records(self, relation_types: Optional[List[str]]) -> None:
         # find events that are related to different entities of which one event also has a reference to the other entity
@@ -109,7 +107,6 @@ class EKGUsingSemanticHeaderBuilder:
                                    })
         self._create_corr_from_parents(relation_constructor=relation_constructor)
 
-
     def _create_corr_from_parents(self, relation_constructor):
         if relation_constructor.infer_corr_from_reified_parents:
             for use_from in [True, False]:
@@ -119,7 +116,6 @@ class EKGUsingSemanticHeaderBuilder:
                                                "use_from": use_from,
                                                "batch_size": self.batch_size
                                            })
-
 
     def create_df_edges(self, entity_types: List[str], event_label: str) -> None:
         entity: ConstructedNodes
