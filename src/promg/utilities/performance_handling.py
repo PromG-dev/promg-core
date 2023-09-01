@@ -90,3 +90,16 @@ class Performance(metaclass=Singleton):
     def save(self):
         os.makedirs(os.path.dirname(self.path), exist_ok=True)
         self.perf.to_csv(self.path, sep=";", decimal=",")
+
+    @staticmethod
+    def set_up_performance_with_path(path, number_of_steps: int = None):
+        return Performance(perf_path=path, number_of_steps=number_of_steps)
+
+    @staticmethod
+    def set_up_performance(dataset_name, use_sample, number_of_steps: int = None):
+        path = os.path.join("perf", dataset_name, f"{dataset_name}_{'sample_' * use_sample}Performance.csv")
+        return Performance.set_up_performance_with_path(path=path, number_of_steps=number_of_steps)
+
+    def finish_and_save(self):
+        self.finish()
+        self.save()
