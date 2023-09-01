@@ -9,6 +9,8 @@ from dataclasses import dataclass
 from ..utilities.auxiliary_functions import replace_undefined_value, create_list, get_id_attribute_from_label
 import re
 
+from ..utilities.singleton import Singleton
+
 
 class Property:
     def __init__(self, attribute: str, value: str, node_name: Optional[str],
@@ -811,7 +813,7 @@ class RecordConstructor:
         return self.record_labels
 
 
-class SemanticHeader:
+class SemanticHeader(metaclass=Singleton):
     def __init__(self, name: str, version: str,
                  records: List["RecordConstructor"],
                  nodes: List[ConstructedNodes],
