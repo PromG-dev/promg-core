@@ -13,10 +13,10 @@ import pandas as pd
 
 
 class Importer:
-    def __init__(self, db_connection: DatabaseConnection, data_structures: ImportedDataStructures,
+    def __init__(self, data_structures: ImportedDataStructures,
                  records: List["RecordConstructor"], batch_size: int,
                  use_sample: bool = False, use_preprocessed_files: bool = False):
-        self.connection = db_connection
+        self.connection = DatabaseConnection()
         self.structures = data_structures.structures
         self.records = records
 

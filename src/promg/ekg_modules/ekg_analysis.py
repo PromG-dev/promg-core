@@ -4,8 +4,8 @@ from ..cypher_queries.analysis_ql import AnalysisQueryLibrary as analysis_ql
 
 
 class EKGAnalysis:
-    def __init__(self, db_connection: DatabaseConnection):
-        self.connection = db_connection
+    def __init__(self):
+        self.connection = DatabaseConnection()
 
     @Performance.track("entity")
     def create_df_process_model(self, entity):
