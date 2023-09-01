@@ -397,5 +397,14 @@ class EventKnowledgeGraph:
         self.perf.finish()
         self.perf.save()
 
-    def identify_task(self):
-        self.task_identifier.identify_tasks()
+    def identify_task(self, case, resource="Resource"):
+        resource_entity = self.semantic_header.get_entity(resource)
+        case_entity = self.semantic_header.get_entity(case)
+
+        self.task_identifier.identify_tasks(resource_entity, case_entity)
+
+    def aggregate_tasks(self, case, resource="Resource"):
+        resource_entity = self.semantic_header.get_entity(resource)
+        case_entity = self.semantic_header.get_entity(case)
+
+        self.task_identifier.aggregate_on_task_variant(resource_entity, case_entity)
