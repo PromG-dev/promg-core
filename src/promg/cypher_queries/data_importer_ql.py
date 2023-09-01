@@ -97,7 +97,7 @@ class DataImporterQueryLibrary:
                      parameters={"batch": batch})
 
     @staticmethod
-    def get_make_timestamp_date_query(attribute, datetime_object, batch_size, load_status) -> Query:
+    def get_make_timestamp_date_query(attribute, datetime_object, load_status) -> Query:
         """
         Convert the strings of the timestamp to the datetime as used in cypher
         Remove the str_timestamp property
@@ -124,14 +124,13 @@ class DataImporterQueryLibrary:
                          "datetime_object_format": datetime_object.format,
                          "datetime_object_convert_to": datetime_object.convert_to,
                          "date_type": datetime_object.get_date_type(),
-                         "batch_size": batch_size,
                          "attribute": attribute,
                          "offset": offset,
                          "load_status": load_status
                      })
 
     @staticmethod
-    def get_convert_epoch_to_timestamp_query(attribute, datetime_object, batch_size, load_status) -> Query:
+    def get_convert_epoch_to_timestamp_query(attribute, datetime_object, load_status) -> Query:
         # language=SQL
         query_str = '''
                 CALL apoc.periodic.iterate(
@@ -150,14 +149,13 @@ class DataImporterQueryLibrary:
                      template_string_parameters={"attribute": attribute},
                      parameters={
                          "label": "Record",
-                         "batch_size": batch_size,
                          "unit": datetime_object.unit,
                          "datetime_object_format": datetime_object.format,
                          "load_status": load_status
                      })
 
     @staticmethod
-    def get_finalize_import_events_query(batch_size) -> Query:
+    def get_finalize_import_events_query() -> Query:
         # language=SQL
         query_str = '''
             CALL apoc.periodic.iterate(
@@ -168,8 +166,7 @@ class DataImporterQueryLibrary:
                 {batchSize:$batch_size, parallel:false})
             '''
 
-        return Query(query_str=query_str,
-                     parameters={"batch_size": batch_size})
+        return Query(query_str=query_str)
 
     @staticmethod
     def get_filter_events_by_property_query(prop: str, load_status: int, values: Optional[List[str]] = None,
@@ -202,7 +199,7 @@ class DataImporterQueryLibrary:
                      template_string_parameters=template_string_parameters)
 
     @staticmethod
-    def get_update_load_status_query(current_load_status: int, batch_size: int):
+    def get_update_load_status_query(current_load_status: int):
         query_str = '''
         CALL apoc.periodic.commit(
             'MATCH (record:Record) 
@@ -211,10 +208,9 @@ class DataImporterQueryLibrary:
             SET record.loadStatus = record.loadStatus + 1
             RETURN COUNT(*)',
             {old_value: $old_value,
-            limit: $limit})
+            limit: $batch_size})
                             '''
         return Query(query_str=query_str,
                      parameters={
-                         "old_value": current_load_status,
-                         "limit": batch_size
+                         "old_value": current_load_status
                      })

@@ -21,10 +21,12 @@ class Query:
 
 
 class DatabaseConnection(metaclass=Singleton):
-    def __init__(self, uri: str, db_name: str, user: str, password: str, verbose: bool = False):
+    def __init__(self, uri: str, db_name: str, user: str, password: str, verbose: bool = False,
+                 batch_size: int = 100000):
         self.db_name = db_name
         self.driver = self.start_connection(uri, user, password)
         self.verbose = verbose
+        self.batch_size = batch_size
 
     @staticmethod
     def start_connection(uri: str, user: str, password: str):
@@ -45,6 +47,10 @@ class DatabaseConnection(metaclass=Singleton):
         database = result.database
         if kwargs is None:
             kwargs = {}  # replace None value by an emtpy dictionary
+        if "$batch_size" in query:
+            kwargs["batch_size"] = self.batch_size
+        if "$limit" in query:
+            kwargs["limit"] = self.batch_size
 
         if "apoc.periodic.commit" in query:
             limit = kwargs["limit"]
@@ -104,11 +110,13 @@ class DatabaseConnection(metaclass=Singleton):
     @staticmethod
     def set_up_connection(
             credentials: Credentials = authentication.connections_map[authentication.Connections.LOCAL],
-            verbose: bool = False):
+            verbose: bool = False,
+            batch_size: int = 100000):
         return DatabaseConnection(db_name=credentials.user, uri=credentials.uri, user=credentials.user,
-                                  password=credentials.password, verbose=verbose)
+                                  password=credentials.password, verbose=verbose, batch_size=batch_size)
 
     @staticmethod
-    def set_up_connection_using_key(key=authentication.Connections.LOCAL, verbose: bool = False):
+    def set_up_connection_using_key(key=authentication.Connections.LOCAL, verbose: bool = False,
+                                    batch_size: int = 100000):
         credentials = authentication.connections_map[key]
-        return DatabaseConnection.set_up_connection(credentials, verbose)
+        return DatabaseConnection.set_up_connection(credentials, verbose, batch_size=batch_size)
