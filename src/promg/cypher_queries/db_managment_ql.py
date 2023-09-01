@@ -40,7 +40,7 @@ class DBManagementQueryLibrary:
         return Query(query_str=query_str, database="system", template_string_parameters={"db_name": db_name})
 
     @staticmethod
-    def get_delete_relationships_query(batch_size) -> Query:
+    def get_delete_relationships_query() -> Query:
         # language=SQL
         query_str = '''
                     CALL apoc.periodic.iterate(
@@ -51,11 +51,10 @@ class DBManagementQueryLibrary:
                     RETURN batches, total
                 '''
 
-        return Query(query_str=query_str,
-                     parameters={"batch_size": batch_size})
+        return Query(query_str=query_str)
 
     @staticmethod
-    def get_delete_nodes_query(batch_size) -> Query:
+    def get_delete_nodes_query() -> Query:
         # language=SQL
         query_str = '''
                 CALL apoc.periodic.iterate(
@@ -65,8 +64,7 @@ class DBManagementQueryLibrary:
                 RETURN batches, total
             '''
 
-        return Query(query_str=query_str,
-                     parameters={"batch_size": batch_size})
+        return Query(query_str=query_str)
 
     @staticmethod
     def get_replace_db_query(db_name) -> Query:

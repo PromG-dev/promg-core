@@ -7,24 +7,17 @@ from ..utilities.performance_handling import Performance
 
 
 class DBManagement:
-    def __init__(self, batch_size):
+    def __init__(self):
         self.connection = DatabaseConnection()
         self.db_name = self.connection.db_name
-        self.batch_size = batch_size
 
     @Performance.track()
     def clear_db(self, replace=True):
         if replace:
             self.connection.exec_query(dbm_ql.get_replace_db_query, **{"db_name": self.db_name})
         else:
-            self.connection.exec_query(dbm_ql.get_delete_relationships_query,
-                                       **{
-                                           "batch_size": self.batch_size
-                                       })
-            self.connection.exec_query(dbm_ql.get_delete_nodes_query,
-                                       **{
-                                           "batch_size": self.batch_size
-                                       })
+            self.connection.exec_query(dbm_ql.get_delete_relationships_query)
+            self.connection.exec_query(dbm_ql.get_delete_nodes_query)
 
     @Performance.track()
     def set_constraints(self):
