@@ -39,7 +39,7 @@ class EventKnowledgeGraph:
                  batch_size: int = 5000, use_sample: bool = False, use_preprocessed_files: bool = False,
                  semantic_header: SemanticHeader = None, custom_module_name=None, number_of_steps: int = None):
         # classes responsible for executing queries
-        self.ekg_management = DBManagement()
+        self.ekg_management = DBManagement(batch_size=batch_size)
         self.data_importer = Importer(data_structures=specification_of_data_structures,
                                       records=semantic_header.records,
                                       batch_size=batch_size,
@@ -61,14 +61,23 @@ class EventKnowledgeGraph:
     # region EKG management
     """Define all queries and return their results (if required)"""
 
-    def clear_db(self) -> None:
+    def replace_db(self) -> None:
         """
-        Pass on method to ekg_management to clear the entire database
+        Replace the entire database by a new one
 
         :return: None
         """
 
-        self.ekg_management.clear_db()
+        self.ekg_management.clear_db(replace=True)
+
+    def clear_db(self) -> None:
+        """
+        Clear the entire database
+
+        :return: None
+        """
+
+        self.ekg_management.clear_db(replace=False)
 
     def set_constraints(self) -> None:
         """

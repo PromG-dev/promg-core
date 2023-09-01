@@ -40,6 +40,45 @@ class DBManagementQueryLibrary:
         return Query(query_str=query_str, database="system", template_string_parameters={"db_name": db_name})
 
     @staticmethod
+    def get_delete_relationships_query(batch_size) -> Query:
+        # language=SQL
+        query_str = '''
+                    CALL apoc.periodic.iterate(
+                        "MATCH () - [r] -> () return id(r) as id", 
+                        "MATCH () - [r] -> () WHERE id(r) = id DELETE r", 
+                        {batchSize:$batch_size})
+                    yield batches, total 
+                    RETURN batches, total
+                '''
+
+        return Query(query_str=query_str,
+                     parameters={"batch_size": batch_size})
+
+    @staticmethod
+    def get_delete_nodes_query(batch_size) -> Query:
+        # language=SQL
+        query_str = '''
+                CALL apoc.periodic.iterate(
+                    "MATCH (n) return id(n) as id", 
+                    "MATCH (n) WHERE id(n) = id DETACH DELETE n", {batchSize:$batch_size})
+                yield batches, total 
+                RETURN batches, total
+            '''
+
+        return Query(query_str=query_str,
+                     parameters={"batch_size": batch_size})
+
+    @staticmethod
+    def get_replace_db_query(db_name) -> Query:
+        # language=SQL
+        query_str = '''
+                    CREATE OR REPLACE DATABASE $db_name
+                    WAIT
+                '''
+
+        return Query(query_str=query_str, database="system", template_string_parameters={"db_name": db_name})
+
+    @staticmethod
     def get_constraint_unique_event_id_query() -> Query:
         # language=SQL
         query_str = '''
