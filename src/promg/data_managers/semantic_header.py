@@ -842,7 +842,12 @@ class SemanticHeader(metaclass=Singleton):
         return SemanticHeader(name=_name, version=_version, records=_records, nodes=_nodes, relations=_relations)
 
     @staticmethod
-    def create_semantic_header(path: Path):
+    def create_semantic_header(path: Path = None, dataset_name: str = None):
+        if path is None:
+            if dataset_name is None:
+                raise ValueError("At least a path or dataset name has be to defined")
+            path = Path(f'json_files/{dataset_name}.json')
+
         with open(path) as f:
             json_semantic_header = json.load(f)
 

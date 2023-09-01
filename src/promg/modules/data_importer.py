@@ -4,7 +4,7 @@ from typing import List
 import numpy as np
 from tqdm import tqdm
 
-from ..data_managers.semantic_header import RecordConstructor
+from ..data_managers.semantic_header import RecordConstructor, SemanticHeader
 from ..database_managers.db_connection import DatabaseConnection
 from ..data_managers.datastructures import DatasetDescriptions
 from ..utilities.performance_handling import Performance
@@ -14,11 +14,10 @@ import pandas as pd
 
 class Importer:
     def __init__(self, data_structures: DatasetDescriptions,
-                 records: List["RecordConstructor"],
                  use_sample: bool = False, use_preprocessed_files: bool = False):
         self.connection = DatabaseConnection()
         self.structures = data_structures.structures
-        self.records = records
+        self.records = SemanticHeader().records
 
         self.load_batch_size = 20000
         self.use_sample = use_sample
