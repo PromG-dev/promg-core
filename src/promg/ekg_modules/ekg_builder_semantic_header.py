@@ -8,8 +8,8 @@ from ..cypher_queries.semantic_header_ql import SemanticHeaderQueryLibrary as sh
 
 
 class EKGUsingSemanticHeaderBuilder:
-    def __init__(self, db_connection: DatabaseConnection, semantic_header: SemanticHeader, batch_size: int):
-        self.connection = db_connection
+    def __init__(self, semantic_header: SemanticHeader, batch_size: int):
+        self.connection = DatabaseConnection()
         self.semantic_header = semantic_header
         self.batch_size = batch_size
 

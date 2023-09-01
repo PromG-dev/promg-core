@@ -8,9 +8,10 @@ from ..utilities.performance_handling import Performance
 
 
 class DBManagement:
-    def __init__(self, db_connection: DatabaseConnection, db_name):
-        self.connection = db_connection
-        self.db_name = db_name
+    def __init__(self):
+        self.connection = DatabaseConnection()
+        self.db_name = self.connection.db_name
+
 
     @Performance.track()
     def clear_db(self):
