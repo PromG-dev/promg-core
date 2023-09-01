@@ -90,3 +90,7 @@ class Performance(metaclass=Singleton):
     def save(self):
         os.makedirs(os.path.dirname(self.path), exist_ok=True)
         self.perf.to_csv(self.path, sep=";", decimal=",")
+
+    def finish_and_save(self):
+        self.finish()
+        self.save()

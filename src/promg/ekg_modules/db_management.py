@@ -1,4 +1,6 @@
-from typing import List, Set, Optional, Dict
+from typing import List, Set, Optional, Dict, Any
+
+from tabulate import tabulate
 
 from ..cypher_queries.db_managment_ql import DBManagementQueryLibrary as dbm_ql
 from ..data_managers.semantic_header import ConstructedNodes
@@ -12,7 +14,14 @@ class DBManagement:
         self.db_name = self.connection.db_name
 
     @Performance.track()
-    def clear_db(self, replace=True):
+    def clear_db(self, replace=True) -> None:
+        """
+        Replace or clear the entire database by a new one
+
+        Args:
+            replace: boolean to indicate whether the database may be replaced
+
+        """
         if replace:
             self.connection.exec_query(dbm_ql.get_replace_db_query, **{"db_name": self.db_name})
         else:
@@ -20,7 +29,10 @@ class DBManagement:
             self.connection.exec_query(dbm_ql.get_delete_nodes_query)
 
     @Performance.track()
-    def set_constraints(self):
+    def set_constraints(self) -> None:
+        """
+        Set constraints in Neo4j instance
+        """
         # # for implementation only (not required by schema or patterns)
         # self.connection.exec_query(dbm_ql.get_constraint_unique_event_id_query)
         #
@@ -33,8 +45,10 @@ class DBManagement:
 
     def get_all_rel_types(self) -> List[str]:
         """
-        Find all possible rel types
-        @return:
+        Get all relationship types that are present in Neo4j instance
+
+        Returns:
+            A list of strings with all relationship types present in the Neo4j instance
         """
 
         # execute the query and store the result
@@ -49,8 +63,10 @@ class DBManagement:
 
     def get_all_node_labels(self) -> Set[str]:
         """
-        Find all possible node labels
-        @return: Set of strings
+        Get all node labels that are present in Neo4j instance
+
+        Returns:
+            A list of strings with all node labels present in the Neo4j instance
         """
 
         # execute the query and store the result
@@ -64,6 +80,13 @@ class DBManagement:
         return result
 
     def get_statistics(self) -> List[Dict[str, any]]:
+        """
+        Get the count of nodes per label and the count of relationships per type
+
+        Returns:
+            A list containing dictionaries with the label/relationship and its count
+        """
+
         def make_empty_list_if_none(_list: Optional[List[Dict[str, str]]]):
             if _list is not None:
                 return _list
@@ -79,13 +102,29 @@ class DBManagement:
             make_empty_list_if_none(agg_edge_count)
         return result
 
-    def get_event_log(self, entity: ConstructedNodes, additional_event_attributes: List[str]):
+    def print_statistics(self) -> None:
+        """
+        Print the statistics nicely using tabulate
+        """
+        print(tabulate(self.get_statistics()))
+
+    def get_event_log(self, entity: ConstructedNodes, additional_event_attributes: Optional[List[str]] = None) -> \
+            Optional[List[Dict[str, Any]]]:
+        """
+        Get an event log extracted from the EKG for a specific entity and return it
+
+        Args:
+            entity: The entity for which we want to extract an event log
+            additional_event_attributes: list of different attributes of event that should also be stored in the
+            event log
+
+        Returns:
+            A list of events with its attributes in the form of a dictionary
+        """
+        if additional_event_attributes is None:
+            additional_event_attributes = []
         return self.connection.exec_query(dbm_ql.get_event_log_query,
                                           **{
                                               "entity": entity,
                                               "additional_event_attributes": additional_event_attributes
                                           })
-
-    @Performance.track("query_function")
-    def do_custom_query(self, query_function, **kwargs):
-        return self.connection.exec_query(query_function, **kwargs)
