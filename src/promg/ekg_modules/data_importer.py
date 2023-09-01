@@ -6,14 +6,14 @@ from tqdm import tqdm
 
 from ..data_managers.semantic_header import RecordConstructor
 from ..database_managers.db_connection import DatabaseConnection
-from ..data_managers.datastructures import ImportedDataStructures
+from ..data_managers.datastructures import DatasetDescriptions
 from ..utilities.performance_handling import Performance
 from ..cypher_queries.data_importer_ql import DataImporterQueryLibrary as di_ql
 import pandas as pd
 
 
 class Importer:
-    def __init__(self, data_structures: ImportedDataStructures,
+    def __init__(self, data_structures: DatasetDescriptions,
                  records: List["RecordConstructor"],
                  use_sample: bool = False, use_preprocessed_files: bool = False):
         self.connection = DatabaseConnection()

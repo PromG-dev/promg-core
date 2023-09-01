@@ -500,7 +500,7 @@ class DataStructure:
         return attribute_value_pairs
 
 
-class ImportedDataStructures:
+class DatasetDescriptions:
     def __init__(self, path: Path):
         random.seed(1)
         with open(path, encoding='utf-8') as f:
