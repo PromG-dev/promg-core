@@ -1,51 +1,42 @@
 import os
-from typing import List, Set, Optional, Dict
+from typing import List, Optional
 
-from .db_connection import DatabaseConnection
 from ..data_managers.semantic_header import SemanticHeader
-from ..data_managers.datastructures import ImportedDataStructures
-from ..ekg_modules.ekg_analysis import EKGAnalysis
+from ..data_managers.datastructures import DatasetDescriptions
 from ..ekg_modules.ekg_builder_semantic_header import EKGUsingSemanticHeaderBuilder
-from ..ekg_modules.db_management import DBManagement
 from ..ekg_modules.data_importer import Importer
-from ..ekg_modules.inference_engine import InferenceEngine
-from ..ekg_modules.task_identification import TaskIdentification
 from ..utilities.performance_handling import Performance
 
-from tabulate import tabulate
-import pandas as pd
 
-
-# ensure to allocate enough memory to your database: dbms.memory.heap.max_size=5G advised
-class OCEDPG:
+class OcedPg:
     """
     This is a Class that acts as a facade for used to extract, load and transform their data using OCED-PG
 
-    :param specification_of_data_structures: A specification of how the data sets are structured
-    :type specification_of_data_structures: ImportedDataStructures
+    :param dataset_descriptions: A specification of how the data sets are structured
+    :type dataset_descriptions: DatasetDescriptions
     :param semantic_header: a :class:SemanticHeader class describing the semantics of the EKG
     :type semantic_header: SemanticHeader
     :param perf: a :class:Performance to keep track of the running time of the EKG construction
     :type perf: Performance
-    :param batch_size: the batch_size used when calling apoc.periodic.iterate --> reduce required memory, defaults to
-    5000
-    :type batch_size: int
     :param use_sample: boolean indicating whether the DB should be build using a sample as specified in the
     ImportedDataStructures, defaults to False
     :type use_sample: bool
 
     """
 
-    def __init__(self, specification_of_data_structures: ImportedDataStructures,
-                 batch_size: int = 5000, use_sample: bool = False, use_preprocessed_files: bool = False,
+    def __init__(self, dataset_descriptions: DatasetDescriptions,
+                 use_sample: bool = False, use_preprocessed_files: bool = False,
                  semantic_header: SemanticHeader = None):
         # classes responsible for executing queries
-        self.data_importer = Importer(data_structures=specification_of_data_structures,
+        self.data_importer = Importer(data_structures=dataset_descriptions,
                                       records=semantic_header.records,
-                                      batch_size=batch_size,
-                                      use_sample=use_sample, use_preprocessed_files=use_preprocessed_files)
-        self.ekg_builder = EKGUsingSemanticHeaderBuilder(semantic_header=semantic_header,
-                                                         batch_size=batch_size)
+                                      use_sample=use_sample,
+                                      use_preprocessed_files=use_preprocessed_files)
+        self.ekg_builder = EKGUsingSemanticHeaderBuilder(semantic_header=semantic_header)
+
+    def run(self):
+        self.load()
+        self.transform()
 
     # region import events
     def load(self):
