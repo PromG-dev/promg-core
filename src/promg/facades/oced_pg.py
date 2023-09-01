@@ -119,13 +119,13 @@ class OcedPg:
         """
         self.ekg_builder.create_nodes_by_relations(node_types)
 
-    def create_df_edges(self) -> None:
+    def create_df_edges(self, entity_types: Optional[List[str]] = None, event_label: str = "Event") -> None:
         """
         Pass on method to ekg_builder to merge parallel directly follows in between batching events
 
         :return: None
         """
-        self.ekg_builder.create_df_edges()
+        self.ekg_builder.create_df_edges(entity_types, event_label)
         self.ekg_builder.merge_duplicate_df()
         self.ekg_builder.delete_parallel_dfs_derived()
 
