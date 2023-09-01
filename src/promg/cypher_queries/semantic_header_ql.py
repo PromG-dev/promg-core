@@ -171,8 +171,7 @@ class SemanticHeaderQueryLibrary:
                            WITH $idt_properties, collect(n) as same_nodes, last_node, collection_size
                            CALL {WITH same_nodes, last_node
                                 MATCH (last_node)
-                                // last node could be the first of the list of same_nodes, we do not set to merged = 
-                                true
+                                // last node could be the first of the list of same_nodes, we do not set to merged=true
                                 // for this node
                                  WHERE size(same_nodes) = 1 and  head(same_nodes) <> last_node
                                  SET head(same_nodes).merged = True}             
