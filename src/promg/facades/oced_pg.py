@@ -3,8 +3,8 @@ from typing import List, Optional
 
 from ..data_managers.semantic_header import SemanticHeader
 from ..data_managers.datastructures import DatasetDescriptions
-from ..ekg_modules.ekg_builder_semantic_header import EKGUsingSemanticHeaderBuilder
-from ..ekg_modules.data_importer import Importer
+from ..modules.ekg_builder_semantic_header import EKGUsingSemanticHeaderBuilder
+from ..modules.data_importer import Importer
 from ..utilities.performance_handling import Performance
 
 
@@ -139,3 +139,12 @@ class OcedPg:
         :return: None
         """
         self.ekg_builder.delete_parallel_dfs_derived()
+
+    def create_static_nodes_and_relations(self) -> None:
+        """
+        Pass on method to ekg_builder to create static nodes and relations
+        No implementation yet
+
+        :return: None
+        """
+        self.ekg_builder.create_static_nodes_and_relations()

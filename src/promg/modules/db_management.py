@@ -1,9 +1,8 @@
-from typing import List, Set, Optional, Dict, Any
+from typing import List, Set, Optional, Dict
 
 from tabulate import tabulate
 
 from ..cypher_queries.db_managment_ql import DBManagementQueryLibrary as dbm_ql
-from ..data_managers.semantic_header import ConstructedNodes
 from ..database_managers.db_connection import DatabaseConnection
 from ..utilities.performance_handling import Performance
 
@@ -107,24 +106,3 @@ class DBManagement:
         Print the statistics nicely using tabulate
         """
         print(tabulate(self.get_statistics()))
-
-    def get_event_log(self, entity: ConstructedNodes, additional_event_attributes: Optional[List[str]] = None) -> \
-            Optional[List[Dict[str, Any]]]:
-        """
-        Get an event log extracted from the EKG for a specific entity and return it
-
-        Args:
-            entity: The entity for which we want to extract an event log
-            additional_event_attributes: list of different attributes of event that should also be stored in the
-            event log
-
-        Returns:
-            A list of events with its attributes in the form of a dictionary
-        """
-        if additional_event_attributes is None:
-            additional_event_attributes = []
-        return self.connection.exec_query(dbm_ql.get_event_log_query,
-                                          **{
-                                              "entity": entity,
-                                              "additional_event_attributes": additional_event_attributes
-                                          })
