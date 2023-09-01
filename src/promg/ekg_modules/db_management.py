@@ -1,6 +1,5 @@
 from typing import List, Set, Optional, Dict
 
-
 from ..cypher_queries.db_managment_ql import DBManagementQueryLibrary as dbm_ql
 from ..data_managers.semantic_header import ConstructedNodes
 from ..database_managers.db_connection import DatabaseConnection
@@ -8,14 +7,24 @@ from ..utilities.performance_handling import Performance
 
 
 class DBManagement:
-    def __init__(self):
+    def __init__(self, batch_size):
         self.connection = DatabaseConnection()
         self.db_name = self.connection.db_name
-
+        self.batch_size = batch_size
 
     @Performance.track()
-    def clear_db(self):
-        self.connection.exec_query(dbm_ql.get_clear_db_query, **{"db_name": self.db_name})
+    def clear_db(self, replace=True):
+        if replace:
+            self.connection.exec_query(dbm_ql.get_replace_db_query, **{"db_name": self.db_name})
+        else:
+            self.connection.exec_query(dbm_ql.get_delete_relationships_query,
+                                       **{
+                                           "batch_size": self.batch_size
+                                       })
+            self.connection.exec_query(dbm_ql.get_delete_nodes_query,
+                                       **{
+                                           "batch_size": self.batch_size
+                                       })
 
     @Performance.track()
     def set_constraints(self):
@@ -79,8 +88,10 @@ class DBManagement:
 
     def get_event_log(self, entity: ConstructedNodes, additional_event_attributes: List[str]):
         return self.connection.exec_query(dbm_ql.get_event_log_query,
-                                          **{"entity": entity,
-                                               "additional_event_attributes": additional_event_attributes})
+                                          **{
+                                              "entity": entity,
+                                              "additional_event_attributes": additional_event_attributes
+                                          })
 
     @Performance.track("query_function")
     def do_custom_query(self, query_function, **kwargs):
