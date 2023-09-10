@@ -25,7 +25,7 @@ class InferenceEngineQueryLibrary:
 
         return Query(query_str=query_str,
                      template_string_parameters={
-                         "entity": entity.node_type,
+                         "entity": entity.type,
                          "operation_type": "LOADS" if is_load else "UNLOADS",
                          "comparison": "<=" if is_load else ">=",
                          "order_type": "DESC" if is_load else ""
@@ -62,8 +62,8 @@ class InferenceEngineQueryLibrary:
 
         return Query(query_str=query_str,
                      template_string_parameters={
-                         "entity": entity.node_type,
-                         "relative_position": relative_position.node_type
+                         "entity": entity.type,
+                         "relative_position": relative_position.type
                      })
 
     @staticmethod
@@ -96,7 +96,7 @@ class InferenceEngineQueryLibrary:
 
         return Query(query_str=query_str,
                      template_string_parameters={
-                         "entity": entity.node_type
+                         "entity": entity.type
                      })
 
     @staticmethod
@@ -110,6 +110,6 @@ class InferenceEngineQueryLibrary:
 
         return Query(query_str=query_str,
                      template_string_parameters={
-                         "entity": entity.node_type,
-                         "relative_position": relative_position.node_type
+                         "entity": entity.type,
+                         "relative_position": relative_position.type
                      })
