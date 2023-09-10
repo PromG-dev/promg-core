@@ -51,7 +51,7 @@ class TaskIdentifierLibrary:
 
         return Query(query_str=query_str,
                      template_string_parameters={
-                         "resource_node_label": resource.node_type
+                         "resource_node_label": resource.type
                      })
 
     @staticmethod
@@ -117,7 +117,6 @@ class TaskIdentifierLibrary:
                  DETACH DELETE ti",
                 {batchSize:$batch_size})
                 '''
-        print(query_str)
 
         return Query(query_str=query_str)
 
@@ -129,7 +128,6 @@ class TaskIdentifierLibrary:
                 MATCH ()-[r:DF_JOINT]-()
                 DELETE r
                 '''
-        print(query_str)
 
         return Query(query_str=query_str)
 
@@ -145,11 +143,10 @@ class TaskIdentifierLibrary:
                     CREATE (ti)-[:CORR]->(n)",
                 {batchSize:$batch_size})
                     '''
-        print(query_str)
 
         return Query(query_str=query_str,
                      template_string_parameters={
-                         "entity_node_label": entity.node_type
+                         "entity_node_label": entity.type
                      })
 
     @staticmethod
@@ -168,11 +165,10 @@ class TaskIdentifierLibrary:
                     MERGE (ti_first)-[df:DF_TI_$entity_node_label]->(ti_second)",
                 {batchSize:$batch_size})
                     '''
-        print(query_str)
 
         return Query(query_str=query_str,
                      template_string_parameters={
-                         "entity_node_label": entity.node_type
+                         "entity_node_label": entity.type
                      })
 
     @staticmethod
@@ -187,7 +183,6 @@ class TaskIdentifierLibrary:
                   MERGE (ta:TaskAggregation {Type:'$property', id:id, count:count})",
                 {batchSize:$batch_size})
                 '''
-        print(query_str)
 
         return Query(query_str=query_str,
                      template_string_parameters={
@@ -229,5 +224,5 @@ class TaskIdentifierLibrary:
         return Query(query_str=query_str,
                      template_string_parameters={
                          "property": property,
-                         "entity_node_label": entity.node_type
+                         "entity_node_label": entity.type
                      })

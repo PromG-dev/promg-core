@@ -1,4 +1,5 @@
 import json
+import warnings
 from abc import ABC
 from pathlib import Path
 from string import Template
@@ -152,7 +153,7 @@ class Node:
             node_pattern_str = "$node_name:$node_label"
             if forbidden_label is not None:
                 sep = "&"
-                node_pattern_str+= "&!$forbidden_label"
+                node_pattern_str += "&!$forbidden_label"
 
         if name is None:
             node_pattern = Template(node_pattern_str).substitute(node_name=self.name,
@@ -558,15 +559,13 @@ class ConstructedNodes:
                  node_constructors: List["NodeConstructor"],
                  infer_df: bool,
                  include_label_in_df: bool,
-                 merge_duplicate_df: bool,
-                 delete_parallel_df: bool):
-        self.node_type = node_type
+                 merge_duplicate_df: bool):
+        self.type = node_type
         self.include = include
         self.node_constructors = node_constructors
         self.infer_df = infer_df
         self.include_label_in_df = include_label_in_df
         self.merge_duplicate_df = merge_duplicate_df
-        self.delete_parallel_df = delete_parallel_df
 
     def __repr__(self):
         return f"(:{self.get_label_string()})"
@@ -584,26 +583,24 @@ class ConstructedNodes:
         _infer_df = replace_undefined_value(obj.get("infer_df"), False)
         _include_label_in_df = _infer_df and replace_undefined_value(obj.get("include_label_in_df"), False)
         _merge_duplicate_df = _infer_df and replace_undefined_value(obj.get("merge_duplicate_df"), False)
-        _delete_parallel_df = _infer_df and obj.get("delete_parallel_df")
 
         constructed_node = ConstructedNodes(include=_include, node_constructors=node_constructors,
                                             node_type=_type,
                                             infer_df=_infer_df,
                                             include_label_in_df=_include_label_in_df,
-                                            merge_duplicate_df=_merge_duplicate_df,
-                                            delete_parallel_df=_delete_parallel_df)
+                                            merge_duplicate_df=_merge_duplicate_df)
 
         # TODO check whether names match
         return constructed_node
 
     def get_label_string(self):
         if len(self.node_constructors) == 0:
-            return self.node_type
+            return self.type
         return self.node_constructors[0].get_label_string()
 
     def get_labels(self):
         if len(self.node_constructors) == 0:
-            return self.node_type
+            return self.type
         return self.node_constructors[0].get_labels()
 
     def get_corr_type_strings(self):
@@ -612,9 +609,16 @@ class ConstructedNodes:
 
     def get_df_label(self):
         if self.include_label_in_df:
-            return f'DF_{self.node_type.upper()}'
+            return f'DF_{self.type.upper()}'
         else:
             return f'DF'
+
+    def get_df_a_label(self, include_label_in_df_a: bool = None):
+        include_label_in_df_a = self.include_label_in_df if include_label_in_df_a is None else include_label_in_df_a
+        if include_label_in_df_a:
+            return f'DF_A_{self.type.upper()}'
+        else:
+            return f'DF_A'
 
 
 class RelationConstructor:
@@ -626,7 +630,8 @@ class RelationConstructor:
                  result: "Relationship",
                  optional_properties: List[Property],
                  model_as_node: bool,
-                 infer_corr_from_reified_parents: bool):
+                 infer_corr_from_reified_parents: bool,
+                 corr_type: str):
         self.prevalent_record = prevalent_record
         self.from_node = from_node
         self.to_node = to_node
@@ -636,9 +641,10 @@ class RelationConstructor:
         self.optional_properties = optional_properties
         self.model_as_node = model_as_node
         self.infer_corr_from_reified_parents = infer_corr_from_reified_parents
+        self.corr_type = corr_type
 
     @staticmethod
-    def from_dict(obj: Any) -> "RelationConstructor":
+    def from_dict(obj: Any, model_as_node: bool) -> "RelationConstructor":
         _prevalent_record = RelationshipOrNode.from_string(obj.get("prevalent_record"))
         _nodes = create_list(Node, obj.get("nodes"))
         _relations = create_list(Relationship, obj.get("relations"))
@@ -650,8 +656,8 @@ class RelationConstructor:
             _optional_properties = _optional_properties.split(",")
             _optional_properties = [Property.from_string(prop) for prop in _optional_properties]
 
-        _model_as_node = replace_undefined_value(obj.get("model_as_node"), False)
         _infer_corr_from_reified_parents = replace_undefined_value(obj.get("infer_corr_from_reified_parents"), False)
+        _corr_type = replace_undefined_value(obj.get("corr_type"), "CORR")
 
         return RelationConstructor(prevalent_record=_prevalent_record,
                                    relations=_relations,
@@ -660,8 +666,9 @@ class RelationConstructor:
                                    to_node=_to_node,
                                    result=_result,
                                    optional_properties=_optional_properties,
-                                   model_as_node=_model_as_node,
-                                   infer_corr_from_reified_parents=_infer_corr_from_reified_parents)
+                                   model_as_node=model_as_node,
+                                   infer_corr_from_reified_parents=_infer_corr_from_reified_parents,
+                                   corr_type=_corr_type)
 
     def __name__(self):
         if self.prevalent_record is not None:
@@ -715,12 +722,22 @@ class RelationConstructor:
         relation_query = "\n".join(relation_queries)
         return relation_query
 
+    def get_type_string(self):
+        return self.result.get_relation_types_str()
+
+    def get_types(self):
+        return self.result.relation_types
+
 
 @dataclass
 class ConstructedRelation:
     include: bool
     type: str
     relation_constructors: List["RelationConstructor"]
+    model_as_node: bool
+    infer_df: bool
+    include_label_in_df: bool
+    merge_duplicate_df: bool
 
     @staticmethod
     def from_dict(obj: Any) -> Optional["ConstructedRelation"]:
@@ -731,11 +748,54 @@ class ConstructedRelation:
             return None
 
         _type = obj.get("type")
-        _relation_constructors = create_list(RelationConstructor, obj.get("constructor"))
-        return ConstructedRelation(_include, _type, relation_constructors=_relation_constructors)
+        _model_as_node = replace_undefined_value(obj.get("model_as_node"), False)
+        _relation_constructors = create_list(RelationConstructor, obj.get("constructor"), _model_as_node)
+        _infer_df = replace_undefined_value(obj.get("infer_df"), False)
+        _include_label_in_df = _infer_df and replace_undefined_value(obj.get("include_label_in_df"), False)
+        _merge_duplicate_df = _infer_df and replace_undefined_value(obj.get("merge_duplicate_df"), False)
+
+        if not _model_as_node and _infer_df:
+            warnings.warn("Cannot infer df for relations that are modeled as edges")
+        return ConstructedRelation(_include, _type,
+                                   relation_constructors=_relation_constructors,
+                                   model_as_node=_model_as_node,
+                                   infer_df=_infer_df,
+                                   include_label_in_df=_include_label_in_df,
+                                   merge_duplicate_df=_merge_duplicate_df
+                                   )
 
     def __repr__(self):
         return f"[:{self.type}]"
+
+    def get_label_string(self):
+        if self.model_as_node:
+            if len(self.relation_constructors) == 0:
+                return self.type
+            return self.relation_constructors[0].get_type_string()
+        else:
+            raise ValueError("Relationship is not modelled as node, hence does not have a label string."
+                             "Set model_as_node = true in Semantic Header")
+
+    def get_labels(self):
+        if len(self.relation_constructors) == 0:
+            return self.type
+        return self.relation_constructors[0].get_types()
+
+    def get_corr_type_strings(self):
+        corr_types = list(set([node_constructor.corr_type for node_constructor in self.relation_constructors]))
+        return "|".join(corr_types)
+
+    def get_df_label(self):
+        if self.include_label_in_df:
+            return f'DF_{self.type.upper()}'
+        else:
+            return f'DF'
+
+    def get_df_a_label(self):
+        if self.include_label_in_df:
+            return f'DF_A_{self.type.upper()}'
+        else:
+            return f'DF_A'
 
 
 class RecordConstructor:
@@ -825,8 +885,8 @@ class SemanticHeader(metaclass=Singleton):
         self.relations = relations
 
     def get_entity(self, entity_type) -> Optional[ConstructedNodes]:
-        for entity in self.nodes:
-            if entity_type == entity.node_type:
+        for entity in self.nodes + self.relations:
+            if entity_type == entity.type:
                 return entity
         return None
 
@@ -857,26 +917,23 @@ class SemanticHeader(metaclass=Singleton):
     def get_node_by_record_constructors(self, node_types: Optional[List[str]]) -> List[NodeConstructor]:
         node_constructors = []
         for node in self.nodes:
-            if node_types is None or node.node_type in node_types:
+            if node_types is None or node.type in node_types:
                 node_constructors.extend([
                     node_constructor for node_constructor in node.node_constructors if
                     node_constructor.constructed_by_record()
                 ])
         return node_constructors
 
-    def get_nodes_constructed_by_relations(self, node_types: Optional[List[str]] = None,
-                                           only_include_delete_parallel_df=False) -> Dict[
+    def get_nodes_constructed_by_relations(self, node_types: Optional[List[str]] = None) -> Dict[
         str, List[NodeConstructor]]:
         node_constructors = {}
         for node in self.nodes:
-            if only_include_delete_parallel_df and not node.delete_parallel_df:
-                continue
-            if node_types is None or node.node_type in node_types:
+            if node_types is None or node.type in node_types:
                 for node_constructor in node.node_constructors:
                     if node_constructor.constructed_by_relation():
-                        if node.node_type not in node_constructors:
-                            node_constructors[node.node_type] = []
-                        node_constructors[node.node_type].append(node_constructor)
+                        if node.type not in node_constructors:
+                            node_constructors[node.type] = []
+                        node_constructors[node.type].append(node_constructor)
         return node_constructors
 
     def get_entities_constructed_by_query(self):

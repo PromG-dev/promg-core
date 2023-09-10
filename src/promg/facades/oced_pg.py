@@ -127,7 +127,6 @@ class OcedPg:
         """
         self.ekg_builder.create_df_edges(entity_types, event_label)
         self.ekg_builder.merge_duplicate_df()
-        self.ekg_builder.delete_parallel_dfs_derived()
 
     def create_static_nodes_and_relations(self) -> None:
         """
