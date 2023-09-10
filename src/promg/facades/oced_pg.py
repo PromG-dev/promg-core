@@ -30,7 +30,7 @@ class OcedPg:
                                       use_preprocessed_files=use_preprocessed_files)
         self.ekg_builder = EKGUsingSemanticHeaderBuilder()
 
-    def run(self):
+    def load_and_transform(self):
         self.load()
         self.transform()
 
