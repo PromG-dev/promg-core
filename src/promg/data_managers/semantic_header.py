@@ -1,4 +1,5 @@
 import json
+import warnings
 from abc import ABC
 from pathlib import Path
 from string import Template
@@ -152,7 +153,7 @@ class Node:
             node_pattern_str = "$node_name:$node_label"
             if forbidden_label is not None:
                 sep = "&"
-                node_pattern_str+= "&!$forbidden_label"
+                node_pattern_str += "&!$forbidden_label"
 
         if name is None:
             node_pattern = Template(node_pattern_str).substitute(node_name=self.name,
@@ -626,7 +627,8 @@ class RelationConstructor:
                  result: "Relationship",
                  optional_properties: List[Property],
                  model_as_node: bool,
-                 infer_corr_from_reified_parents: bool):
+                 infer_corr_from_reified_parents: bool,
+                 corr_type: str):
         self.prevalent_record = prevalent_record
         self.from_node = from_node
         self.to_node = to_node
@@ -636,6 +638,7 @@ class RelationConstructor:
         self.optional_properties = optional_properties
         self.model_as_node = model_as_node
         self.infer_corr_from_reified_parents = infer_corr_from_reified_parents
+        self.corr_type = corr_type
 
     @staticmethod
     def from_dict(obj: Any) -> "RelationConstructor":
@@ -652,6 +655,7 @@ class RelationConstructor:
 
         _model_as_node = replace_undefined_value(obj.get("model_as_node"), False)
         _infer_corr_from_reified_parents = replace_undefined_value(obj.get("infer_corr_from_reified_parents"), False)
+        _corr_type = replace_undefined_value(obj.get("corr_type"), "CORR")
 
         return RelationConstructor(prevalent_record=_prevalent_record,
                                    relations=_relations,
@@ -661,7 +665,8 @@ class RelationConstructor:
                                    result=_result,
                                    optional_properties=_optional_properties,
                                    model_as_node=_model_as_node,
-                                   infer_corr_from_reified_parents=_infer_corr_from_reified_parents)
+                                   infer_corr_from_reified_parents=_infer_corr_from_reified_parents,
+                                   corr_type=_corr_type)
 
     def __name__(self):
         if self.prevalent_record is not None:
@@ -721,6 +726,11 @@ class ConstructedRelation:
     include: bool
     type: str
     relation_constructors: List["RelationConstructor"]
+    modelled_as_node: bool
+    infer_df: bool
+    include_label_in_df: bool
+    merge_duplicate_df: bool
+    delete_parallel_df: bool
 
     @staticmethod
     def from_dict(obj: Any) -> Optional["ConstructedRelation"]:
@@ -732,7 +742,22 @@ class ConstructedRelation:
 
         _type = obj.get("type")
         _relation_constructors = create_list(RelationConstructor, obj.get("constructor"))
-        return ConstructedRelation(_include, _type, relation_constructors=_relation_constructors)
+        _modelled_as_node = any([relation_constructor.model_as_node for relation_constructor in _relation_constructors])
+        _infer_df = replace_undefined_value(obj.get("infer_df"), False)
+        _include_label_in_df = _infer_df and replace_undefined_value(obj.get("include_label_in_df"), False)
+        _merge_duplicate_df = _infer_df and replace_undefined_value(obj.get("merge_duplicate_df"), False)
+        _delete_parallel_df = _infer_df and obj.get("delete_parallel_df")
+
+        if not _modelled_as_node and _infer_df:
+            warnings.warn("Cannot infer df for relations that are modeled as edges")
+        return ConstructedRelation(_include, _type,
+                                   relation_constructors=_relation_constructors,
+                                   modelled_as_node = _modelled_as_node,
+                                   infer_df=_infer_df,
+                                   include_label_in_df=_include_label_in_df,
+                                   merge_duplicate_df=_merge_duplicate_df,
+                                   delete_parallel_df=_delete_parallel_df
+                                   )
 
     def __repr__(self):
         return f"[:{self.type}]"
