@@ -1,7 +1,8 @@
 from string import Template
+from typing import Union
 
 from ..data_managers.semantic_header import ConstructedNodes, NodeConstructor, Node, \
-    RelationConstructor, RecordConstructor
+    RelationConstructor, RecordConstructor, ConstructedRelation
 from ..database_managers.db_connection import Query
 
 
@@ -207,7 +208,7 @@ class SemanticHeaderQueryLibrary:
                 MATCH (e:Event) --> ($node) - [:$from_or_to] - (relation:$relation_label_str)
                 WHERE NOT EXISTS ((e) - [:CORR] -> (relation))
                 WITH DISTINCT relation, e limit $limit
-                MERGE (e) - [:CORR] -> (relation)
+                MERGE (e) - [:$corr_type] -> (relation)
                 RETURN COUNT(*)',
                 {limit:$batch_size}
                 )       
@@ -217,7 +218,8 @@ class SemanticHeaderQueryLibrary:
                      template_string_parameters={
                          "node": node,
                          "from_or_to": from_or_to,
-                         "relation_label_str": relation_constructor.result.get_relation_types_str()
+                         "relation_label_str": relation_constructor.result.get_relation_types_str(),
+                         "corr_type": relation_constructor.corr_type
                      })
 
     @staticmethod
@@ -317,7 +319,7 @@ class SemanticHeaderQueryLibrary:
                      })
 
     @staticmethod
-    def get_create_directly_follows_query(entity: ConstructedNodes, event_label) -> Query:
+    def get_create_directly_follows_query(entity: Union[ConstructedNodes, ConstructedRelation], event_label) -> Query:
         # find the specific entities and events with a certain label correlated to that entity
         # order all events by time, order_nr and id grouped by a node n
         # collect the sorted nodes as a list
@@ -327,7 +329,7 @@ class SemanticHeaderQueryLibrary:
         # language=sql
 
         if event_label == "CompoundEvent":
-            if entity.node_type == "Resource":
+            if entity.type == "Resource":
                 query_str = '''
                      CALL apoc.periodic.iterate(
                         'MATCH (n:$entity_labels_string) <-[:$corr_type_string]- (e:$event_label)
@@ -384,13 +386,14 @@ class SemanticHeaderQueryLibrary:
                                 {batchSize: $batch_size})
                             '''
 
+
         return Query(query_str=query_str,
                      template_string_parameters={
                          "entity_labels_string": entity.get_label_string(),
                          "corr_type_string": entity.get_corr_type_strings(),
                          "event_label": event_label,
                          "df_entity": entity.get_df_label(),
-                         "entity_type": entity.node_type
+                         "entity_type": entity.type
                      })
 
     @staticmethod
@@ -410,21 +413,7 @@ class SemanticHeaderQueryLibrary:
                     '''
         return Query(query_str=query_str,
                      template_string_parameters={
-                         "entity_type": node.node_type,
+                         "entity_type": node.type,
                          "df_entity": node.get_df_label()
                      })
 
-    @staticmethod
-    def delete_parallel_directly_follows_derived(_type: str, node: Node):
-        # language=sql
-        query_str = '''
-            MATCH (e1:Event) -[df:DF {entityType: "$type"}]-> (e2:Event)
-            WHERE (e1:Event) -[:DF {entityType: "$original_entity_type"}]-> (e2:Event)
-            DELETE df'''
-
-        return Query(query_str=query_str,
-                     template_string_parameters={
-                         "type": _type,
-                         "original_entity_type": node.get_label_str()
-                     },
-                     parameters={})
