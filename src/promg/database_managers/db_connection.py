@@ -4,6 +4,10 @@ from typing import Optional, List, Dict, Any
 import neo4j
 from neo4j import GraphDatabase
 
+from . import authentication
+from .authentication import Credentials
+from ..utilities.singleton import Singleton
+
 
 class Query:
     def __init__(self, query_str: str, database: str = None, parameters: Optional[Dict[str, any]] = None,
@@ -16,12 +20,13 @@ class Query:
         self.database = database
 
 
-class DatabaseConnection(object):
-
-    def __init__(self, uri: str, db_name: str, user: str, password: str, verbose: bool = False):
+class DatabaseConnection(metaclass=Singleton):
+    def __init__(self, uri: str, db_name: str, user: str, password: str, verbose: bool = False,
+                 batch_size: int = 100000):
         self.db_name = db_name
         self.driver = self.start_connection(uri, user, password)
         self.verbose = verbose
+        self.batch_size = batch_size
 
     @staticmethod
     def start_connection(uri: str, user: str, password: str):
@@ -42,7 +47,10 @@ class DatabaseConnection(object):
         database = result.database
         if kwargs is None:
             kwargs = {}  # replace None value by an emtpy dictionary
-
+        if "$batch_size" in query:
+            kwargs["batch_size"] = self.batch_size
+        if "$limit" in query:
+            kwargs["limit"] = self.batch_size
 
         if "apoc.periodic.commit" in query:
             limit = kwargs["limit"]
@@ -51,9 +59,9 @@ class DatabaseConnection(object):
             while failed_batches > 0 and attempts <= 10:
                 result = self._exec_query(query, database, **kwargs)
                 failed_batches = result[0]['failedBatches']
-                kwargs["limit"] = int(limit/2)
-                kwargs["limit"] = max(10000, kwargs["limit"])
-                attempts +=1
+                kwargs["batch_size"] = int(limit / 2)
+                kwargs["batch_size"] = max(10000, kwargs["batch_size"])
+                attempts += 1
             if failed_batches > 0:
                 raise Exception(f"Maximum attempts reached: {result[0]['batchErrors']}")
 
@@ -98,3 +106,17 @@ class DatabaseConnection(object):
         with self.driver.session(database=database) as session:
             result = session.write_transaction(run_query, query, **kwargs)
             return result
+
+    @staticmethod
+    def set_up_connection(
+            credentials: Credentials = authentication.connections_map[authentication.Connections.LOCAL],
+            verbose: bool = False,
+            batch_size: int = 100000):
+        return DatabaseConnection(db_name=credentials.user, uri=credentials.uri, user=credentials.user,
+                                  password=credentials.password, verbose=verbose, batch_size=batch_size)
+
+    @staticmethod
+    def set_up_connection_using_key(key=authentication.Connections.LOCAL, verbose: bool = False,
+                                    batch_size: int = 100000):
+        credentials = authentication.connections_map[key]
+        return DatabaseConnection.set_up_connection(credentials, verbose, batch_size=batch_size)

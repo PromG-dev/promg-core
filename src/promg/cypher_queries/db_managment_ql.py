@@ -40,6 +40,43 @@ class DBManagementQueryLibrary:
         return Query(query_str=query_str, database="system", template_string_parameters={"db_name": db_name})
 
     @staticmethod
+    def get_delete_relationships_query() -> Query:
+        # language=SQL
+        query_str = '''
+                    CALL apoc.periodic.iterate(
+                        "MATCH () - [r] -> () return id(r) as id", 
+                        "MATCH () - [r] -> () WHERE id(r) = id DELETE r", 
+                        {batchSize:$batch_size})
+                    yield batches, total 
+                    RETURN batches, total
+                '''
+
+        return Query(query_str=query_str)
+
+    @staticmethod
+    def get_delete_nodes_query() -> Query:
+        # language=SQL
+        query_str = '''
+                CALL apoc.periodic.iterate(
+                    "MATCH (n) return id(n) as id", 
+                    "MATCH (n) WHERE id(n) = id DETACH DELETE n", {batchSize:$batch_size})
+                yield batches, total 
+                RETURN batches, total
+            '''
+
+        return Query(query_str=query_str)
+
+    @staticmethod
+    def get_replace_db_query(db_name) -> Query:
+        # language=SQL
+        query_str = '''
+                    CREATE OR REPLACE DATABASE $db_name
+                    WAIT
+                '''
+
+        return Query(query_str=query_str, database="system", template_string_parameters={"db_name": db_name})
+
+    @staticmethod
     def get_constraint_unique_event_id_query() -> Query:
         # language=SQL
         query_str = '''
@@ -137,18 +174,3 @@ class DBManagementQueryLibrary:
             '''
 
         return Query(query_str=query_str)
-
-    @staticmethod
-    def get_event_log_query(entity: ConstructedNodes, additional_event_attributes) -> Query:
-        query_str = '''
-                MATCH (e:Event) - [:CORR] -> (n:$node_label)
-                RETURN n.sysId as caseId, e.activity as activity, e.timestamp as timestamp $extra_attributes
-                ORDER BY n.ID, e.timestamp
-            '''
-
-        attributes_query = ",".join(f"e.{attribute} as {attribute}" for attribute in additional_event_attributes)
-        return Query(query_str=query_str,
-                     template_string_parameters={
-                         "node_label": entity.get_label_string(),
-                         "extra_attributes": f", {attributes_query}" if len(additional_event_attributes) > 0 else ""
-                     })
