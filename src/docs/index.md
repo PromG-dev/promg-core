@@ -12,8 +12,25 @@ This site contains the project documentation for `PromG`.
 
 1. [Tutorials](tutorials.md)
 2. [How-To Guides](how-to-guides.md)
-3. [Reference](reference.md)
+3. [Modules](module-0verview.md)
+    1. Database Management Modules
+        1. [Database Manager](module:db-management.md)
+    2. Data Storage
+        1. [Data Importer](module-data-importer.md)
+        2. [Transformer](module-transformer.md)
+        3. [Exporter](module-exporter.md)
+    3. Inference
+        1. [Inference Engine](module-inference_engine.md)
+    4. Analysis
+        1. [Process Model Disovery](module-process_discovery.md)
 4. [Explanation](explanation.md)
+
+5. PromG Documentation: index.md
+tutorials.md
+  - How-To Guides: how-to-guides.md
+  - Modules:
+      - 
+  - explanation.md
 
 Quickly find what you're looking for depending on
 your use case by looking at the different pages.
