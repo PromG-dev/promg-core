@@ -27,7 +27,7 @@ class DataImporterQueryLibrary:
         return optional_label_str
 
     @staticmethod
-    def get_label_constructors(record_constructors: List[Dict[bool, RecordConstructor]]):
+    def get_label_constructors(record_constructors: List[Dict[str, RecordConstructor]]):
         required_labels = ['Record']
         optional_labels = []
         record_name = "record"
