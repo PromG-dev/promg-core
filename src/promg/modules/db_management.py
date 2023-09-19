@@ -8,18 +8,46 @@ from ..utilities.performance_handling import Performance
 
 
 class DBManagement:
+    """
+        Create DBManagement module
+        Examples:
+            >>> from promg.modules.db_management import DBManagement
+            >>> db_manager = DBManagement()
+    """
+
     def __init__(self):
         self.connection = DatabaseConnection()
         self.db_name = self.connection.db_name
 
     @Performance.track()
-    def clear_db(self, replace=True) -> None:
+    def clear_db(self, replace: bool = True) -> None:
         """
-        Replace or clear the entire database by a new one
+        Replace or clear the entire database by a new one.
+
+        Note:
+            Note about difference between replacing and clearing.
+
+            - Replace: results in an Empty database that is completely replaced with a new database.
+                - Replacing a database is faster than clearing a database.
+                - Only possible when
+                    - you have an enterprise license
+                    - you are running a local instance on the free desktop version
+
+            - Clear: Results in an empty database, however constraints are still in place.
+                - Clearing a database takes longer
+                - Independent of license
 
         Args:
             replace: boolean to indicate whether the database may be replaced
 
+        Examples:
+            >>> db_manager.clear(replace=True)
+            Results in an Empty database that is completely replaced with a new database
+                (i.e. constraints are also removed)
+
+            >>> db_manager.clear(replace=False)
+            Results in an empty database, however constraints are still in place.
+            Clearing an entire database takes longer.
         """
         if replace:
             self.connection.exec_query(dbm_ql.get_replace_db_query, **{"db_name": self.db_name})
@@ -30,7 +58,13 @@ class DBManagement:
     @Performance.track()
     def set_constraints(self) -> None:
         """
-        Set constraints in Neo4j instance
+        Set constraints in Neo4j instance.
+
+        - sysId property is used as index for (:Entity) nodes
+
+        Examples:
+            >>> db_managers.set_constraints()
+            sysId is used as index for (:Entity) nodes
         """
         # # for implementation only (not required by schema or patterns)
         # self.connection.exec_query(dbm_ql.get_constraint_unique_event_id_query)
