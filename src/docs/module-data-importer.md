@@ -3,8 +3,9 @@
 ### ::: promg.modules.data_importer
     options:
         members_order: source
-        show_source: true
+        show_source: false
         allow_inspection: true
+        show_root_toc_entry: false
 
 
 
