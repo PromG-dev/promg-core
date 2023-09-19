@@ -3,7 +3,7 @@ from typing import List, Optional
 
 from ..data_managers.semantic_header import SemanticHeader
 from ..data_managers.datastructures import DatasetDescriptions
-from ..modules.ekg_builder_semantic_header import EKGUsingSemanticHeaderBuilder
+from ..modules.transformer import Transformer
 from ..modules.data_importer import Importer
 from ..utilities.performance_handling import Performance
 
@@ -28,7 +28,7 @@ class OcedPg:
         self.data_importer = Importer(data_structures=dataset_descriptions,
                                       use_sample=use_sample,
                                       use_preprocessed_files=use_preprocessed_files)
-        self.ekg_builder = EKGUsingSemanticHeaderBuilder()
+        self.ekg_builder = Transformer()
 
     def load_and_transform(self):
         self.load()
