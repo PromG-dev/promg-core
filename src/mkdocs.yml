@@ -12,6 +12,12 @@ nav:
   - tutorials.md
   - How-To Guides: how-to-guides.md
   - Modules:
-      - Database Manager: db-management.md
-      - Data Importer: data-importer.md
+      - Database Manager: module-db-management.md
+      - Data Importer: module-data-importer.md
+      - Database Manager: module:db-management.md
+      - Data Importer: module-data-importer.md
+      - Transformer: module-transformer.md
+      - Exporter: module-exporter.md
+      - Inference Engine: module-inference_engine.md
+      - Process Model Discovery: module-process_discovery.md
   - explanation.md
