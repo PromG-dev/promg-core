@@ -30,8 +30,8 @@ class DBManagement:
             - Replace: results in an Empty database that is completely replaced with a new database.
                 - Replacing a database is faster than clearing a database.
                 - Only possible when
-                    - you have an enterprise license
-                    - you are running a local instance on the free desktop version
+                    - you have an Neo4j enterprise license
+                    - you are running a local instance on the free Neo4j desktop version
 
             - Clear: Results in an empty database, however constraints are still in place.
                 - Clearing a database takes longer
