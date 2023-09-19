@@ -397,7 +397,7 @@ class SemanticHeaderQueryLibrary:
                      })
 
     @staticmethod
-    def get_merge_duplicate_df_entity_query(node: ConstructedNodes) -> Query:
+    def get_merge_duplicate_df_entity_query(node: Union[ConstructedNodes, ConstructedRelation]) -> Query:
 
         # language=sql
         query_str = '''
