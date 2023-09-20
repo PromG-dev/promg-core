@@ -6,6 +6,12 @@ from ..database_managers.db_connection import DatabaseConnection
 
 
 class InferenceEngine:
+    """
+        Create Inference Engine module
+        Examples:
+            >>> from promg.modules.inference_engine import InferenceEngine
+            >>> inference_engine = InferenceEngine()
+    """
     def __init__(self):
         self.connection = DatabaseConnection()
 
