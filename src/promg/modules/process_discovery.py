@@ -5,6 +5,12 @@ from ..cypher_queries.process_discovery_ql import AnalysisQueryLibrary as analys
 
 
 class ProcessDiscovery:
+    """
+        Create ProcessDiscovery module
+        Examples:
+            >>> from promg.modules.process_discovery import ProcessDiscovery
+            >>> process_discovery = ProcessDiscovery()
+    """
     def __init__(self):
         self.connection = DatabaseConnection()
 
@@ -17,6 +23,10 @@ class ProcessDiscovery:
 
         Raises:
             ValueError: when the entity has not been defined
+
+        Examples:
+            >>> process_discovery.create_df_process_model(entity_type="Book")
+            A process model is created from the (:Book) perspective
         """
         entity = SemanticHeader().get_entity(entity_type)
         if entity_type is None:
