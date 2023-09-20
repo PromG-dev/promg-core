@@ -26,6 +26,9 @@
     
       <link rel="stylesheet" href="../assets/stylesheets/main.0e669242.min.css">
       
+        
+        <link rel="stylesheet" href="../assets/stylesheets/palette.85d0ee34.min.css">
+      
       
 
 
@@ -55,7 +58,14 @@
   </head>
   
   
-    <body dir="ltr">
+    
+    
+      
+    
+    
+    
+    
+    <body dir="ltr" data-md-color-scheme="default" data-md-color-primary="indigo" data-md-color-accent="indigo">
   
     
     
@@ -109,6 +119,32 @@
         </div>
       </div>
     </div>
+    
+      
+        <form class="md-header__option" data-md-component="palette">
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="" data-md-color-scheme="default" data-md-color-primary="indigo" data-md-color-accent="indigo"  aria-label="Switch to dark mode"  type="radio" name="__palette" id="__palette_1">
+    
+      <label class="md-header__button md-icon" title="Switch to dark mode" for="__palette_2" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a4 4 0 0 0-4 4 4 4 0 0 0 4 4 4 4 0 0 0 4-4 4 4 0 0 0-4-4m0 10a6 6 0 0 1-6-6 6 6 0 0 1 6-6 6 6 0 0 1 6 6 6 6 0 0 1-6 6m8-9.31V4h-4.69L12 .69 8.69 4H4v4.69L.69 12 4 15.31V20h4.69L12 23.31 15.31 20H20v-4.69L23.31 12 20 8.69Z"/></svg>
+      </label>
+    
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="" data-md-color-scheme="slate" data-md-color-primary="indigo" data-md-color-accent="indigo"  aria-label="Switch to light mode"  type="radio" name="__palette" id="__palette_2">
+    
+      <label class="md-header__button md-icon" title="Switch to light mode" for="__palette_1" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 18c-.89 0-1.74-.2-2.5-.55C11.56 16.5 13 14.42 13 12c0-2.42-1.44-4.5-3.5-5.45C10.26 6.2 11.11 6 12 6a6 6 0 0 1 6 6 6 6 0 0 1-6 6m8-9.31V4h-4.69L12 .69 8.69 4H4v4.69L.69 12 4 15.31V20h4.69L12 23.31 15.31 20H20v-4.69L23.31 12 20 8.69Z"/></svg>
+      </label>
+    
+  
+</form>
+      
     
     
     
@@ -211,11 +247,30 @@
   
   
     <li class="md-nav__item">
+      <a href="../getting-started/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Getting started
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+    <li class="md-nav__item">
       <a href="../tutorials/" class="md-nav__link">
         
   
   <span class="md-ellipsis">
-    Tutorials
+    Tutorial for BPIC'17 Dataset
   </span>
   
 
@@ -259,9 +314,9 @@
         
         
         
-        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_4" checked>
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_5" checked>
         
-          <label class="md-nav__link" for="__nav_4" id="__nav_4_label" tabindex="0">
+          <label class="md-nav__link" for="__nav_5" id="__nav_5_label" tabindex="0">
             
   
   <span class="md-ellipsis">
@@ -272,8 +327,8 @@
             <span class="md-nav__icon md-icon"></span>
           </label>
         
-        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_4_label" aria-expanded="true">
-          <label class="md-nav__title" for="__nav_4">
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_5_label" aria-expanded="true">
+          <label class="md-nav__title" for="__nav_5">
             <span class="md-nav__icon md-icon"></span>
             Modules
           </label>
@@ -527,6 +582,26 @@
 
               
             
+              
+                
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../module-task_identification/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Task Identification
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
           </ul>
         </nav>
       
@@ -540,11 +615,11 @@
   
   
     <li class="md-nav__item">
-      <a href="../explanation/" class="md-nav__link">
+      <a href="../related_publications/" class="md-nav__link">
         
   
   <span class="md-ellipsis">
-    Explanation
+    Related publications
   </span>
   
 
@@ -684,13 +759,13 @@ using the semantic header</p>
 </ul>
 
 <p><strong>Examples:</strong></p>
-    <div class="highlight"><pre><span></span><code><span class="gp">&gt;&gt;&gt; </span><span class="kn">from</span> <span class="nn">promg.modules.transformer</span> <span class="kn">import</span> <span class="n">Transformer</span>
-<span class="gp">&gt;&gt;&gt; </span><span class="kn">from</span> <span class="nn">promg</span> <span class="kn">import</span> <span class="n">SemanticHeader</span>
-<span class="gp">&gt;&gt;&gt; </span><span class="n">semantic_header_path</span> <span class="o">=</span> <span class="n">Path</span><span class="p">(</span><span class="sa">f</span><span class="s1">&#39;json_files/</span><span class="si">{</span><span class="n">dataset_name</span><span class="si">}</span><span class="s1">.json&#39;</span><span class="p">)</span>
-<span class="gp">&gt;&gt;&gt; </span><span class="n">semantic_header</span> <span class="o">=</span> <span class="n">SemanticHeader</span><span class="o">.</span><span class="n">create_semantic_header</span><span class="p">(</span><span class="n">semantic_header_path</span><span class="p">)</span>
-<span class="gp">&gt;&gt;&gt; </span><span class="n">transformer</span> <span class="o">=</span> <span class="n">Transformer</span><span class="p">()</span>
-<span class="go">Returns the transformer module</span>
-</code></pre></div>
+    <div class="highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="gp">&gt;&gt;&gt; </span><span class="kn">from</span> <span class="nn">promg.modules.transformer</span> <span class="kn">import</span> <span class="n">Transformer</span>
+</span><span id="__span-0-2"><a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a><span class="gp">&gt;&gt;&gt; </span><span class="kn">from</span> <span class="nn">promg</span> <span class="kn">import</span> <span class="n">SemanticHeader</span>
+</span><span id="__span-0-3"><a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a><span class="gp">&gt;&gt;&gt; </span><span class="n">semantic_header_path</span> <span class="o">=</span> <span class="n">Path</span><span class="p">(</span><span class="sa">f</span><span class="s1">&#39;json_files/</span><span class="si">{</span><span class="n">dataset_name</span><span class="si">}</span><span class="s1">.json&#39;</span><span class="p">)</span>
+</span><span id="__span-0-4"><a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a><span class="gp">&gt;&gt;&gt; </span><span class="n">semantic_header</span> <span class="o">=</span> <span class="n">SemanticHeader</span><span class="o">.</span><span class="n">create_semantic_header</span><span class="p">(</span><span class="n">semantic_header_path</span><span class="p">)</span>
+</span><span id="__span-0-5"><a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a><span class="gp">&gt;&gt;&gt; </span><span class="n">transformer</span> <span class="o">=</span> <span class="n">Transformer</span><span class="p">()</span>
+</span><span id="__span-0-6"><a id="__codelineno-0-6" name="__codelineno-0-6" href="#__codelineno-0-6"></a><span class="go">Returns the transformer module</span>
+</span></code></pre></div>
 
 
 
@@ -753,15 +828,15 @@ created using records</p>
 
 <p><strong>Examples:</strong></p>
     <p>Create nodes for a specific list of node types</p>
-    <div class="highlight"><pre><span></span><code><span class="gp">&gt;&gt;&gt; </span><span class="n">transformer</span><span class="o">.</span><span class="n">create_nodes_by_records</span><span class="p">([</span><span class="s2">&quot;Event&quot;</span><span class="p">,</span> <span class="s2">&quot;Activity&quot;</span><span class="p">,</span> <span class="s2">&quot;Book&quot;</span><span class="p">])</span>
-<span class="go">The transformer creates the nodes with the types Event, Activity and Book</span>
-<span class="go">as specified in semantic header in the Event Knowledge graph.</span>
-</code></pre></div>
+    <div class="highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="gp">&gt;&gt;&gt; </span><span class="n">transformer</span><span class="o">.</span><span class="n">create_nodes_by_records</span><span class="p">([</span><span class="s2">&quot;Event&quot;</span><span class="p">,</span> <span class="s2">&quot;Activity&quot;</span><span class="p">,</span> <span class="s2">&quot;Book&quot;</span><span class="p">])</span>
+</span><span id="__span-0-2"><a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a><span class="go">The transformer creates the nodes with the types Event, Activity and Book</span>
+</span><span id="__span-0-3"><a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a><span class="go">as specified in semantic header in the Event Knowledge graph.</span>
+</span></code></pre></div>
     <p>Create nodes for all node types specified in the semantic header</p>
-    <div class="highlight"><pre><span></span><code><span class="gp">&gt;&gt;&gt; </span><span class="n">transformer</span><span class="o">.</span><span class="n">create_nodes_by_records</span><span class="p">()</span>
-<span class="go">The transformer creates the nodes that are constructed by a record</span>
-<span class="go">as specified in the semantic header Event Knowledge graph.</span>
-</code></pre></div>
+    <div class="highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="gp">&gt;&gt;&gt; </span><span class="n">transformer</span><span class="o">.</span><span class="n">create_nodes_by_records</span><span class="p">()</span>
+</span><span id="__span-0-2"><a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a><span class="go">The transformer creates the nodes that are constructed by a record</span>
+</span><span id="__span-0-3"><a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a><span class="go">as specified in the semantic header Event Knowledge graph.</span>
+</span></code></pre></div>
 
   </div>
 
@@ -816,18 +891,18 @@ they are created using records</p>
 
 <p><strong>Examples:</strong></p>
     <p>Create nodes for a specific list of relation types</p>
-    <div class="highlight"><pre><span></span><code><span class="gp">&gt;&gt;&gt; </span><span class="n">transformer</span><span class="o">.</span><span class="n">create_relations_using_records</span><span class="p">([</span><span class="s2">&quot;MEMBER_OF&quot;</span><span class="p">])</span>
-<span class="go">The transformer creates the relationships between two nodes with the type MEMBER_OF</span>
-<span class="go">as specified in semantic header in the Event Knowledge graph.</span>
-<span class="go">More specifically, a (:Member) node is related to a (:Library) node with a [:MEMBER_OF] relation</span>
-<span class="go">when the (:Member) and (:Library) node are related to the same (:Record) node as specified in</span>
-<span class="go">the semantic header</span>
-</code></pre></div>
+    <div class="highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="gp">&gt;&gt;&gt; </span><span class="n">transformer</span><span class="o">.</span><span class="n">create_relations_using_records</span><span class="p">([</span><span class="s2">&quot;MEMBER_OF&quot;</span><span class="p">])</span>
+</span><span id="__span-0-2"><a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a><span class="go">The transformer creates the relationships between two nodes with the type MEMBER_OF</span>
+</span><span id="__span-0-3"><a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a><span class="go">as specified in semantic header in the Event Knowledge graph.</span>
+</span><span id="__span-0-4"><a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a><span class="go">More specifically, a (:Member) node is related to a (:Library) node with a [:MEMBER_OF] relation</span>
+</span><span id="__span-0-5"><a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a><span class="go">when the (:Member) and (:Library) node are related to the same (:Record) node as specified in</span>
+</span><span id="__span-0-6"><a id="__codelineno-0-6" name="__codelineno-0-6" href="#__codelineno-0-6"></a><span class="go">the semantic header</span>
+</span></code></pre></div>
     <p>Create nodes for all relationship types specified in the semantic header</p>
-    <div class="highlight"><pre><span></span><code><span class="gp">&gt;&gt;&gt; </span><span class="n">transformer</span><span class="o">.</span><span class="n">create_relations_using_records</span><span class="p">()</span>
-<span class="go">The transformer creates the relationships that are constructed by a subgraph</span>
-<span class="go">as specified in the semantic header Event Knowledge graph.</span>
-</code></pre></div>
+    <div class="highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="gp">&gt;&gt;&gt; </span><span class="n">transformer</span><span class="o">.</span><span class="n">create_relations_using_records</span><span class="p">()</span>
+</span><span id="__span-0-2"><a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a><span class="go">The transformer creates the relationships that are constructed by a subgraph</span>
+</span><span id="__span-0-3"><a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a><span class="go">as specified in the semantic header Event Knowledge graph.</span>
+</span></code></pre></div>
 
   </div>
 
@@ -880,15 +955,15 @@ they are created using a subgraph</p>
 
 <p><strong>Examples:</strong></p>
     <p>Create nodes for a specific list of node types</p>
-    <div class="highlight"><pre><span></span><code><span class="gp">&gt;&gt;&gt; </span><span class="n">transformer</span><span class="o">.</span><span class="n">create_relations_using_relations</span><span class="p">([</span><span class="s2">&quot;BORROWED&quot;</span><span class="p">])</span>
-<span class="go">The transformer creates the relationship with the types BORROWED</span>
-<span class="go">as specified in semantic header in the Event Knowledge graph.</span>
-</code></pre></div>
+    <div class="highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="gp">&gt;&gt;&gt; </span><span class="n">transformer</span><span class="o">.</span><span class="n">create_relations_using_relations</span><span class="p">([</span><span class="s2">&quot;BORROWED&quot;</span><span class="p">])</span>
+</span><span id="__span-0-2"><a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a><span class="go">The transformer creates the relationship with the types BORROWED</span>
+</span><span id="__span-0-3"><a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a><span class="go">as specified in semantic header in the Event Knowledge graph.</span>
+</span></code></pre></div>
     <p>Create nodes for all node types specified in the semantic header</p>
-    <div class="highlight"><pre><span></span><code><span class="gp">&gt;&gt;&gt; </span><span class="n">transformer</span><span class="o">.</span><span class="n">create_relations_using_relations</span><span class="p">()</span>
-<span class="go">The transformer creates the relationship that are constructed by a subgraph</span>
-<span class="go">as specified in the semantic header Event Knowledge graph.</span>
-</code></pre></div>
+    <div class="highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="gp">&gt;&gt;&gt; </span><span class="n">transformer</span><span class="o">.</span><span class="n">create_relations_using_relations</span><span class="p">()</span>
+</span><span id="__span-0-2"><a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a><span class="go">The transformer creates the relationship that are constructed by a subgraph</span>
+</span><span id="__span-0-3"><a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a><span class="go">as specified in the semantic header Event Knowledge graph.</span>
+</span></code></pre></div>
 
   </div>
 
@@ -955,8 +1030,8 @@ matching event_label</p>
   </table>
 
 <p><strong>Examples:</strong></p>
-    <div class="highlight"><pre><span></span><code><span class="gp">&gt;&gt;&gt; </span><span class="bp">self</span><span class="o">.</span><span class="n">create_df_edges</span><span class="p">(</span><span class="n">entity_types</span><span class="o">=</span><span class="p">[</span><span class="s2">&quot;Book&quot;</span><span class="p">],</span> <span class="n">event_label</span><span class="o">=</span><span class="s2">&quot;Event&quot;</span><span class="p">)</span>
-</code></pre></div>
+    <div class="highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="gp">&gt;&gt;&gt; </span><span class="bp">self</span><span class="o">.</span><span class="n">create_df_edges</span><span class="p">(</span><span class="n">entity_types</span><span class="o">=</span><span class="p">[</span><span class="s2">&quot;Book&quot;</span><span class="p">],</span> <span class="n">event_label</span><span class="o">=</span><span class="s2">&quot;Event&quot;</span><span class="p">)</span>
+</span></code></pre></div>
 
   </div>
 
@@ -1034,7 +1109,7 @@ Only do this for the (reified) nodes in semantic header with merge_duplicate_df 
       <div class="md-dialog__inner md-typeset"></div>
     </div>
     
-    <script id="__config" type="application/json">{"base": "..", "features": [], "search": "../assets/javascripts/workers/search.dfff1995.min.js", "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}}</script>
+    <script id="__config" type="application/json">{"base": "..", "features": ["content.code.copy", "content.code.select"], "search": "../assets/javascripts/workers/search.dfff1995.min.js", "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}}</script>
     
     
       <script src="../assets/javascripts/bundle.78eede0e.min.js"></script>

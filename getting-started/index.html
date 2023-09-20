@@ -9,10 +9,10 @@
       
       
       
-        <link rel="prev" href="../tutorials/">
+        <link rel="prev" href="..">
       
       
-        <link rel="next" href="../module-db-management/">
+        <link rel="next" href="../tutorials/">
       
       
       <link rel="icon" href="../assets/images/favicon.png">
@@ -20,7 +20,7 @@
     
     
       
-        <title>How-To Guides - PromG Documentation</title>
+        <title>Getting started - PromG Documentation</title>
       
     
     
@@ -76,6 +76,11 @@
     <label class="md-overlay" for="__drawer"></label>
     <div data-md-component="skip">
       
+        
+        <a href="#promg" class="md-skip">
+          Skip to content
+        </a>
+      
     </div>
     <div data-md-component="announce">
       
@@ -108,7 +113,7 @@
         <div class="md-header__topic" data-md-component="header-topic">
           <span class="md-ellipsis">
             
-              How-To Guides
+              Getting started
             
           </span>
         </div>
@@ -240,9 +245,27 @@
       
   
   
+    
   
-    <li class="md-nav__item">
-      <a href="../getting-started/" class="md-nav__link">
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  <span class="md-ellipsis">
+    Getting started
+  </span>
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="./" class="md-nav__link md-nav__link--active">
         
   
   <span class="md-ellipsis">
@@ -251,6 +274,52 @@
   
 
       </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#promg" class="md-nav__link">
+    PromG
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#neo4j" class="md-nav__link">
+    Neo4j
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#create-a-new-graph-database" class="md-nav__link">
+    Create a new graph database
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#ensure-database-is-running" class="md-nav__link">
+    Ensure database is running
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
     </li>
   
 
@@ -278,16 +347,9 @@
       
   
   
-    
   
-  
-    <li class="md-nav__item md-nav__item--active">
-      
-      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
-      
-      
-      
-      <a href="./" class="md-nav__link md-nav__link--active">
+    <li class="md-nav__item">
+      <a href="../how-to-guides/" class="md-nav__link">
         
   
   <span class="md-ellipsis">
@@ -296,7 +358,6 @@
   
 
       </a>
-      
     </li>
   
 
@@ -559,6 +620,42 @@
   
   
   
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#promg" class="md-nav__link">
+    PromG
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#neo4j" class="md-nav__link">
+    Neo4j
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#create-a-new-graph-database" class="md-nav__link">
+    Create a new graph database
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#ensure-database-is-running" class="md-nav__link">
+    Ensure database is running
+  </a>
+  
+</li>
+      
+    </ul>
+  
 </nav>
                   </div>
                 </div>
@@ -572,9 +669,30 @@
                   
 
 
-  <h1>How-To Guides</h1>
+  <h1>Getting started</h1>
 
-
+<h2 id="promg">PromG</h2>
+<p>The library can be installed in Pyhton using pip
+<code>pip install promg</code>.</p>
+<h2 id="neo4j">Neo4j</h2>
+<p>The library assumes that Neo4j is installed.</p>
+<p>Install <a href="https://neo4j.com/download/">Neo4j</a>:</p>
+<ul>
+<li>Use the <a href="https://neo4j.com/download-center/#desktop">Neo4j Desktop</a>  (recommended), or</li>
+<li><a href="https://neo4j.com/download-center/#community">Neo4j Community Server</a></li>
+</ul>
+<h2 id="create-a-new-graph-database">Create a new graph database</h2>
+<ul>
+<li>The scripts in this release assume password "12345678".</li>
+<li>The scripts assume the server to be available at the default URL <code>bolt://localhost:7687</code></li>
+<li>You can modify this also in the script.</li>
+<li>ensure to allocate enough memory to your database, advised: <code>dbms.memory.heap.max_size=5G</code></li>
+<li>the script expects the <code>Neo4j APOC library</code> to be installed as a plugin, see https://neo4j.com/labs/apoc/</li>
+</ul>
+<h2 id="ensure-database-is-running">Ensure database is running</h2>
+<ul>
+<li>When executing the main script, ensure that your database instance is running.</li>
+</ul>
 
 
 

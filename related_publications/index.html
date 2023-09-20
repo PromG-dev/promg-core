@@ -9,10 +9,8 @@
       
       
       
-        <link rel="prev" href="../tutorials/">
+        <link rel="prev" href="../module-task_identification/">
       
-      
-        <link rel="next" href="../module-db-management/">
       
       
       <link rel="icon" href="../assets/images/favicon.png">
@@ -20,7 +18,7 @@
     
     
       
-        <title>How-To Guides - PromG Documentation</title>
+        <title>Related publications - PromG Documentation</title>
       
     
     
@@ -76,6 +74,11 @@
     <label class="md-overlay" for="__drawer"></label>
     <div data-md-component="skip">
       
+        
+        <a href="#event-knowledge-graphs" class="md-skip">
+          Skip to content
+        </a>
+      
     </div>
     <div data-md-component="announce">
       
@@ -108,7 +111,7 @@
         <div class="md-header__topic" data-md-component="header-topic">
           <span class="md-ellipsis">
             
-              How-To Guides
+              Related publications
             
           </span>
         </div>
@@ -278,16 +281,9 @@
       
   
   
-    
   
-  
-    <li class="md-nav__item md-nav__item--active">
-      
-      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
-      
-      
-      
-      <a href="./" class="md-nav__link md-nav__link--active">
+    <li class="md-nav__item">
+      <a href="../how-to-guides/" class="md-nav__link">
         
   
   <span class="md-ellipsis">
@@ -296,7 +292,6 @@
   
 
       </a>
-      
     </li>
   
 
@@ -526,9 +521,27 @@
       
   
   
+    
   
-    <li class="md-nav__item">
-      <a href="../related_publications/" class="md-nav__link">
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  <span class="md-ellipsis">
+    Related publications
+  </span>
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="./" class="md-nav__link md-nav__link--active">
         
   
   <span class="md-ellipsis">
@@ -537,6 +550,72 @@
   
 
       </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#event-knowledge-graphs" class="md-nav__link">
+    Event Knowledge Graphs
+  </a>
+  
+    <nav class="md-nav" aria-label="Event Knowledge Graphs">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#publications" class="md-nav__link">
+    Publications
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#oced-pg" class="md-nav__link">
+    OCED-PG
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#multi-process-discovery-and-analysis" class="md-nav__link">
+    Multi-process Discovery and Analysis
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#task-identification" class="md-nav__link">
+    Task Identification
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#inference-of-missing-case-identifiers" class="md-nav__link">
+    Inference of missing case identifiers
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
     </li>
   
 
@@ -559,6 +638,62 @@
   
   
   
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#event-knowledge-graphs" class="md-nav__link">
+    Event Knowledge Graphs
+  </a>
+  
+    <nav class="md-nav" aria-label="Event Knowledge Graphs">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#publications" class="md-nav__link">
+    Publications
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#oced-pg" class="md-nav__link">
+    OCED-PG
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#multi-process-discovery-and-analysis" class="md-nav__link">
+    Multi-process Discovery and Analysis
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#task-identification" class="md-nav__link">
+    Task Identification
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#inference-of-missing-case-identifiers" class="md-nav__link">
+    Inference of missing case identifiers
+  </a>
+  
+</li>
+      
+    </ul>
+  
 </nav>
                   </div>
                 </div>
@@ -572,9 +707,40 @@
                   
 
 
-  <h1>How-To Guides</h1>
+  <h1>Related publications</h1>
 
-
+<p>The following projects are part of this repository</p>
+<h2 id="event-knowledge-graphs">Event Knowledge Graphs</h2>
+<p>We use Event Knowledge Graphs as basis for our data model as they already naturally model Events, Activities, Entities and their relations for Process Mining.
+The EKGs are stored in a labeled property graph in <a href="https://neo4j.com/">Neo4J</a>.</p>
+<h3 id="publications">Publications</h3>
+<ul>
+<li><code>Stefan Esser, Dirk Fahland: Multi-Dimensional Event Data in Graph
+  Databases. [CoRR abs/2005.14552](https://arxiv.org/abs/2005.14552), [Journal on Data Semantics, DOI: 10.1007/s13740-021-00122-1](https://dx.doi.org/10.1007/s13740-021-00122-1) (
+  2020)</code></li>
+<li><code>Esser, Stefan. (2020, February 19). A Schema Framework for Graph Event Data. Master thesis. Eindhoven University of
+  Technology. https://doi.org/10.5281/zenodo.3820037</code></li>
+</ul>
+<h2 id="oced-pg">OCED-PG</h2>
+<p>We developed a reference implementation for Object-Centric Event Data <a href="https://icpmconference.org/2022/program/xes-symposium/">OCED</a>. OCED-PG is a declarative extract-load-transformT framework, that maps the raw data to a corresponding EKG, using the semantic header as a basis.</p>
+<p>We proposed a three-layer approach to create a semantic-aware representation and storage system for OCED. </p>
+<ul>
+<li>
+<p><em>Base ontology</em>: The OCED proposal is formalized as a PG-schema [1] providing a common interface for process querying. The schema defines a <em>base ontology</em> for representing and transforming OCED, which includes a <em>semantic layer</em> (defining the OCED concepts) and a <em>record layer</em> (defining concepts for generic data records from a legacy system and how they are related to the semantic layer). </p>
+</li>
+<li>
+<p><em>Reference ontology</em>: The base ontology is specialized into a domain-specific reference ontology using PG-schema's inheritance mechanism. The reference ontology includes a <em>semantic layer</em> (defining the domain's semantic objects, events, and relations), and a <em>record layer</em> (defining in which legacy records the domain-level concepts are stored). The structural definitions are extended with rules to transform data in the record layer into nodes and relationships of the semantic layer, similar to <a href="https://doi.org/10.24963/ijcai.2018/777">ontology-based data access</a>.</p>
+</li>
+<li><em>OCED-PG: declarative extract-load-transform (ELT) framework</em>. OCED-PG load the legacy data records into the graph DB as a record layer. We then transform the data records into OCED by automatically translating the transformation rules of step (2) into queries over the record layer.</li>
+</ul>
+<h2 id="multi-process-discovery-and-analysis">Multi-process Discovery and Analysis</h2>
+<p><code>D. Fahland, “Process mining over multiple behavioral dimensions with
+event knowledge graphs,” in Process Mining Handbook. Springer, 2022,
+vol. 448, pp. 274–319</code></p>
+<h2 id="task-identification">Task Identification</h2>
+<p><code>Klijn, E.L., Mannhardt, F., Fahland, D. (2021). Classifying and Detecting Task Executions and Routines in Processes Using Event Graphs. In: Polyvyanyy, A., Wynn, M.T., Van Looy, A., Reichert, M. (eds) Business Process Management Forum. BPM 2021. Lecture Notes in Business Information Processing, vol 427. Springer, Cham. https://doi.org/10.1007/978-3-030-85440-9_13</code></p>
+<h2 id="inference-of-missing-case-identifiers">Inference of missing case identifiers</h2>
+<p><code>Swevels, A., Dijkman, R., Fahland, D. (2023). Inferring Missing Entity Identifiers from Context Using Event Knowledge Graphs. In: Di Francescomarino, C., Burattin, A., Janiesch, C., Sadiq, S. (eds) Business Process Management. BPM 2023. Lecture Notes in Computer Science, vol 14159. Springer, Cham. https://doi.org/10.1007/978-3-031-41620-0_11</code></p>
 
 
 
