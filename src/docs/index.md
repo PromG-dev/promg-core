@@ -16,7 +16,6 @@ your use case by looking at the different pages.
 
 0. [Getting Started](getting-started.md)
 1. [Tutorials](tutorials.md)
-2. [How-To Guides](how-to-guides.md)
 3. [Modules](module-0verview.md)
     1. Database Management Modules
         1. [Database Manager](module:db-management.md)
