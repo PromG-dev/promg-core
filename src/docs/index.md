@@ -32,6 +32,6 @@ your use case by looking at the different pages.
 4. [Related Publications](related_publications.md)
 
 
-For example projects that use this library, have a look at [EKG BPI Challenges](https://github.com/Ava-S/ekg_bpi_challenges), [EKG Inferring missing identifiers](https://github.com/Ava-S/ekg_inference) and [EKG for AutoTwin EU GA n. 101092021.](https://github.com/Ava-S/ekg_autotwin)
+For example projects that use this library, have a look at [EKG BPI Challenges](https://github.com/Ava-S/ekg_bpi_challenges), [EKG Inferring missing identifiers](https://github.com/PromG-dev/promg-inference).
 
 
