@@ -9,6 +9,12 @@ from ..database_managers.db_connection import DatabaseConnection
 
 
 class Exporter:
+    """
+        Create Exporter module
+        Examples:
+            >>> from promg.modules.exporter import Exporter
+            >>> exporter = Exporter()
+    """
     def __init__(self):
         self.connection = DatabaseConnection()
 
