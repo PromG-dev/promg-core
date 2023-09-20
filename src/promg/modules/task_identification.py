@@ -5,13 +5,31 @@ from ..database_managers.db_connection import DatabaseConnection
 
 
 class TaskIdentification:
+    """
+        Create TaskIdentification module
+        Examples:
+            >>> from promg.modules.task_identification import TaskIdentification
+            >>> task_identifier = TaskIdentification(resource="Resource", case="CASE_AWO")
+            returns a task_identifier module from the perspective "Resource" and the "CASE_AWO" entities
+
+    """
     def __init__(self, resource: str, case: str):
         self.connection = DatabaseConnection()
         self.resource: ConstructedNodes = SemanticHeader().get_entity(resource)
         self.case: ConstructedNodes = SemanticHeader().get_entity(case)
 
-    @Performance.track("resource")
+    @Performance.track()
     def identify_tasks(self):
+        """
+            Method to create (:TaskInstance) nodes and [:CONTAINS] from (:Event) nodes to (:TaskInstance) nodes
+
+            Examples:
+                >>> from promg.modules.task_identification import TaskIdentification
+                >>> task_identifier = TaskIdentification(resource="Resource", case="CASE_AWO")
+                >>> task_identifier.identify_tasks()
+                Identifies and creates (:TaskInstance) nodes for the given resource and case
+
+        """
         self.connection.exec_query(tf_ql.get_combine_df_joint_query,
                                    **{
                                        "resource": self.resource,
@@ -32,6 +50,16 @@ class TaskIdentification:
 
     @Performance.track("resource")
     def aggregate_on_task_variant(self):
+        """
+            Method to aggregate (:TaskInstance) nodes into (:TaskAggregation) nodes
+
+            Examples:
+                >>> from promg.modules.task_identification import TaskIdentification
+                >>> task_identifier = TaskIdentification(resource="Resource", case="CASE_AWO")
+                >>> task_identifier.aggregate_on_task_variant()
+                Identifies and creates (:TaskAggegration) given there exists (:TaskInstance) nodes
+
+        """
         self.connection.exec_query(tf_ql.get_aggregate_task_instances_query,
                                    **{"property": "variant"})
         self.connection.exec_query(tf_ql.get_link_task_instances_to_aggregations_query,
