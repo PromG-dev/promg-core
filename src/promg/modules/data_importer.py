@@ -41,6 +41,8 @@ class Importer:
                 # read and import the nodes
                 df_log = structure.read_data_set(file_directory, file_name, use_sample=self.use_sample,
                                                  use_preprocessed_file=self.use_preprocessed_files)
+                df_log = self.determine_labels(df_log, structure)
+
                 df_log["loadStatus"] = self.load_status
                 self._import_nodes_from_data(df_log=df_log, file_name=file_name,
                                              record_constructors=record_constructors)
@@ -53,6 +55,95 @@ class Importer:
             self._filter_nodes(structure=structure)  # filter nodes according to the structure
 
             self._finalize_import()  # removes temporary properties
+
+    def determine_labels(self, df_log, structure):
+        all_considered_labels = set()
+        for record_constructor in self.records:
+            # one of possible labels appear in record constructor
+            if self.labels_appear_in_record_constructor(structure.labels, record_constructor):
+                should_have_label = self.all_required_attributes_are_present_in_df_log(df_log, structure,
+                                                                                                 record_constructor)
+                if should_have_label.any(): # check whether there is still a row that can have the label
+                    should_have_label = should_have_label & self.is_where_condition_satisfied(
+                        df_log, record_constructor)
+                for label in record_constructor.record_labels:
+                    all_considered_labels.add(label)
+                    df_log.loc[should_have_label, label] = label
+        # combine all labels into a list if they are not nan
+        # https://stackoverflow.com/questions/43898035/pandas-combine-column-values-into-a-list-in-a-new-column
+        all_considered_labels = list(all_considered_labels)
+        df_log["labels"] = [[e for e in row if e==e] for row in df_log[list(all_considered_labels)].values.tolist()]
+        df_log = df_log.drop(all_considered_labels)
+
+        return df_log
+
+    @staticmethod
+    def labels_appear_in_record_constructor(labels, record_constructor):
+        if labels is not None:
+            # check whether the labels have overlap with the labels of the record_constructor
+            intersection = list(set(labels) & set(record_constructor.record_labels))
+        else:
+            # no labels are defined, hence we consider all labels of the record constructor
+            intersection = record_constructor.record_labels
+
+        return len(intersection) > 0
+
+    @staticmethod
+    def all_required_attributes_are_present_in_df_log(df_log, structure, record_constructor):
+        required_attributes_are_present = pd.Series(True, index=np.arange(len(df_log)), name='present')
+
+        for required_attribute in record_constructor.required_attributes:
+            if required_attribute == "index":
+                continue
+            if required_attribute in structure.attributes:
+                if structure.attributes[required_attribute].optional:
+                    # if the required attribute is optional in the structure, check whether the required attribute is
+                    # not null
+                    required_attributes_are_present = required_attributes_are_present[0] & df_log[
+                        required_attribute].notnull()
+                # else --> the required attribute is also required in the structure, hence nothing changes
+            else:  # the required attribute is missing in the structure -> hence not all are present
+                required_attributes_are_present = False
+                # since for all rows, at least an attribute is missing, we can return
+                return required_attributes_are_present
+
+        return required_attributes_are_present
+
+    @staticmethod
+    def is_where_condition_satisfied(df_log, record_constructor):
+        # TODO split where_condition
+        where_condition = record_constructor.prevalent_record.where_condition
+        where_condition_satisfied = pd.Series(True, index=np.arange(len(df_log)), name='satisfied')
+        if where_condition == "":
+            return where_condition_satisfied
+        where_conditions = where_condition.split("AND")
+        for condition in where_conditions:
+            stripped_condition = condition.strip()
+            if "=" in condition:
+                condition_list = stripped_condition.split("=")
+                column_name = condition_list[0].strip()
+                if "." in column_name:
+                    column_name = column_name.split(".")[1].strip()
+                column_value = condition_list[1].strip()
+                where_condition_satisfied = where_condition_satisfied[0] & (
+                        df_log[column_name].astype("string") == column_value)
+            elif "STARTS WITH" in condition:
+                condition_list = stripped_condition.split("STARTS WITH")
+                column_name = condition_list[0].strip()
+                if "." in column_name:
+                    column_name = column_name.split(".")[1].strip()
+                column_value = condition_list[1].strip()
+                where_condition_satisfied = where_condition_satisfied[0] & df_log[
+                    column_name].str.startswith(column_value)
+            elif "ENDS WITH" in condition:
+                condition_list = stripped_condition.split("ENDS WITH")
+                column_name = condition_list[0].strip()
+                if "." in column_name:
+                    column_name = column_name.split(".")[1].strip()
+                column_value = condition_list[1].strip()
+                where_condition_satisfied = where_condition_satisfied[0] & df_log[
+                    column_name].str.endswith(column_value)
+        return where_condition_satisfied
 
     @Performance.track("structure")
     def _reformat_timestamps(self, structure):
