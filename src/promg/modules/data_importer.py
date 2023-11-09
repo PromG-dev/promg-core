@@ -1,10 +1,6 @@
-import math
-from typing import List
+from string import Template
 
-import numpy as np
-from tqdm import tqdm
-
-from ..data_managers.semantic_header import RecordConstructor, SemanticHeader
+from ..data_managers.semantic_header import SemanticHeader
 from ..database_managers.db_connection import DatabaseConnection
 from ..data_managers.datastructures import DatasetDescriptions
 from ..utilities.performance_handling import Performance
@@ -13,7 +9,7 @@ import pandas as pd
 
 
 class Importer:
-    def __init__(self, data_structures: DatasetDescriptions,
+    def __init__(self, data_structures: DatasetDescriptions, import_directory: str,
                  use_sample: bool = False, use_preprocessed_files: bool = False):
         self.connection = DatabaseConnection()
         self.structures = data_structures.structures
@@ -24,6 +20,8 @@ class Importer:
         self.use_preprocessed_files = use_preprocessed_files
         self.load_status = 0
 
+        self.import_directory = import_directory
+
     def update_load_status(self):
         self.connection.exec_query(di_ql.get_update_load_status_query,
                                    **{
@@ -33,198 +31,117 @@ class Importer:
 
     def import_data(self) -> None:
         for structure in self.structures:
-            labels = structure.labels
-            record_constructors = self._get_record_constructors_by_labels(structure=structure, labels=labels)
-            file_directory = structure.file_directory
+            required_labels_str = structure.get_required_labels_str(records=self.records)
+
             # read in all file names that match this structure
             for file_name in structure.file_names:
                 # read and import the nodes
-                df_log = structure.read_data_set(file_directory, file_name, use_sample=self.use_sample,
-                                                 use_preprocessed_file=self.use_preprocessed_files)
-                df_log = self.determine_labels(df_log, structure)
+                df_log = structure.read_data_set(file_name=file_name,
+                                                 use_sample=self.use_sample,
+                                                 use_preprocessed_file=self.use_preprocessed_files,
+                                                 load_status=self.load_status)
 
-                df_log["loadStatus"] = self.load_status
+                df_log = structure.determine_optional_labels_in_log(df_log, records=self.records)
+
                 self._import_nodes_from_data(df_log=df_log, file_name=file_name,
-                                             record_constructors=record_constructors)
+                                             required_labels_str=required_labels_str)
 
-            if structure.has_datetime_attribute():
-                # once all events are imported, we convert the string timestamp to the timestamp as used in Cypher
-                self._reformat_timestamps(structure=structure)
-                self.update_load_status()
+                if structure.has_datetime_attribute():
+                    # once all events are imported, we convert the string timestamp to the timestamp as used in Cypher
+                    self._reformat_timestamps(structure=structure, required_labels_str=required_labels_str)
 
-            self._filter_nodes(structure=structure)  # filter nodes according to the structure
-
-            self._finalize_import()  # removes temporary properties
-
-    def determine_labels(self, df_log, structure):
-        all_considered_labels = set()
-        for record_constructor in self.records:
-            # one of possible labels appear in record constructor
-            if self.labels_appear_in_record_constructor(structure.labels, record_constructor):
-                should_have_label = self.all_required_attributes_are_present_in_df_log(df_log, structure,
-                                                                                                 record_constructor)
-                if should_have_label.any(): # check whether there is still a row that can have the label
-                    should_have_label = should_have_label & self.is_where_condition_satisfied(
-                        df_log, record_constructor)
-                for label in record_constructor.record_labels:
-                    all_considered_labels.add(label)
-                    df_log.loc[should_have_label, label] = label
-        # combine all labels into a list if they are not nan
-        # https://stackoverflow.com/questions/43898035/pandas-combine-column-values-into-a-list-in-a-new-column
-        all_considered_labels = list(all_considered_labels)
-        df_log["labels"] = [[e for e in row if e==e] for row in df_log[list(all_considered_labels)].values.tolist()]
-        df_log = df_log.drop(all_considered_labels)
-
-        return df_log
-
-    @staticmethod
-    def labels_appear_in_record_constructor(labels, record_constructor):
-        if labels is not None:
-            # check whether the labels have overlap with the labels of the record_constructor
-            intersection = list(set(labels) & set(record_constructor.record_labels))
-        else:
-            # no labels are defined, hence we consider all labels of the record constructor
-            intersection = record_constructor.record_labels
-
-        return len(intersection) > 0
-
-    @staticmethod
-    def all_required_attributes_are_present_in_df_log(df_log, structure, record_constructor):
-        required_attributes_are_present = pd.Series(True, index=np.arange(len(df_log)), name='present')
-
-        for required_attribute in record_constructor.required_attributes:
-            if required_attribute == "index":
-                continue
-            if required_attribute in structure.attributes:
-                if structure.attributes[required_attribute].optional:
-                    # if the required attribute is optional in the structure, check whether the required attribute is
-                    # not null
-                    required_attributes_are_present = required_attributes_are_present[0] & df_log[
-                        required_attribute].notnull()
-                # else --> the required attribute is also required in the structure, hence nothing changes
-            else:  # the required attribute is missing in the structure -> hence not all are present
-                required_attributes_are_present = False
-                # since for all rows, at least an attribute is missing, we can return
-                return required_attributes_are_present
-
-        return required_attributes_are_present
-
-    @staticmethod
-    def is_where_condition_satisfied(df_log, record_constructor):
-        # TODO split where_condition
-        where_condition = record_constructor.prevalent_record.where_condition
-        where_condition_satisfied = pd.Series(True, index=np.arange(len(df_log)), name='satisfied')
-        if where_condition == "":
-            return where_condition_satisfied
-        where_conditions = where_condition.split("AND")
-        for condition in where_conditions:
-            stripped_condition = condition.strip()
-            if "=" in condition:
-                condition_list = stripped_condition.split("=")
-                column_name = condition_list[0].strip()
-                if "." in column_name:
-                    column_name = column_name.split(".")[1].strip()
-                column_value = condition_list[1].strip()
-                where_condition_satisfied = where_condition_satisfied[0] & (
-                        df_log[column_name].astype("string") == column_value)
-            elif "STARTS WITH" in condition:
-                condition_list = stripped_condition.split("STARTS WITH")
-                column_name = condition_list[0].strip()
-                if "." in column_name:
-                    column_name = column_name.split(".")[1].strip()
-                column_value = condition_list[1].strip()
-                where_condition_satisfied = where_condition_satisfied[0] & df_log[
-                    column_name].str.startswith(column_value)
-            elif "ENDS WITH" in condition:
-                condition_list = stripped_condition.split("ENDS WITH")
-                column_name = condition_list[0].strip()
-                if "." in column_name:
-                    column_name = column_name.split(".")[1].strip()
-                column_value = condition_list[1].strip()
-                where_condition_satisfied = where_condition_satisfied[0] & df_log[
-                    column_name].str.endswith(column_value)
-        return where_condition_satisfied
+                # TODO: move filtering to pandas dataframe
+                self._filter_nodes(structure=structure,
+                                   required_labels_str=required_labels_str)  # filter nodes according to the structure
+                self._finalize_import(required_labels_str=required_labels_str)  # removes temporary properties
 
     @Performance.track("structure")
-    def _reformat_timestamps(self, structure):
+    def _reformat_timestamps(self, structure, required_labels_str):
         datetime_formats = structure.get_datetime_formats()
         for attribute, datetime_format in datetime_formats.items():
             if datetime_format.is_epoch:
                 self.connection.exec_query(di_ql.get_convert_epoch_to_timestamp_query,
                                            **{
+                                               "required_labels_str": required_labels_str,
                                                "attribute": attribute,
                                                "datetime_object": datetime_format
                                            })
 
             self.connection.exec_query(di_ql.get_make_timestamp_date_query,
                                        **{
+                                           "required_labels_str": required_labels_str,
                                            "attribute": attribute,
                                            "datetime_object": datetime_format,
                                            "load_status": self.load_status
                                        })
 
     @Performance.track("structure")
-    def _filter_nodes(self, structure):
-        for boolean in (True, False):
-            attribute_values_pairs_filtered = structure.get_attribute_value_pairs_filtered(exclude=boolean)
+    def _filter_nodes(self, structure, required_labels_str):
+        for exclude in [True, False]:
+            attribute_values_pairs_filtered = structure.get_attribute_value_pairs_filtered(exclude=exclude)
             for name, values in attribute_values_pairs_filtered.items():
                 self.connection.exec_query(di_ql.get_filter_events_by_property_query,
                                            **{
-                                               "prop": name, "values": values, "exclude": boolean,
-                                               "load_status": self.load_status
+                                               "prop": name,
+                                               "values": values,
+                                               "exclude": exclude,
+                                               "load_status": self.load_status,
+                                               "required_labels": required_labels_str
                                            })
 
     @Performance.track("structure")
-    def _finalize_import(self):
+    def _finalize_import(self, required_labels_str):
         # finalize the import
-        self.connection.exec_query(di_ql.get_finalize_import_events_query)
+        self.connection.exec_query(di_ql.get_finalize_import_events_query,
+                                   **{
+                                       "load_status": self.load_status,
+                                       "required_labels": required_labels_str
+                                   })
+        self.load_status = 0
 
     @Performance.track("file_name")
-    def _import_nodes_from_data(self, df_log, file_name, record_constructors):
+    def _import_nodes_from_data(self, df_log, file_name, required_labels_str):
         # start with batch 0 and increment until everything is imported
-        batch = 0
-        print("\n")
-        pbar = tqdm(total=math.ceil(len(df_log) / self.load_batch_size), position=0)
+        grouped_by_optional_labels = df_log.groupby(by="labels")
+        count = 0
+        mapping_str = self._determine_column_mapping_str(df_log)
 
-        labels_constructor = di_ql.get_label_constructors(record_constructors)
-
-        while batch * self.load_batch_size < len(df_log):
-            pbar.set_description(f"Loading data from {file_name} from batch {batch}")
-
-            # import the events in batches, use the records of the log
-            batch_without_nans = [{k: int(v) if isinstance(v, np.integer) else v for k, v in m.items()
-                                   if (isinstance(v, list) and len(v) > 0) or (not pd.isna(v) and v is not None)}
-                                  for m in
-                                  df_log[batch * self.load_batch_size:(batch + 1) * self.load_batch_size].to_dict(
-                                      orient='records')]
-
-            self.connection.exec_query(di_ql.get_create_nodes_by_importing_batch_query,
+        for optional_labels_str, log in grouped_by_optional_labels:
+            new_file_name = self.determine_new_file_name(file_name, optional_labels_str)
+            self._save_log_grouped_by_labels(log=log, new_file_name=new_file_name)
+            self.connection.exec_query(di_ql.get_create_nodes_by_loading_csv_query,
                                        **{
-                                           "batch": batch_without_nans,
-                                           "labels_constructors": labels_constructor
+                                           "file_name": new_file_name,
+                                           "labels": required_labels_str + optional_labels_str,
+                                           "mapping": mapping_str
                                        })
 
-            pbar.update(1)
-            batch += 1
-        pbar.close()
+    @staticmethod
+    def determine_new_file_name(file_name, optional_labels_str):
+        if optional_labels_str == "":
+            return file_name
+        return file_name[:-4] + "_" + optional_labels_str.replace(":", "_") + ".csv"
 
-    def _get_record_constructors_by_labels(self, structure, labels):
-        constructors = []
-        for record_constructor in self.records:
-            if labels is not None:
-                intersection = list(set(labels) & set(record_constructor.record_labels))
+    def _save_log_grouped_by_labels(self, log, new_file_name):
+        log = log.drop(columns=["labels"])
+        log.to_csv(self.import_directory + "\\" + new_file_name, index=False)
+
+    @staticmethod
+    def _determine_column_mapping_str(log):
+        mapping = {}
+        dtypes = log.dtypes.to_dict()
+        for col_name, type in dtypes.items():
+            if type == object:
+                continue  # default is STRING
+            elif pd.api.types.is_integer_dtype(type):
+                mapping[col_name] = 'INTEGER'
+            elif pd.api.types.is_float_dtype(type):
+                mapping[col_name] = 'FLOAT'
             else:
-                intersection = record_constructor.record_labels
-            if len(intersection) > 0:  # label of record constructor is in intersection or labels is not defined
-                required = True
-                if record_constructor.prevalent_record.where_condition != "":
-                    required = False
-                else:
-                    for required_attribute in record_constructor.required_attributes:
-                        if required_attribute == "index":
-                            continue
-                        if required_attribute not in structure.attributes or structure.attributes[
-                            required_attribute].optional:
-                            required = False
-                constructors.append({"required": required, "record_constructor": record_constructor})
-        return constructors
+                raise Exception(f"Type for column {col_name} is not defined")
+
+        template_str = '$col_name:{type:"$type"}'
+        mapping_list = [Template(template_str).substitute({"col_name": col_name, "type": type}) for col_name, type in
+                        mapping.items()]
+        mapping_str = '{' + ','.join(mapping_list) + '}'
+        return mapping_str
