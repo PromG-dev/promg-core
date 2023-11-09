@@ -80,7 +80,7 @@ class Importer:
         for exclude in [True, False]:
             attribute_values_pairs_filtered = structure.get_attribute_value_pairs_filtered(exclude=exclude)
             for name, values in attribute_values_pairs_filtered.items():
-                self.connection.exec_query(di_ql.get_filter_events_by_property_query,
+                self.connection.exec_query(di_ql.get_filter_records_by_property_query,
                                            **{
                                                "prop": name,
                                                "values": values,
@@ -92,7 +92,7 @@ class Importer:
     @Performance.track("structure")
     def _finalize_import(self, required_labels_str):
         # finalize the import
-        self.connection.exec_query(di_ql.get_finalize_import_events_query,
+        self.connection.exec_query(di_ql.get_finalize_import_records_query,
                                    **{
                                        "load_status": self.load_status,
                                        "required_labels": required_labels_str
