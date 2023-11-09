@@ -10,7 +10,7 @@ from ..utilities.performance_handling import Performance
 
 class OcedPg:
 
-    def __init__(self, dataset_descriptions: DatasetDescriptions,
+    def __init__(self, dataset_descriptions: DatasetDescriptions, import_directory: str,
                  use_sample: bool = False, use_preprocessed_files: bool = False):
         """
             This is a Class that acts as a facade for used to extract, load and transform their data using OCED-PG
@@ -27,7 +27,8 @@ class OcedPg:
         # classes responsible for executing queries
         self.data_importer = Importer(data_structures=dataset_descriptions,
                                       use_sample=use_sample,
-                                      use_preprocessed_files=use_preprocessed_files)
+                                      use_preprocessed_files=use_preprocessed_files,
+                                      import_directory=import_directory)
         self.ekg_builder = EKGUsingSemanticHeaderBuilder()
 
     def load_and_transform(self):
