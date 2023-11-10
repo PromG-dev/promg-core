@@ -8,7 +8,7 @@ from ..cypher_queries.semantic_header_ql import SemanticHeaderQueryLibrary as sh
 
 
 class EKGUsingSemanticHeaderBuilder:
-    def __init__(self):
+    def __init__(self, connection = DatabaseDependencyModule().get_connection()):
         self.connection = DatabaseConnection()
         self.semantic_header = SemanticHeader()
 
