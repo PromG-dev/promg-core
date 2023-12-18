@@ -5,6 +5,7 @@ from ..database_managers.db_connection import DatabaseConnection
 from ..data_managers.datastructures import DatasetDescriptions
 from ..utilities.performance_handling import Performance
 from ..cypher_queries.data_importer_ql import DataImporterQueryLibrary as di_ql
+from pathlib import Path
 import pandas as pd
 
 
@@ -124,7 +125,7 @@ class Importer:
 
     def _save_log_grouped_by_labels(self, log, new_file_name):
         log = log.drop(columns=["labels"])
-        log.to_csv(self.import_directory + "\\" + new_file_name, index=False)
+        log.to_csv(Path(self.import_directory, new_file_name), index=False)
 
     @staticmethod
     def _determine_column_mapping_str(log):
