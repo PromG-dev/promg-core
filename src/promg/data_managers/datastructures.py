@@ -556,14 +556,14 @@ class DataStructure:
                 if set(record_constructor.record_labels) <= set(self.required_labels):
                     continue  # record constructor only contains required labels
 
-            # one of possible labels appear in record constructor
-            should_have_label = self.all_required_attributes_are_present_in_df_log(df_log, record_constructor)
-            if should_have_label.any():  # check whether there is still a row that can have the label
-                should_have_label = should_have_label & self.is_where_condition_satisfied(
-                    df_log, record_constructor)
-            if should_have_label.any():
-                for label in record_constructor.record_labels:
-                    df_log.loc[should_have_label, "labels"] += ":" + label
+                # one of possible labels appear in record constructor
+                should_have_label = self.all_required_attributes_are_present_in_df_log(df_log, record_constructor)
+                if should_have_label.any():  # check whether there is still a row that can have the label
+                    should_have_label = should_have_label & self.is_where_condition_satisfied(
+                        df_log, record_constructor)
+                if should_have_label.any():
+                    for label in record_constructor.record_labels:
+                        df_log.loc[should_have_label, "labels"] += ":" + label
 
         return df_log
 
