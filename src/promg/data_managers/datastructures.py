@@ -14,6 +14,7 @@ from pandas import DataFrame
 
 from .semantic_header import Node
 from ..utilities.auxiliary_functions import replace_undefined_value, create_list
+from ..utilities.configuration import Configuration
 
 
 @dataclass
@@ -501,7 +502,9 @@ class DataStructure:
 
 
 class DatasetDescriptions:
-    def __init__(self, path: Path):
+    def __init__(self, config: Configuration):
+        path = config.dataset_description_path
+
         random.seed(1)
         with open(path, encoding='utf-8') as f:
             json_event_tables = json.load(f)
