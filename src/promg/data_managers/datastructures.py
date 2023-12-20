@@ -121,6 +121,7 @@ class Sample:
     size: int
     ids: List[Any]
     between: List[str]
+    format: Optional[str]
 
     @staticmethod
     def from_dict(obj: Any, default_file_name: Optional[str] = None) -> Optional['Sample']:
@@ -136,8 +137,9 @@ class Sample:
         _size = obj.get("size")
         _ids = obj.get("ids")
         _between = obj.get("between")
+        _format = obj.get("datetime_format")
 
-        return Sample(_file_name, _use_random_sample, _population_column, _size, _ids, _between)
+        return Sample(_file_name, _use_random_sample, _population_column, _size, _ids, _between, _format)
 
 
 class DataStructure:
@@ -269,7 +271,7 @@ class DataStructure:
             elif sample.between is not None:
                 start_date = sample.between[0]
                 end_date = sample.between[1]
-                df_log['date_time_conv'] = pd.to_datetime(df_log[sample_column])
+                df_log['date_time_conv'] = pd.to_datetime(df_log[sample_column], format=sample.format)
                 df_log = df_log.loc[df_log["date_time_conv"].between(start_date, end_date)]
                 df_log = df_log.drop(columns=['date_time_conv'])
 
