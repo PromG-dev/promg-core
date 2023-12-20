@@ -6,6 +6,7 @@ from .database_managers import authentication
 from .data_managers.datastructures import DatasetDescriptions
 from .database_managers.db_connection import Query
 from .utilities.performance_handling import Performance
+from .utilities.configuration import Configuration
 
 __all__ = [SemanticHeader,
            DatabaseConnection,
@@ -13,4 +14,5 @@ __all__ = [SemanticHeader,
            DatasetDescriptions,
            Query,
            Performance,
-           OcedPg]
+           OcedPg,
+           Configuration]

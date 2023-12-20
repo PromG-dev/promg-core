@@ -8,6 +8,7 @@ from typing import List, Any, Optional, Union, Dict
 from dataclasses import dataclass
 
 from ..utilities.auxiliary_functions import replace_undefined_value, create_list, get_id_attribute_from_label
+from ..utilities.configuration import Configuration
 import re
 
 from ..utilities.singleton import Singleton
@@ -902,11 +903,8 @@ class SemanticHeader(metaclass=Singleton):
         return SemanticHeader(name=_name, version=_version, records=_records, nodes=_nodes, relations=_relations)
 
     @staticmethod
-    def create_semantic_header(path: Path = None, dataset_name: str = None):
-        if path is None:
-            if dataset_name is None:
-                raise ValueError("At least a path or dataset name has be to defined")
-            path = Path(f'json_files/{dataset_name}.json')
+    def create_semantic_header(config: Configuration):
+        path = config.semantic_header_path
 
         with open(path) as f:
             json_semantic_header = json.load(f)
