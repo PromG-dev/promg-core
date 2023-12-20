@@ -12,7 +12,7 @@ class DataImporterQueryLibrary:
     def determine_mapping_str(mapping):
         if mapping == "":
             return ""
-        mapping_str = ''',{mapping:$mapping}''' if mapping != "" else ""
+        mapping_str = ''',{nullValues: [""], mapping:$mapping}''' if mapping != "" else ""
         mapping_str = Template(mapping_str).safe_substitute({"mapping": mapping})
         return mapping_str
 
