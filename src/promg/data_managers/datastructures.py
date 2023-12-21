@@ -583,13 +583,13 @@ class DataStructure:
     def all_required_attributes_are_present_in_df_log(self, df_log, record_constructor):
         required_attributes_are_present = pd.Series(True, index=np.arange(len(df_log)), name='present')
         for required_attribute in record_constructor.required_attributes:
-            if required_attribute == "index":
+            if required_attribute == "index" or required_attribute == "log":
                 continue
             if required_attribute in self.attributes:
                 if self.attributes[required_attribute].optional:
                     # if the required attribute is optional in the structure, check whether the required attribute is
                     # not null
-                    required_attributes_are_present = required_attributes_are_present[0] & df_log[
+                    required_attributes_are_present = required_attributes_are_present & df_log[
                         required_attribute].notnull()
                 # else the required attributes is required in the structure, hence nothing changes
             else:  # the required attribute is missing in the structure -> hence not all are present
@@ -614,24 +614,24 @@ class DataStructure:
                 column_name = condition_list[0].strip()
                 if "." in column_name:
                     column_name = column_name.split(".")[1].strip()
-                column_value = condition_list[1].strip()
-                where_condition_satisfied = where_condition_satisfied[0] & (
+                column_value = condition_list[1].strip().strip('"')
+                where_condition_satisfied = where_condition_satisfied & (
                         df_log[column_name].astype("string") == column_value)
             elif "STARTS WITH" in condition:
                 condition_list = stripped_condition.split("STARTS WITH")
                 column_name = condition_list[0].strip()
                 if "." in column_name:
                     column_name = column_name.split(".")[1].strip()
-                column_value = condition_list[1].strip()
-                where_condition_satisfied = where_condition_satisfied[0] & df_log[
+                column_value = condition_list[1].strip().strip('"')
+                where_condition_satisfied = where_condition_satisfied & df_log[
                     column_name].str.startswith(column_value)
             elif "ENDS WITH" in condition:
                 condition_list = stripped_condition.split("ENDS WITH")
                 column_name = condition_list[0].strip()
                 if "." in column_name:
                     column_name = column_name.split(".")[1].strip()
-                column_value = condition_list[1].strip()
-                where_condition_satisfied = where_condition_satisfied[0] & df_log[
+                column_value = condition_list[1].strip().strip('"')
+                where_condition_satisfied = where_condition_satisfied & df_log[
                     column_name].str.endswith(column_value)
         return where_condition_satisfied
 
