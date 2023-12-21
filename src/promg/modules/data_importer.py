@@ -138,6 +138,8 @@ class Importer:
                 mapping[col_name] = 'INTEGER'
             elif pd.api.types.is_float_dtype(type):
                 mapping[col_name] = 'FLOAT'
+            elif pd.api.types.is_bool_dtype(type):
+                mapping[col_name] = 'BOOLEAN'
             else:
                 raise Exception(f"Type for column {col_name} is not defined")
 
