@@ -7,6 +7,7 @@ from neo4j import GraphDatabase
 from . import authentication
 from .authentication import Credentials
 from ..utilities.singleton import Singleton
+from ..utilities.configuration import Configuration
 
 
 class Query:
@@ -108,15 +109,6 @@ class DatabaseConnection(metaclass=Singleton):
             return result
 
     @staticmethod
-    def set_up_connection(
-            credentials: Credentials = authentication.connections_map[authentication.Connections.LOCAL],
-            verbose: bool = False,
-            batch_size: int = 100000):
-        return DatabaseConnection(db_name=credentials.user, uri=credentials.uri, user=credentials.user,
-                                  password=credentials.password, verbose=verbose, batch_size=batch_size)
-
-    @staticmethod
-    def set_up_connection_using_key(key=authentication.Connections.LOCAL, verbose: bool = False,
-                                    batch_size: int = 100000):
-        credentials = authentication.connections_map[key]
-        return DatabaseConnection.set_up_connection(credentials, verbose, batch_size=batch_size)
+    def set_up_connection(config: Configuration):
+        return DatabaseConnection(db_name=config.user, uri=config.uri, user=config.user,
+                                  password=config.password, verbose=config.verbose, batch_size=config.batch_size)

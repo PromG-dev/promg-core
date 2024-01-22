@@ -23,7 +23,7 @@ setup(
     description='Pyhton library to build Event Knowledge Graphs',
     author='A. Swevels, D.Fahland',
     python_requires='>=3.7',
-    install_requires=['neo4j', 'numpy', 'pandas', 'tabulate', 'tqdm'],
+    install_requires=['neo4j', 'numpy', 'pandas', 'tabulate', 'tqdm', 'pyyaml'],
     license='GPL 3.0',
     long_description=long_description,
     long_description_content_type='text/markdown',
