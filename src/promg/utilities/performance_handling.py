@@ -8,19 +8,17 @@ from tqdm import tqdm
 
 from .singleton import Singleton
 from ..utilities.context_manager_tqdm import Nostdout
+from ..utilities.configuration import Configuration
 
 
 class Performance(metaclass=Singleton):
-    def __init__(self, perf_path: str, number_of_steps: int = None):
+    def __init__(self, perf_path: str):
         self.start = time.time()
         self.last = self.start
         self.perf = pd.DataFrame(columns=["name", "start", "end", "duration"])
         self.path = perf_path
         self.count = 0
-        if number_of_steps is not None:
-            self.pbar = tqdm(total=number_of_steps, file=sys.stdout)
-        else:
-            self.pbar = tqdm(file=sys.stdout)
+        self.pbar = tqdm(file=sys.stdout)
         self.total = None
         # start python trickery
         self.ctx = Nostdout()
@@ -92,13 +90,13 @@ class Performance(metaclass=Singleton):
         self.perf.to_csv(self.path, sep=";", decimal=",")
 
     @staticmethod
-    def set_up_performance_with_path(path, number_of_steps: int = None):
-        return Performance(perf_path=path, number_of_steps=number_of_steps)
+    def set_up_performance_with_path(path):
+        return Performance(perf_path=path)
 
     @staticmethod
-    def set_up_performance(dataset_name, use_sample, number_of_steps: int = None):
-        path = os.path.join("perf", dataset_name, f"{dataset_name}_{'sample_' * use_sample}Performance.csv")
-        return Performance.set_up_performance_with_path(path=path, number_of_steps=number_of_steps)
+    def set_up_performance(config: Configuration):
+        path = os.path.join("perf", f"{config.db_name}_{'sample_' * config.use_sample}Performance.csv")
+        return Performance.set_up_performance_with_path(path=path)
 
     def finish_and_save(self):
         self.finish()
