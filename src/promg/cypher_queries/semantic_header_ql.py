@@ -347,6 +347,7 @@ class SemanticHeaderQueryLibrary:
                         'MERGE (first) -[df:$df_entity {entityType: "$entity_type"}]->(second)
                          SET df.type = "DF"
                          SET df.entityId = n.sysId
+                         SET df.duration = second.timestamp - first.timestamp
                         ',
                         {batchSize: $batch_size})
                     '''
@@ -367,6 +368,7 @@ class SemanticHeaderQueryLibrary:
                                         RETURN first, second',
                                         'MERGE (first) -[df:$df_entity {entityType: "$entity_type"}]->(second)
                                          SET df.type = "DF"
+                                         SET df.duration = second.timestamp - first.timestamp
                                         ',
                                         {batchSize: $batch_size})
                                     '''
@@ -382,6 +384,7 @@ class SemanticHeaderQueryLibrary:
                                 RETURN first, second',
                                 'MERGE (first) -[df:$df_entity {entityType: "$entity_type"}]->(second)
                                  SET df.type = "DF"
+                                 SET df.duration = second.timestamp - first.timestamp
                                 ',
                                 {batchSize: $batch_size})
                             '''
