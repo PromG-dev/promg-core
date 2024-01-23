@@ -12,7 +12,7 @@ import numpy as np
 import pandas as pd
 from pandas import DataFrame
 
-from .semantic_header import Node
+from .semantic_header import RecordConstructor
 from ..utilities.auxiliary_functions import replace_undefined_value, create_list
 from ..utilities.configuration import Configuration
 
@@ -417,32 +417,52 @@ class DataStructure:
             self.attributes["timestamp"] = complete_attribute
             del self.attributes["completeTimestamp"]
 
-    def determine_required_labels(self, records):
+    def check_if_required_attributes_are_present(self, record_constructor):
+        # loop over all required attributes of the record constructor
+        # --> check whether they are required by self
+        required = True
+        for required_attribute in record_constructor.required_attributes:
+            if required_attribute == "index":  # records of an always have an index, so records will have
+                # the required attributes = index
+                continue
+            if required_attribute not in self.attributes or self.attributes[required_attribute].optional:
+                # if the required attribute does not occur in the self.attributes or the attribute is
+                # optional, then the record_constructor labels are not required
+                required = False
+        return required
+
+    def determine_required_labels(self, records: List["RecordConstructor"]):
+        # determine the required labels for the records defined by this datastructure
+        # therefore, we have to check for all record constructors in records
+        # whether the required attributes are present by the dataset description definition
+
+        # initially, self.required_labels might be None, hence we need to make it an empty list.
         if self.required_labels is None:
             self.required_labels = []
+
+        # loop over all record_constructors in records
         for record_constructor in records:
+            # check whether self.labels appear in the record constructor
             if self.labels_appear_in_record_constructor(record_constructor):
-                required = True
                 if record_constructor.prevalent_record.where_condition != "":
+                    # a where condition is specified, then not all records require the record_constructor labels
                     required = False
                 else:
-                    for required_attribute in record_constructor.required_attributes:
-                        if required_attribute == "index":
-                            continue
-                        if required_attribute not in self.attributes or self.attributes[
-                            required_attribute].optional:
-                            required = False
-                            break
+                    required = self.check_if_required_attributes_are_present(record_constructor)
                 if required:
+                    # if required = true, then the record_constructor labels are required labels of self
                     self.required_labels.extend(record_constructor.record_labels)
         self.required_labels = list(set(self.required_labels))
 
-    def get_required_labels(self, records):
+    def get_required_labels(self, records: List["RecordConstructor"]):
         if self.required_labels is None:
             self.determine_required_labels(records)
         return self.required_labels
 
-    def get_required_labels_str(self, records):
+    def get_required_labels_str(self, records: List["RecordConstructor"]):
+        """Method to convert the required labels determined by records to a string seperated by :
+        :param records: the required
+        """
         if self.required_labels is None:
             self.determine_required_labels(records)
         required_labels_w_records = self.required_labels[:]
