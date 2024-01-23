@@ -1,7 +1,7 @@
 from typing import Dict, Optional, List, Union
 from string import Template
 
-from ..data_managers.datastructures import DataStructure
+from ..data_managers.datastructures import DataStructure, DatetimeObject
 from ..data_managers.semantic_header import RecordConstructor
 from ..database_managers.db_connection import Query
 
@@ -9,7 +9,13 @@ from ..database_managers.db_connection import Query
 class DataImporterQueryLibrary:
 
     @staticmethod
-    def determine_mapping_str(mapping):
+    def create_mapping_str(mapping: str) -> str:
+        """
+        Create the string including the information of the datatypes mapping used when importing records.
+
+        :param mapping: The dtype mapping of the imported records as string
+        :return: str containing the mapping in Cypher format
+        """
         if mapping == "":
             return ""
         mapping_str = ''',{nullValues: [""], mapping:$mapping}''' if mapping != "" else ""
@@ -21,11 +27,11 @@ class DataImporterQueryLibrary:
         """
         Create event nodes for each row in the batch with labels
         The properties of each row are also the property of the node
-        @param mapping:
-        @param file_name:
+        @param mapping: The dtype mapping of the imported records as string
+        @param file_name: the name of the file to be imported
         @param labels: The labels of the record nodes
 
-        @return: None
+        @return: Query object to create record nodes by loading csv
         """
 
         # $batch is a variable we can add in tx.run, this allows us to use string properties
@@ -44,15 +50,23 @@ class DataImporterQueryLibrary:
                      template_string_parameters={
                          "file_name": file_name,
                          "labels": labels,
-                         "mapping_str": DataImporterQueryLibrary.determine_mapping_str(mapping)
+                         "mapping_str": DataImporterQueryLibrary.create_mapping_str(mapping)
                      })
 
     @staticmethod
-    def get_make_timestamp_date_query(required_labels_str, attribute, datetime_object, load_status) -> Query:
+    def get_make_timestamp_date_query(required_labels_str: str, attribute: str, datetime_object: DatetimeObject,
+                                      load_status: int) -> Query:
         """
-        Convert the strings of the timestamp to the datetime as used in cypher
+        Create a query to convert the strings of the timestamp to the datetime as used in Neo4j
         Remove the str_timestamp property
-        @return: None
+
+        @param required_labels_str: the required labels of the just imported nodes
+        @param attribute: the name of the attribute that should be converted
+        @param datetime_object: the DatetimeObject describing how the attribute should be converted
+        @param load_status: the current load status of the records that are being imported
+
+        @return: Query object to convert the timestamps string into timestamp objects
+
         """
         offset = datetime_object.timezone_offset
         offset = f'{attribute}+"{offset}"' if offset != "" else attribute
@@ -84,7 +98,21 @@ class DataImporterQueryLibrary:
                      })
 
     @staticmethod
-    def get_convert_epoch_to_timestamp_query(required_labels_str, attribute, datetime_object, load_status) -> Query:
+    def get_convert_epoch_to_timestamp_query(required_labels_str: str, attribute: str, datetime_object: DatetimeObject,
+                                             load_status: int) -> Query:
+        """
+        Create a query to convert epoch timestamp to the datetime as used in Neo4j
+        Remove the str_timestamp property
+
+        @param required_labels_str: the required labels of the just imported nodes
+        @param attribute: the name of the attribute that should be converted
+        @param datetime_object: the DatetimeObject describing how the attribute should be converted
+        @param load_status: the current load status of the records that are being imported
+
+        @return: Query object to convert the epoch timestamps into timestamp objects
+
+        """
+
         # language=SQL
         query_str = '''
                 CALL apoc.periodic.iterate(
@@ -113,7 +141,17 @@ class DataImporterQueryLibrary:
                      })
 
     @staticmethod
-    def get_finalize_import_records_query(load_status, required_labels) -> Query:
+    def get_finalize_import_records_query(required_labels_str: str, load_status: int) -> Query:
+        """
+        Create a query to finalize the import of the record nodes, i.e. remove the load status
+
+        @param required_labels_str: the required labels of the just imported nodes
+        @param load_status: the current load status of the records that are being imported
+
+        @return: Query object to remove the load status attribute of the just imported nodes
+
+        """
+
         # language=SQL
         query_str = '''
             CALL apoc.periodic.commit(
@@ -127,7 +165,7 @@ class DataImporterQueryLibrary:
             '''
 
         return Query(query_str=query_str,
-                     template_string_parameters={"required_labels": required_labels},
+                     template_string_parameters={"required_labels": required_labels_str},
                      parameters={
                          "load_status": load_status
                      }
@@ -135,32 +173,47 @@ class DataImporterQueryLibrary:
 
     @staticmethod
     def get_filter_records_by_property_query(prop: str, load_status: int, values: Optional[List[str]] = None,
-                                             exclude=True, required_labels="Record") -> Query:
+                                             exclude: bool = True, required_labels_str="Record") -> Query:
+        """
+        Create a query to remove nodes and their relationships if they have (exlude) or have not (include) a certain
+        attribute or a certain attribute-value pairs.
+
+        @param prop: the name of the property
+        @param load_status: the current load status of the records that are being imported
+        @param values: a list of values that the property should (not) have for being removed
+        @param exclude: boolean indicating whether nodes should be removed if they match the criteria (exclude=True)
+        or be kept (exclude = False)
+        @param required_labels_str: the labels the nodes should have
+
+        @return: Query object to remove the load status attribute of the just imported nodes
+
+        """
+
         if values is None:  # match all events that have a specific property
             negation = "NOT" if exclude else ""
-            # query to delete all events and its relationship with property
+            # query to delete all records and its relationship with property
             # language=SQL
             query_str = '''
                     MATCH (r:$required_labels {loadStatus: $load_status})
-                    WHERE e.$prop IS $negation NULL
-                    DETACH DELETE e
+                    WHERE r.$prop IS $negation NULL
+                    DETACH DELETE r
                     '''
             template_string_parameters = {"prop": prop, "negation": negation}
         else:  # match all events with specific property and value
             negation = "" if exclude else "NOT"
-            # match all e and delete them and its relationship
+            # match all r and delete them and its relationship
             # language=SQL
             query_str = '''
                     MATCH (r:$required_labels {loadStatus: $load_status})
-                    WHERE $negation e.$prop IN $values
-                    DETACH DELETE e
+                    WHERE $negation r.$prop IN $values
+                    DETACH DELETE r
                 '''
             template_string_parameters = {
                 "prop": prop,
                 "negation": negation,
                 "values": values,
                 "load_status": load_status,
-                "required_labels": required_labels
+                "required_labels": required_labels_str
             }
 
         # execute query
@@ -169,6 +222,15 @@ class DataImporterQueryLibrary:
 
     @staticmethod
     def get_update_load_status_query(current_load_status: int):
+        """
+        Create a query to update the record nodes that match the current load status with 1
+
+        @param current_load_status: the current load status of the records that are being imported
+
+        @return: Query object that updates the Record nodes that match the current load status with 1
+
+        """
+
         query_str = '''
         CALL apoc.periodic.commit(
             'MATCH (record:Record) 
