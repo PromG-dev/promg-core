@@ -45,7 +45,7 @@ class Performance(metaclass=Singleton):
     def track(argument: str = None):
         def performance_tracker_wrapper(func):
             def wrapper(self, *args, **kwargs):
-                func(self, *args, **kwargs)
+                result = func(self, *args, **kwargs)
                 end = time.time()
                 perf = Performance()
                 if argument is None or argument not in kwargs:
@@ -63,6 +63,7 @@ class Performance(metaclass=Singleton):
                 perf.last = end
                 perf.count += 1
                 perf.pbar.update(1)
+                return result
 
             return wrapper
 
