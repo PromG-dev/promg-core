@@ -87,7 +87,7 @@ class Importer:
                                                "values": values,
                                                "exclude": exclude,
                                                "load_status": self.load_status,
-                                               "required_labels": required_labels_str
+                                               "required_labels_str": required_labels_str
                                            })
 
     @Performance.track("structure")
@@ -96,7 +96,7 @@ class Importer:
         self.connection.exec_query(di_ql.get_finalize_import_records_query,
                                    **{
                                        "load_status": self.load_status,
-                                       "required_labels": required_labels_str
+                                       "required_labels_str": required_labels_str
                                    })
         self.load_status = 0
 
