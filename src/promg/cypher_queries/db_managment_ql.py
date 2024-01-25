@@ -120,6 +120,36 @@ class DBManagementQueryLibrary:
                      parameters={})
 
     @staticmethod
+    def get_set_recordid_as_key_node_query() -> Query:
+        # language=SQL
+        query_str = '''
+            CREATE CONSTRAINT record_id_as_key_node IF NOT EXISTS FOR (r:Record) REQUIRE (r.recordId) IS NODE KEY
+        '''
+        return Query(query_str=query_str,
+                     template_string_parameters={},
+                     parameters={})
+
+    @staticmethod
+    def get_set_recordid_as_index_query() -> Query:
+        # language=SQL
+        query_str = '''
+            CREATE INDEX record_id_as_index IF NOT EXISTS FOR (r:Record) ON (r.recordId)
+        '''
+        return Query(query_str=query_str,
+                     template_string_parameters={},
+                     parameters={})
+
+    @staticmethod
+    def get_set_load_status_as_index_query() -> Query:
+        # language=SQL
+        query_str = '''
+            CREATE INDEX load_status_as_index IF NOT EXISTS FOR (r:Record) ON (r.loadStatus)
+        '''
+        return Query(query_str=query_str,
+                     template_string_parameters={},
+                     parameters={})
+
+    @staticmethod
     def get_node_count_query() -> Query:
         # language=SQL
         query_str = '''
