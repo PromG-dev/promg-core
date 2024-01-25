@@ -319,7 +319,32 @@ class SemanticHeaderQueryLibrary:
                      })
 
     @staticmethod
-    def get_create_directly_follows_query(entity: Union[ConstructedNodes, ConstructedRelation], event_label) -> Query:
+    def get_add_duration_query_str(add_duration) -> str:
+        if add_duration:
+            # check the type of the timestamp attributes.
+            # DATE, DATETIME, TIME --> create Duration between first and second
+            # INT, FLOAT --> save difference between second and first
+            add_duration_str = '''
+                , CASE 
+                    WHEN apoc.meta.cypher.type(first.timestamp) IN ["DATE_TIME", "TIME", "DATE"] THEN duration.between(
+                    first.timestamp, second.timestamp)
+                    WHEN apoc.meta.cypher.type(first.timestamp) IN ["INTEGER", "FLOAT"] THEN  second.timestamp - 
+                    first.timestamp
+                    ELSE NULL
+                END AS duration
+            '''
+        else:
+            # we don't want to add the duration, so we use NULL for duration
+            # This ensures us that we can use duration in the rest of the queries
+            add_duration_str = '''
+                , NULL as duration
+            '''
+
+        return add_duration_str
+
+    @staticmethod
+    def get_create_directly_follows_query(entity: Union[ConstructedNodes, ConstructedRelation], event_label,
+                                          add_duration: bool = False) -> Query:
         # find the specific entities and events with a certain label correlated to that entity
         # order all events by time, order_nr and id grouped by a node n
         # collect the sorted nodes as a list
@@ -343,11 +368,11 @@ class SemanticHeaderQueryLibrary:
                         WITH n , collect (nodes) as nodeList
                         UNWIND range(0,size(nodeList)-2) AS i
                         WITH n , nodeList[i] as first, nodeList[i+1] as second
-                        RETURN n, first, second',
+                        RETURN n, first, second $add_duration_str',
                         'MERGE (first) -[df:$df_entity {entityType: "$entity_type"}]->(second)
                          SET df.type = "DF"
                          SET df.entityId = n.sysId
-                         SET df.duration = second.timestamp - first.timestamp
+                         SET df.duration = duration
                         ',
                         {batchSize: $batch_size})
                     '''
@@ -365,10 +390,10 @@ class SemanticHeaderQueryLibrary:
                                         WITH n , collect (nodes) as nodeList
                                         UNWIND range(0,size(nodeList)-2) AS i
                                         WITH n , nodeList[i] as first, nodeList[i+1] as second
-                                        RETURN first, second',
+                                        RETURN first, second $add_duration_str',
                                         'MERGE (first) -[df:$df_entity {entityType: "$entity_type"}]->(second)
                                          SET df.type = "DF"
-                                         SET df.duration = second.timestamp - first.timestamp
+                                         SET df.duration = duration
                                         ',
                                         {batchSize: $batch_size})
                                     '''
@@ -381,14 +406,13 @@ class SemanticHeaderQueryLibrary:
                                 WITH n , collect (nodes) as nodeList
                                 UNWIND range(0,size(nodeList)-2) AS i
                                 WITH n , nodeList[i] as first, nodeList[i+1] as second
-                                RETURN first, second',
+                                RETURN first, second $add_duration_str',
                                 'MERGE (first) -[df:$df_entity {entityType: "$entity_type"}]->(second)
                                  SET df.type = "DF"
-                                 SET df.duration = second.timestamp - first.timestamp
+                                 SET df.duration = duration
                                 ',
                                 {batchSize: $batch_size})
                             '''
-
 
         return Query(query_str=query_str,
                      template_string_parameters={
@@ -396,7 +420,8 @@ class SemanticHeaderQueryLibrary:
                          "corr_type_string": entity.get_corr_type_strings(),
                          "event_label": event_label,
                          "df_entity": entity.get_df_label(),
-                         "entity_type": entity.type
+                         "entity_type": entity.type,
+                         "add_duration_str": SemanticHeaderQueryLibrary.get_add_duration_query_str(add_duration)
                      })
 
     @staticmethod
@@ -419,4 +444,3 @@ class SemanticHeaderQueryLibrary:
                          "entity_type": node.type,
                          "df_entity": node.get_df_label()
                      })
-
