@@ -24,8 +24,8 @@ class EKGUsingSemanticHeaderBuilder:
                                                  "use_record": True
                                              })
         merge_first = num_ids[0]['num_ids'] < 1000 \
-                        and "Event" not in node_constructor.get_labels() \
-                        and "EntityAttribute" not in node_constructor.get_labels()
+                      and "Event" not in node_constructor.get_labels() \
+                      and "EntityAttribute" not in node_constructor.get_labels()
 
         self.connection.exec_query(sh_ql.get_create_node_by_record_constructor_query,
                                    **{
@@ -52,7 +52,8 @@ class EKGUsingSemanticHeaderBuilder:
 
                 self.connection.exec_query(sh_ql.get_reset_merged_in_nodes_query,
                                            **{
-                                               "node_constructor": node_constructor}
+                                               "node_constructor": node_constructor
+                                           }
                                            )
 
     def create_nodes_by_relations(self, node_types: Optional[List[str]]) -> None:
@@ -102,7 +103,14 @@ class EKGUsingSemanticHeaderBuilder:
                                                "use_from": use_from
                                            })
 
-    def create_df_edges(self, entity_types: List[str], event_label: str) -> None:
+    def create_df_edges(self, entity_types: List[str], event_label: str, add_duration: bool = False) -> None:
+        """
+        Create Directly Follows edges for the given entity types using the semantic header information
+        :param entity_types: list of entity types for which DF edge should be created. If None, we try for all entities
+        :param event_label: the labels of the event nodes for which we want to create the event_label
+        :param add_duration: boolean indicating whether we want to add the duration to the df edges
+        :return: None
+        """
         entity: ConstructedNodes
 
         if entity_types is None:
@@ -111,18 +119,20 @@ class EKGUsingSemanticHeaderBuilder:
 
         for entity in self.semantic_header.nodes:
             if entity.infer_df and entity.type in entity_types:
-                self._create_df_edges_for_entity(entity=entity, event_label=event_label)
+                self._create_df_edges_for_entity(entity=entity, event_label=event_label, add_duration=add_duration)
 
         for relation in self.semantic_header.relations:
             if relation.model_as_node and relation.infer_df and relation.type in entity_types:
-                self._create_df_edges_for_entity(entity=relation, event_label=event_label)
+                self._create_df_edges_for_entity(entity=relation, event_label=event_label, add_duration=add_duration)
 
     @Performance.track("entity")
-    def _create_df_edges_for_entity(self, entity: Union[ConstructedNodes, ConstructedRelation], event_label):
+    def _create_df_edges_for_entity(self, entity: Union[ConstructedNodes, ConstructedRelation], event_label,
+                                    add_duration):
         self.connection.exec_query(sh_ql.get_create_directly_follows_query,
                                    **{
                                        "entity": entity,
-                                       "event_label": event_label
+                                       "event_label": event_label,
+                                       "add_duration": add_duration
                                    })
 
     def merge_duplicate_df(self):
