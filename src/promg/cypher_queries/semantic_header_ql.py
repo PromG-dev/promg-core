@@ -326,10 +326,12 @@ class SemanticHeaderQueryLibrary:
             # INT, FLOAT --> save difference between second and first
             add_duration_str = '''
                 , CASE 
-                    WHEN apoc.meta.cypher.type(first.timestamp) IN ["DATE_TIME", "TIME", "DATE"] THEN duration.between(
-                    first.timestamp, second.timestamp)
-                    WHEN apoc.meta.cypher.type(first.timestamp) IN ["INTEGER", "FLOAT"] THEN  second.timestamp - 
-                    first.timestamp
+                    WHEN apoc.meta.cypher.type(first.timestamp) IN ["DATE_TIME", "TIME", "DATE"] 
+                        AND apoc.meta.cypher.type(second.timestamp) IN ["DATE_TIME", "TIME", "DATE"] 
+                        THEN duration.between(first.timestamp, second.timestamp)
+                    WHEN apoc.meta.cypher.type(first.timestamp) IN ["INTEGER", "FLOAT"]
+                     AND apoc.meta.cypher.type(second.timestamp) IN ["INTEGER", "FLOAT"]
+                     THEN  second.timestamp - first.timestamp
                     ELSE NULL
                 END AS duration
             '''
