@@ -21,8 +21,8 @@ class Performance(metaclass=Singleton):
         self.pbar = tqdm(file=sys.stdout)
         self.total = None
         # start python trickery
-        self.ctx = Nostdout()
-        self.ctx.__enter__()
+        # self.ctx = Nostdout()
+        # self.ctx.__enter__()
 
     def string_time(self, epoch_time):
         return datetime.utcfromtimestamp(epoch_time).strftime("%H:%M:%S")
