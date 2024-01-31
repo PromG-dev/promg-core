@@ -19,6 +19,7 @@ class Performance(metaclass=Singleton):
         self.path = perf_path
         self.count = 0
         self.pbar = tqdm(file=sys.stdout)
+        self.status = "Waiting on request"
         self.total = None
         # start python trickery
         # self.ctx = Nostdout()
@@ -60,6 +61,7 @@ class Performance(metaclass=Singleton):
                         "duration": (end - perf.last)
                     }])])
                 perf.pbar.set_description(f"{log_message}: took {round(end - perf.last, 2)} seconds")
+                perf.status = f"{log_message}: took {round(end - perf.last, 2)} seconds"
                 perf.last = end
                 perf.count += 1
                 perf.pbar.update(1)
