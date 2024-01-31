@@ -10,11 +10,14 @@ import pandas as pd
 
 
 class Importer:
-    def __init__(self, data_structures: DatasetDescriptions, import_directory: str,
+    def __init__(self, database_connection: DatabaseConnection,
+                 data_structures: DatasetDescriptions,
+                 semantic_header: SemanticHeader,
+                 import_directory: str,
                  use_sample: bool = False, use_preprocessed_files: bool = False):
-        self.connection = DatabaseConnection()
+        self.connection = database_connection
         self.structures = data_structures.structures
-        self.records = SemanticHeader().records
+        self.records = semantic_header.records
 
         self.load_batch_size = 20000
         self.use_sample = use_sample
