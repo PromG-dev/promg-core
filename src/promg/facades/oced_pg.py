@@ -41,12 +41,12 @@ class OcedPg:
         self.transform()
 
     # region import events
-    def load(self):
+    def load(self, imported_logs = None):
         """
         Import data, both event data as other data, as specified in the DS files.
         Add record labels as specified in the semantic header
         """
-        self.data_importer.import_data()
+        return self.data_importer.import_data(imported_logs)
 
     # endregion
     def transform(self):
