@@ -111,3 +111,7 @@ class DBManagement:
         Print the statistics nicely using tabulate
         """
         print(tabulate(self.get_statistics()))
+
+    def get_imported_logs(self) -> List[str]:
+        imported_logs = self.connection.exec_query(dbm_ql.get_imported_logs_query)
+        return imported_logs
