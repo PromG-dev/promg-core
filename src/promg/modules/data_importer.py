@@ -16,7 +16,9 @@ class Importer:
                  data_structures: DatasetDescriptions,
                  semantic_header: SemanticHeader,
                  import_directory: Optional[str] = None,
-                 use_sample: bool = False, use_preprocessed_files: bool = False):
+                 use_sample: bool = False,
+                 use_preprocessed_files: bool = False,
+                 store_files: bool = False):
         self.connection = database_connection
         self.structures = data_structures.structures
         self.records = semantic_header.records
@@ -24,6 +26,7 @@ class Importer:
         self.load_batch_size = 20000
         self.use_sample = use_sample
         self.use_preprocessed_files = use_preprocessed_files
+        self.store_files = store_files
         self.load_status = 0
 
         self._import_directory = import_directory
@@ -46,7 +49,8 @@ class Importer:
                     df_log = structure.read_data_set(file_name=file_name,
                                                      use_sample=self.use_sample,
                                                      use_preprocessed_file=self.use_preprocessed_files,
-                                                     load_status=self.load_status)
+                                                     load_status=self.load_status,
+                                                     store_preprocessed_file=self.store_files)
 
                     df_log = structure.determine_optional_labels_in_log(df_log, records=self.records)
 

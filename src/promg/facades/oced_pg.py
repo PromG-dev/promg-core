@@ -13,7 +13,10 @@ class OcedPg:
 
     def __init__(self, database_connection: DatabaseConnection, dataset_descriptions: DatasetDescriptions,
                  semantic_header: SemanticHeader,
-                 use_sample: bool = False, use_preprocessed_files: bool = False, import_directory=None):
+                 use_sample: bool = False,
+                 use_preprocessed_files: bool = False,
+                 store_files: bool = True,
+                 import_directory=None):
         """
             This is a Class that acts as a facade for used to extract, load and transform their data using OCED-PG
 
@@ -32,7 +35,8 @@ class OcedPg:
                                       use_sample=use_sample,
                                       use_preprocessed_files=use_preprocessed_files,
                                       semantic_header=semantic_header,
-                                      import_directory=import_directory)
+                                      import_directory=import_directory,
+                                      store_files=store_files)
         self.ekg_builder = EKGUsingSemanticHeaderBuilder(database_connection=database_connection,
                                                          semantic_header=semantic_header)
 
