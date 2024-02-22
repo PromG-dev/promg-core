@@ -23,6 +23,24 @@ class DataImporterQueryLibrary:
         return mapping_str
 
     @staticmethod
+    def get_import_directory_query() -> Query:
+        """
+        Query that gets the import directory of the current running database
+
+        :return: Query object to get import directory of the current running database
+        """
+
+        # language=SQL
+        query_str = """
+            Call dbms.listConfig() YIELD name, value
+            WHERE name='server.directories.import'
+            RETURN value
+        """
+
+        return Query(query_str=query_str)
+
+
+    @staticmethod
     def get_create_nodes_by_loading_csv_query(labels: str, file_name: str, mapping: str) -> Query:
         """
         Create event nodes for each row in the batch with labels
