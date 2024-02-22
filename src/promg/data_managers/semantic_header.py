@@ -874,7 +874,7 @@ class RecordConstructor:
         return self.record_labels
 
 
-class SemanticHeader(metaclass=Singleton):
+class SemanticHeader:
     def __init__(self, name: str, version: str,
                  records: List["RecordConstructor"],
                  nodes: List[ConstructedNodes],

@@ -204,3 +204,13 @@ class DBManagementQueryLibrary:
             '''
 
         return Query(query_str=query_str)
+
+    @staticmethod
+    def get_imported_logs_query() -> Query:
+        # language = SQL
+        query_str = '''
+            MATCH (n:Record)
+            RETURN COLLECT(DISTINCT n.log) AS logs
+        '''
+
+        return Query(query_str=query_str)

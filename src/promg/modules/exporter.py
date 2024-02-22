@@ -9,8 +9,8 @@ from ..database_managers.db_connection import DatabaseConnection
 
 
 class Exporter:
-    def __init__(self):
-        self.connection = DatabaseConnection()
+    def __init__(self, db_connection):
+        self.connection = db_connection
 
     def get_event_log(self, entity_type, additional_event_attributes: Optional[List[str]] = None) -> List[
         Dict[str, Any]]:

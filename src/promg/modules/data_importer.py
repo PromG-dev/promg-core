@@ -10,11 +10,14 @@ import pandas as pd
 
 
 class Importer:
-    def __init__(self, data_structures: DatasetDescriptions, import_directory: str,
+    def __init__(self, database_connection: DatabaseConnection,
+                 data_structures: DatasetDescriptions,
+                 semantic_header: SemanticHeader,
+                 import_directory: str,
                  use_sample: bool = False, use_preprocessed_files: bool = False):
-        self.connection = DatabaseConnection()
+        self.connection = database_connection
         self.structures = data_structures.structures
-        self.records = SemanticHeader().records
+        self.records = semantic_header.records
 
         self.load_batch_size = 20000
         self.use_sample = use_sample
@@ -30,31 +33,33 @@ class Importer:
                                    })
         self.load_status += 1
 
-    def import_data(self) -> None:
+    def import_data(self, imported_logs) -> None:
         for structure in self.structures:
             required_labels_str = structure.get_required_labels_str(records=self.records)
 
             # read in all file names that match this structure
             for file_name in structure.file_names:
-                # read and import the nodes
-                df_log = structure.read_data_set(file_name=file_name,
-                                                 use_sample=self.use_sample,
-                                                 use_preprocessed_file=self.use_preprocessed_files,
-                                                 load_status=self.load_status)
+                if imported_logs is None or file_name not in imported_logs:
+                    # read and import the nodes
+                    df_log = structure.read_data_set(file_name=file_name,
+                                                     use_sample=self.use_sample,
+                                                     use_preprocessed_file=self.use_preprocessed_files,
+                                                     load_status=self.load_status)
 
-                df_log = structure.determine_optional_labels_in_log(df_log, records=self.records)
+                    df_log = structure.determine_optional_labels_in_log(df_log, records=self.records)
 
-                self._import_nodes_from_data(df_log=df_log, file_name=file_name,
-                                             required_labels_str=required_labels_str)
+                    self._import_nodes_from_data(df_log=df_log, file_name=file_name,
+                                                 required_labels_str=required_labels_str)
 
-                if structure.has_datetime_attribute():
-                    # once all events are imported, we convert the string timestamp to the timestamp as used in Cypher
-                    self._reformat_timestamps(structure=structure, required_labels_str=required_labels_str)
+                    if structure.has_datetime_attribute():
+                        # once all events are imported, we convert the string timestamp to the timestamp as used in Cypher
+                        self._reformat_timestamps(structure=structure, required_labels_str=required_labels_str)
 
-                # TODO: move filtering to pandas dataframe
-                self._filter_nodes(structure=structure,
-                                   required_labels_str=required_labels_str)  # filter nodes according to the structure
-                self._finalize_import(required_labels_str=required_labels_str)  # removes temporary properties
+                    # TODO: move filtering to pandas dataframe
+                    self._filter_nodes(structure=structure,
+                                       required_labels_str=required_labels_str)  # filter nodes according to the structure
+                    self._finalize_import(required_labels_str=required_labels_str)  # removes temporary properties
+
 
     @Performance.track("structure")
     def _reformat_timestamps(self, structure, required_labels_str):
