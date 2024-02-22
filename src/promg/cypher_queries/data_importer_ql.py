@@ -34,7 +34,7 @@ class DataImporterQueryLibrary:
         query_str = """
             Call dbms.listConfig() YIELD name, value
             WHERE name='server.directories.import'
-            RETURN value
+            RETURN value as directory
         """
 
         return Query(query_str=query_str)
