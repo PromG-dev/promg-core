@@ -6,8 +6,8 @@ from ..database_managers.db_connection import DatabaseConnection
 
 
 class InferenceEngine:
-    def __init__(self):
-        self.connection = DatabaseConnection()
+    def __init__(self, db_connection):
+        self.connection = db_connection
 
     def match_entity_with_batch_position(self, entity_type: str, relative_position_type: str) -> None:
         """

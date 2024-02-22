@@ -8,9 +8,10 @@ from ..cypher_queries.semantic_header_ql import SemanticHeaderQueryLibrary as sh
 
 
 class EKGUsingSemanticHeaderBuilder:
-    def __init__(self):
-        self.connection = DatabaseConnection()
-        self.semantic_header = SemanticHeader()
+    def __init__(self, database_connection: DatabaseConnection,
+                 semantic_header: SemanticHeader):
+        self.connection = database_connection
+        self.semantic_header = semantic_header
 
     def create_nodes_by_records(self, node_types: Optional[List[str]]) -> None:
         for node_constructor in self.semantic_header.get_node_by_record_constructors(node_types):

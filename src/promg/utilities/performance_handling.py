@@ -12,17 +12,20 @@ from ..utilities.configuration import Configuration
 
 
 class Performance(metaclass=Singleton):
-    def __init__(self, perf_path: str):
+    def __init__(self, perf_path: str, write_console=True):
         self.start = time.time()
         self.last = self.start
         self.perf = pd.DataFrame(columns=["name", "start", "end", "duration"])
         self.path = perf_path
         self.count = 0
         self.pbar = tqdm(file=sys.stdout)
+        self.status = "Waiting on request"
         self.total = None
         # start python trickery
-        self.ctx = Nostdout()
-        self.ctx.__enter__()
+        self.write_console = write_console
+        if write_console:
+            self.ctx = Nostdout()
+            self.ctx.__enter__()
 
     def string_time(self, epoch_time):
         return datetime.utcfromtimestamp(epoch_time).strftime("%H:%M:%S")
@@ -60,6 +63,7 @@ class Performance(metaclass=Singleton):
                         "duration": (end - perf.last)
                     }])])
                 perf.pbar.set_description(f"{log_message}: took {round(end - perf.last, 2)} seconds")
+                perf.status = f"{log_message}: took {round(end - perf.last, 2)} seconds"
                 perf.last = end
                 perf.count += 1
                 perf.pbar.update(1)
@@ -84,7 +88,8 @@ class Performance(metaclass=Singleton):
         self.pbar.set_description(f"Completed")
         self.pbar.close()
         # close python trickery
-        self.ctx.__exit__()
+        if self.write_console:
+            self.ctx.__exit__()
 
     def save(self):
         os.makedirs(os.path.dirname(self.path), exist_ok=True)

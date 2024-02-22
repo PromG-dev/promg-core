@@ -5,10 +5,10 @@ from ..database_managers.db_connection import DatabaseConnection
 
 
 class TaskIdentification:
-    def __init__(self, resource: str, case: str):
-        self.connection = DatabaseConnection()
-        self.resource: ConstructedNodes = SemanticHeader().get_entity(resource)
-        self.case: ConstructedNodes = SemanticHeader().get_entity(case)
+    def __init__(self, db_connection, semantic_header, resource: str, case: str):
+        self.connection = db_connection
+        self.resource: ConstructedNodes = semantic_header.get_entity(resource)
+        self.case: ConstructedNodes = semantic_header.get_entity(case)
 
     @Performance.track("resource")
     def identify_tasks(self):

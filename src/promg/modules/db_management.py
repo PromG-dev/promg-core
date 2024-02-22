@@ -3,14 +3,12 @@ from typing import List, Set, Optional, Dict
 from tabulate import tabulate
 
 from ..cypher_queries.db_managment_ql import DBManagementQueryLibrary as dbm_ql
-from ..database_managers.db_connection import DatabaseConnection
 from ..utilities.performance_handling import Performance
 
 
 class DBManagement:
-    def __init__(self):
-        self.connection = DatabaseConnection()
-        self.db_name = self.connection.db_name
+    def __init__(self, db_connection):
+        self.connection = db_connection
 
     @Performance.track()
     def clear_db(self, replace=True) -> None:
@@ -22,10 +20,14 @@ class DBManagement:
 
         """
         if replace:
-            self.connection.exec_query(dbm_ql.get_replace_db_query, **{"db_name": self.db_name})
+            result = self.connection.exec_query(dbm_ql.get_replace_db_query, **{"db_name": self.connection.db_name})
+            if result[0]['state'] == 'CaughtUp' and result[0]['success']:
+                return True
+            else:
+                return False
         else:
             self.connection.exec_query(dbm_ql.get_delete_relationships_query)
-            self.connection.exec_query(dbm_ql.get_delete_nodes_query)
+            return self.connection.exec_query(dbm_ql.get_delete_nodes_query)
 
     @Performance.track()
     def set_constraints(self) -> None:
@@ -109,3 +111,7 @@ class DBManagement:
         Print the statistics nicely using tabulate
         """
         print(tabulate(self.get_statistics()))
+
+    def get_imported_logs(self) -> List[str]:
+        imported_logs = self.connection.exec_query(dbm_ql.get_imported_logs_query)
+        return imported_logs

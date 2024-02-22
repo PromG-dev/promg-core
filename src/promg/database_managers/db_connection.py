@@ -21,7 +21,7 @@ class Query:
         self.database = database
 
 
-class DatabaseConnection(metaclass=Singleton):
+class DatabaseConnection:
     def __init__(self, uri: str, db_name: str, user: str, password: str, verbose: bool = False,
                  batch_size: int = 100000):
         self.db_name = db_name
