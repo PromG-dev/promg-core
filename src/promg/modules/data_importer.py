@@ -39,7 +39,7 @@ class Importer:
 
             # read in all file names that match this structure
             for file_name in structure.file_names:
-                if file_name not in imported_logs:
+                if imported_logs is None or file_name not in imported_logs:
                     # read and import the nodes
                     df_log = structure.read_data_set(file_name=file_name,
                                                      use_sample=self.use_sample,
