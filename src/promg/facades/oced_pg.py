@@ -12,8 +12,11 @@ from ..utilities.performance_handling import Performance
 class OcedPg:
 
     def __init__(self, database_connection: DatabaseConnection, dataset_descriptions: DatasetDescriptions,
-                 semantic_header: SemanticHeader, import_directory: str,
-                 use_sample: bool = False, use_preprocessed_files: bool = False):
+                 semantic_header: SemanticHeader,
+                 use_sample: bool = False,
+                 use_preprocessed_files: bool = False,
+                 store_files: bool = True,
+                 import_directory=None):
         """
             This is a Class that acts as a facade for used to extract, load and transform their data using OCED-PG
 
@@ -31,8 +34,9 @@ class OcedPg:
                                       data_structures=dataset_descriptions,
                                       use_sample=use_sample,
                                       use_preprocessed_files=use_preprocessed_files,
+                                      semantic_header=semantic_header,
                                       import_directory=import_directory,
-                                      semantic_header=semantic_header)
+                                      store_files=store_files)
         self.ekg_builder = EKGUsingSemanticHeaderBuilder(database_connection=database_connection,
                                                          semantic_header=semantic_header)
 
@@ -41,7 +45,7 @@ class OcedPg:
         self.transform()
 
     # region import events
-    def load(self, imported_logs = None):
+    def load(self, imported_logs=None):
         """
         Import data, both event data as other data, as specified in the DS files.
         Add record labels as specified in the semantic header
