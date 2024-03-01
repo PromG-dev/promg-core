@@ -39,6 +39,8 @@ class OcedPg:
                                       store_files=store_files)
         self.ekg_builder = EKGUsingSemanticHeaderBuilder(database_connection=database_connection,
                                                          semantic_header=semantic_header)
+        self.semantic_header = semantic_header
+        self.dataset_descriptions = dataset_descriptions
 
     def load_and_transform(self):
         self.load()
@@ -53,58 +55,70 @@ class OcedPg:
         return self.data_importer.import_data(imported_logs)
 
     # endregion
-    def transform(self):
+    def transform(self, imported_logs=None):
         """
             Transform the record layer into a semantic layer
         """
-        self.create_nodes()
-        self.create_relations()
+        self.create_nodes(imported_logs)
+        self.create_relations(imported_logs)
 
-    def create_nodes(self, node_types: Optional[List[str]] = None) -> None:
+    def create_nodes(self, node_types: Optional[List[str]] = None, imported_logs: Optional[List[str]] = None) -> None:
         """
         Create nodes as specified in the semantic header
 
         Args:
             node_types: list of nodes that should be created. In case of None, all nodes are
             created as specified in the semantic header
+            imported_logs: list of logs that need to be transformed
 
         """
-        self.create_nodes_by_records(node_types)
+        self.create_nodes_by_records(node_types=node_types, imported_logs=imported_logs)
 
-    def create_nodes_by_records(self, node_types: Optional[List[str]] = None) -> None:
+    def create_nodes_by_records(self, node_types: Optional[List[str]] = None,
+                                imported_logs: Optional[List[str]] = None) -> None:
         """
         Create nodes based on records as specified in the semantic header
 
         Args:
             node_types: list of nodes that should be created. In case of None, all nodes are
             created as specified in the semantic header
+            imported_logs: list of logs that need to be transformed
 
         """
+        if imported_logs is None:
+            files = self.dataset_descriptions.get_file_names()
+            for name, files in files.items():
+                self.ekg_builder.create_nodes_by_records(node_types, imported_logs=files)
+        else:
+            self.ekg_builder.create_nodes_by_records(node_types, imported_logs=imported_logs)
 
-        self.ekg_builder.create_nodes_by_records(node_types)
-
-    def create_relations(self, relation_types: Optional[List[str]] = None) -> None:
+    def create_relations(self, relation_types: Optional[List[str]] = None,
+                         imported_logs: Optional[List[str]] = None) -> None:
         """
         Create relations as specified in the semantic header
 
         Args:
             relation_types: list of relations that should be created. In case of None, all relations are
             created as specified in the semantic header
+            imported_logs: list of logs that need to be transformed
 
         """
-        self.create_relations_using_record(relation_types)
-        self.create_relations_using_relations(relation_types)
+        # TODO add imported logs not defined
+        self.create_relations_using_record(relation_types=relation_types, imported_logs=imported_logs)
+        self.create_relations_using_relations(relation_types=relation_types)
 
-    def create_relations_using_record(self, relation_types: Optional[List[str]] = None) -> None:
+    def create_relations_using_record(self, relation_types: Optional[List[str]] = None,
+                                      imported_logs: Optional[List[str]] = None) -> None:
         """
         Create relations using records as specified in the semantic header
 
         Args:
             relation_types: list of relations that should be created. In case of None, all relations are
             created as specified in the semantic header
+            imported_logs: list of logs that need to be transformed
 
         """
-        self.ekg_builder.create_relations_using_records(relation_types)
+        self.ekg_builder.create_relations_using_records(relation_types=relation_types, imported_logs=imported_logs)
 
     def create_relations_using_relations(self, relation_types: Optional[List[str]] = None) -> None:
         """
