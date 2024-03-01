@@ -1,5 +1,5 @@
 from string import Template
-from typing import Union
+from typing import Union, Optional, List
 
 from ..data_managers.semantic_header import ConstructedNodes, NodeConstructor, Node, \
     RelationConstructor, RecordConstructor, ConstructedRelation
@@ -8,7 +8,8 @@ from ..database_managers.db_connection import Query
 
 class SemanticHeaderQueryLibrary:
     @staticmethod
-    def get_create_node_by_record_constructor_query(node_constructor: NodeConstructor, merge=True) -> Query:
+    def get_create_node_by_record_constructor_query(node_constructor: NodeConstructor, merge=True,
+                                                    imported_logs: Optional[List[str]] = None) -> Query:
         # find events that contain the entity as property and not nan
         # save the value of the entity property as id and also whether it is a virtual entity
         # create a new entity node if it not exists yet with properties
@@ -61,11 +62,18 @@ class SemanticHeaderQueryLibrary:
                                 CREATE (event) <- [:OBSERVED] - ($result_node_name)
                                 '''
 
+        # add check to only transform records from the imported logs
+        if imported_logs is not None:
+            log_str = ",".join([f'"{log}"' for log in imported_logs])
+            log_check_str = f"AND record.log in [{log_str}]"
+        else:
+            log_check_str = ""
+
         # language=SQL
         query_str = '''
                     CALL apoc.periodic.commit(
                         'MATCH ($record) 
-                        WHERE NOT record:RecordCreated
+                        WHERE NOT record:RecordCreated $log_check_str
                             WITH $record_name limit $limit
                             $merge_or_create ($result_node)
                             SET $record_name:RecordCreated
@@ -84,6 +92,7 @@ class SemanticHeaderQueryLibrary:
             "infer_corr_str": infer_corr_str,
             "infer_observed_str": infer_observed_str,
             "merge_or_create": merge_or_create,
+            "log_check_str": log_check_str
         })
 
         return Query(query_str=query_str,
@@ -110,6 +119,21 @@ class SemanticHeaderQueryLibrary:
                             {limit: $batch_size})
                     '''
         return Query(query_str=query_str)
+
+    @staticmethod
+    def get_associated_record_labels_query(imported_logs):
+        log_str = ",".join([f'"{log}"' for log in imported_logs])
+        log_str = f"[{log_str}]"
+
+        query_str = '''
+            MATCH (r:Record)
+            WHERE r.log in $log_str
+            UNWIND labels(r) as _label
+            RETURN collect(distinct _label) as labels
+        '''
+
+        return Query(query_str=query_str,
+                     template_string_parameters={"log_str": log_str})
 
     @staticmethod
     def get_number_of_ids_query(node_constructor: NodeConstructor, use_record: bool = False):
@@ -256,7 +280,8 @@ class SemanticHeaderQueryLibrary:
                      })
 
     @staticmethod
-    def get_create_relation_using_record_query(relation_constructor: RelationConstructor) -> Query:
+    def get_create_relation_using_record_query(relation_constructor: RelationConstructor,
+                                               imported_logs: Optional[List[str]] = None) -> Query:
         # find events that are related to different entities of which one event also has a reference to the other entity
         # create a relation between these two entities
         if relation_constructor.model_as_node:
@@ -269,9 +294,16 @@ class SemanticHeaderQueryLibrary:
         else:
             merge_str = "MERGE ($from_node_name) -[$rel_pattern] -> ($to_node_name)"
 
+        # add check to only transform records from the imported logs
+        if imported_logs is not None:
+            log_str = ",".join([f'"{log}"' for log in imported_logs])
+            log_check_str = f"AND record.log in [{log_str}]"
+        else:
+            log_check_str = ""
+
         query_str = '''     CALL apoc.periodic.commit('
                             MATCH (record:$record_labels)
-                            WHERE NOT record:RecordCreated
+                            WHERE NOT record:RecordCreated $log_check_str
                             WITH  record limit $limit
                             MATCH ($from_node) - [:EXTRACTED_FROM] -> (record)
                             MATCH ($to_node) - [:EXTRACTED_FROM] -> (record)
@@ -282,7 +314,8 @@ class SemanticHeaderQueryLibrary:
                         '''
 
         query_str = Template(query_str).safe_substitute({
-            "merge_str": merge_str
+            "merge_str": merge_str,
+            "log_check_str": log_check_str
         })
 
         return Query(query_str=query_str,
