@@ -91,9 +91,19 @@ class EKGUsingSemanticHeaderBuilder:
         # find events that are related to different entities of which one event also has a reference to the other entity
         # create a relation between these two entities
         relation: ConstructedRelation
+
+        # request all associated record labels of the imported logs
+        associated_records = self.get_associated_records(imported_logs)
+
         for relation_constructor in self.semantic_header.get_relations_constructed_by_record(relation_types):
-            self._create_relations_using_record(relation_constructor=relation_constructor,
-                                                imported_logs=imported_logs)
+            # check if node_constructor is subset of associated record labels
+            # if so, we need to create nodes for this record
+            is_subset = set(relation_constructor.prevalent_record.labels).issubset(set(associated_records))
+            if imported_logs is None or is_subset:
+                self._create_relations_using_record(relation_constructor=relation_constructor,
+                                                    imported_logs=imported_logs)
+
+
 
     @Performance.track("relation_constructor")
     def _create_relations_using_record(self, relation_constructor, imported_logs: Optional[List[str]] = None):
