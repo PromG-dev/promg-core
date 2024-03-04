@@ -255,7 +255,8 @@ class Relationship:
     def from_dict(obj: Any) -> Optional["Relationship"]:
         return Relationship.from_string(obj)
 
-    def get_pattern(self, name: Optional[str] = None, exclude_nodes=True, with_brackets=False):
+    def get_pattern(self, name: Optional[str] = None, exclude_nodes=True, with_properties=True, with_brackets=False):
+        # First, make pattern consisting of rel_name:rel_type (if defined)
         rel_pattern_str = "$rel_name"
         if self.get_relation_type() != "":
             rel_pattern_str = "$rel_name:$rel_type"
@@ -264,21 +265,23 @@ class Relationship:
         rel_pattern = Template(rel_pattern_str).substitute(rel_name=name,
                                                            rel_type=self.get_relation_type())
 
-        if len(self.properties) > 0:
+        # add properties if requested and there are properties defined
+        if with_properties and len(self.properties) > 0:
             properties_string = ",".join([prop.get_pattern() for prop in self.properties])
             rel_pattern_str = "$rel_pattern {$properties}"
             rel_pattern = Template(rel_pattern_str).substitute(rel_pattern=rel_pattern,
                                                                properties=properties_string)
-        elif self.where_condition != "":
+        # add where condition if requested and where condition is defined
+        elif with_properties and self.where_condition != "":
             rel_pattern_str = "$rel_pattern WHERE $where_condition"
             rel_pattern = Template(rel_pattern_str).substitute(rel_pattern=rel_pattern,
                                                                where_condition=self.where_condition)
-
+        # don't add from and to nodes if they should be excluded
         if exclude_nodes:
-            if with_brackets:
+            if with_brackets: # add brackets
                 rel_pattern_str = "[$rel_pattern]"
                 rel_pattern = Template(rel_pattern_str).substitute(rel_pattern=rel_pattern)
-        else:
+        else: # add from and to nodes (brackets are always added)
             from_node_pattern = self.from_node.get_pattern()
             to_node_pattern = self.to_node.get_pattern()
             rel_pattern_str = "($from_node) - [$rel_pattern] -> ($to_node)" if self.has_direction \
@@ -427,6 +430,7 @@ class NodeConstructor:
     def __init__(self, prevalent_record: Optional[Union["Relationship", "Node"]],
                  node: Optional["Node"],
                  relation: Optional["Relationship"],
+                 use_inference: bool,
                  result: "Node",
                  set_labels: str,
                  infer_observed: bool = False,
@@ -437,9 +441,15 @@ class NodeConstructor:
                  event_label: str = "Event",
                  corr_type: str = "CORR",
                  infer_reified_relation: bool = False):
+        # node can be constructed using several methods
+        # 1) via a prevalent record
         self.prevalent_record = prevalent_record
+        # 2) via a relation
         self.relation = relation
+        # 3) via a node
         self.node = node
+        # 4) via inference, custom code provided by user
+        self.use_inference = use_inference
         self.result = result
         self.set_labels = set_labels
         self.infer_prevalence_record = prevalent_record is not None
@@ -457,6 +467,7 @@ class NodeConstructor:
         _prevalent_record = RelationshipOrNode.from_string(obj.get("prevalent_record"))
         _node = Relationship.from_string(obj.get("node"))
         _relation = Relationship.from_string(obj.get("relation"))
+        _use_inference = replace_undefined_value(obj.get("use_inference"), False)
         _result = Node.from_string(obj.get("result"))
         _set_labels = obj.get("set_labels")
         _infer_observed = replace_undefined_value(obj.get("infer_observed"), False)
@@ -472,6 +483,7 @@ class NodeConstructor:
         return NodeConstructor(prevalent_record=_prevalent_record,
                                relation=_relation,
                                node=_node,
+                               use_inference=_use_inference,
                                result=_result,
                                infer_observed=_infer_observed,
                                infer_corr_from_event_record=_infer_corr_from_event_record,
@@ -490,6 +502,8 @@ class NodeConstructor:
             return "constructed_by_node"
         elif self.relation is not None:
             return "constructed_by_relation"
+        elif self.use_inference:
+            return "constructed_by_inference"
 
     def get_label_string(self):
         return self.result.get_label_str()
@@ -523,7 +537,7 @@ class NodeConstructor:
         return condition_str
 
     def get_pattern(self, name: Optional[str] = None, with_brackets=False, with_properties=True):
-        return self.result.get_pattern(name, with_brackets, with_properties)
+        return self.result.get_pattern(name, with_brackets=with_brackets, with_properties=with_properties)
 
     def __repr__(self):
         return self.result.get_pattern(with_brackets=True)
@@ -626,6 +640,7 @@ class RelationConstructor:
     def __init__(self, prevalent_record: Optional[Union["Relationship", "Node"]],
                  nodes: List["Node"],
                  relations: List["Relationship"],
+                 use_inference: bool,
                  from_node: "Node",
                  to_node: "Node",
                  result: "Relationship",
@@ -633,11 +648,18 @@ class RelationConstructor:
                  model_as_node: bool,
                  infer_corr_from_reified_parents: bool,
                  corr_type: str):
+        # relations can be constructed using several methods
+        # 1) via a prevalent record
         self.prevalent_record = prevalent_record
+        # 2) via another relations
+        self.relations = relations
+        # 3) via other nodes
+        self.nodes = nodes
+        # 4) via inference, custom code provided by user
+        self.use_inference = use_inference
+
         self.from_node = from_node
         self.to_node = to_node
-        self.relations = relations
-        self.nodes = nodes
         self.result = result
         self.optional_properties = optional_properties
         self.model_as_node = model_as_node
@@ -649,6 +671,8 @@ class RelationConstructor:
         _prevalent_record = RelationshipOrNode.from_string(obj.get("prevalent_record"))
         _nodes = create_list(Node, obj.get("nodes"))
         _relations = create_list(Relationship, obj.get("relations"))
+        _use_inference = replace_undefined_value(obj.get("use_inference"), False)
+
         _from_node = Node.from_string(obj.get("from_node"))
         _to_node = Node.from_string(obj.get("to_node"))
         _result = Relationship.from_string(obj.get("result"))
@@ -663,6 +687,7 @@ class RelationConstructor:
         return RelationConstructor(prevalent_record=_prevalent_record,
                                    relations=_relations,
                                    nodes=_nodes,
+                                   use_inference=_use_inference,
                                    from_node=_from_node,
                                    to_node=_to_node,
                                    result=_result,
@@ -678,6 +703,8 @@ class RelationConstructor:
             return "constructed_by_nodes"
         elif self.relations is not None:
             return "constructed_by_relations"
+        elif self.use_inference:
+            return "constructed_by_inference"
 
     def get_type(self):
         return self.result.get_relation_type()
@@ -697,20 +724,36 @@ class RelationConstructor:
             [f'''{node_name}.{key} IS NOT NULL AND {node_name}.{key} <> "Unknown"''' for key
              in self.get_keys()])
 
-    def get_pattern(self, name: Optional[str] = None, with_brackets=False, with_properties=True):
-        return self.result.get_pattern(name, with_brackets, with_properties)
+    def get_pattern(self, name: Optional[str] = None, with_brackets=False, with_properties=True, exclude_nodes=False):
+        return self.result.get_pattern(name=name, with_brackets=with_brackets, with_properties=with_properties,
+                                       exclude_nodes=exclude_nodes)
 
     def __repr__(self):
         return self.result.get_pattern(with_brackets=False, exclude_nodes=False)
 
-    def constructed_by_record(self):
-        return self.prevalent_record is not None
+    def constructed_by_record(self, modeled_as_nodes):
+        # A = self.prevalent_record is not None
+        # B = modeled_as_node -> self.model_as_node == not modeled_as_node OR self.model_as_node
+        # C = A AND B == len(self.relations) > 0 AND (not modeled_as_node OR self.model_as_node)
+        return (self.prevalent_record is not None) and (not modeled_as_nodes or self.model_as_node)
 
-    def constructed_by_nodes(self):
-        return len(self.nodes) > 0
+    def constructed_by_nodes(self, modeled_as_nodes):
+        # A = len(self.nodes) > 0
+        # B = modeled_as_node -> self.model_as_node == not modeled_as_node OR self.model_as_node
+        # C = A AND B == len(self.relations) > 0 AND (not modeled_as_node OR self.model_as_node)
+        return (len(self.nodes) > 0) and (not modeled_as_nodes or self.model_as_node)
 
-    def constructed_by_relations(self):
-        return len(self.relations) > 0
+    def constructed_by_relations(self, modeled_as_nodes):
+        # A = len(self.relations) > 0
+        # B = modeled_as_node -> self.model_as_node == not modeled_as_node OR self.model_as_node
+        # C = A AND B == len(self.relations) > 0 AND (not modeled_as_node OR self.model_as_node)
+        return (len(self.relations) > 0) and (not modeled_as_nodes or self.model_as_node)
+
+    def constructed_by_inference(self, modeled_as_nodes):
+        # A = self.use_inference
+        # B = modeled_as_node -> self.model_as_node == not modeled_as_node OR self.model_as_node
+        # C = A AND B == self.use_inference AND (not modeled_as_node OR self.model_as_node)
+        return self.use_inference and (not modeled_as_nodes or self.model_as_node)
 
     def get_set_result_properties_query(self):
         if self.optional_properties is None:
@@ -938,31 +981,52 @@ class SemanticHeader:
         return [entity for entity in self.nodes if
                 entity.constructor_type == "EntityConstructorByQuery"]
 
-    def get_relations_constructed_by_nodes(self, rel_types: Optional[List[str]]):
-        return self._get_relations_constructed_by_specific_constructor(rel_types, constructor="nodes")
+    def get_node_relation_constructors(self, rel_types: Optional[List[str]] = None):
+        # get relations that are modeled as nodes
+        rel_constructors = []
+        # check for all diferent methods
+        rel_constructors.extend(self.get_relations_constructed_by_nodes(rel_types, modeled_as_nodes=True))
+        rel_constructors.extend(self.get_relations_constructed_by_relations(rel_types, modeled_as_nodes=True))
+        rel_constructors.extend(self.get_relations_constructed_by_record(rel_types, modeled_as_nodes=True))
+        rel_constructors.extend(self.get_relations_constructed_by_inference(rel_types, modeled_as_nodes=True))
+        return rel_constructors
 
-    def get_relations_constructed_by_relations(self, rel_types: Optional[List[str]]):
-        return self._get_relations_constructed_by_specific_constructor(rel_types, constructor="relations")
+    def get_relations_constructed_by_nodes(self, rel_types: Optional[List[str]], modeled_as_nodes=False):
+        return self._get_relations_constructed_by_specific_constructor(rel_types, constructor="nodes",
+                                                                       modeled_as_nodes=modeled_as_nodes)
 
-    def get_relations_constructed_by_record(self, rel_types: Optional[List[str]]):
-        return self._get_relations_constructed_by_specific_constructor(rel_types, constructor="record")
+    def get_relations_constructed_by_relations(self, rel_types: Optional[List[str]], modeled_as_nodes=False):
+        return self._get_relations_constructed_by_specific_constructor(rel_types, constructor="relations",
+                                                                       modeled_as_nodes=modeled_as_nodes)
 
-    def _get_relations_constructed_by_specific_constructor(self, rel_types, constructor):
+    def get_relations_constructed_by_record(self, rel_types: Optional[List[str]], modeled_as_nodes=False):
+        return self._get_relations_constructed_by_specific_constructor(rel_types, constructor="record",
+                                                                       modeled_as_nodes=modeled_as_nodes)
+
+    def get_relations_constructed_by_inference(self, rel_types: Optional[List[str]], modeled_as_nodes=False):
+        return self._get_relations_constructed_by_specific_constructor(rel_types, constructor="inference",
+                                                                       modeled_as_nodes=modeled_as_nodes)
+
+    def _get_relations_constructed_by_specific_constructor(self, rel_types, constructor, modeled_as_nodes):
         rel_constructors = []
         for relation in self.relations:
             if rel_types is None or relation.type in rel_types:
                 if constructor == "nodes":
                     rel_constructors.extend(
                         [rel_constructor for rel_constructor in relation.relation_constructors if
-                         rel_constructor.constructed_by_nodes()])
+                         rel_constructor.constructed_by_nodes(modeled_as_nodes)])
                 elif constructor == "relations":
                     rel_constructors.extend(
                         [rel_constructor for rel_constructor in relation.relation_constructors if
-                         rel_constructor.constructed_by_relations()])
+                         rel_constructor.constructed_by_relations(modeled_as_nodes)])
                 elif constructor == "record":
                     rel_constructors.extend(
                         [rel_constructor for rel_constructor in relation.relation_constructors if
-                         rel_constructor.constructed_by_record()])
+                         rel_constructor.constructed_by_record(modeled_as_nodes)])
+                elif constructor == "inference":
+                    rel_constructors.extend(
+                        [rel_constructor for rel_constructor in relation.relation_constructors if
+                         rel_constructor.constructed_by_inference(modeled_as_nodes)])
         return rel_constructors
 
     def get_relations_derived_from_relations(self):
