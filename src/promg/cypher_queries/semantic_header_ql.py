@@ -9,7 +9,7 @@ from ..database_managers.db_connection import Query
 class SemanticHeaderQueryLibrary:
     @staticmethod
     def get_create_node_by_record_constructor_query(node_constructor: NodeConstructor, merge=True,
-                                                    imported_logs: Optional[List[str]] = None) -> Query:
+                                                    logs: Optional[List[str]] = None) -> Query:
         # find events that contain the entity as property and not nan
         # save the value of the entity property as id and also whether it is a virtual entity
         # create a new entity node if it not exists yet with properties
@@ -63,8 +63,8 @@ class SemanticHeaderQueryLibrary:
                                 '''
 
         # add check to only transform records from the imported logs
-        if imported_logs is not None:
-            log_str = ",".join([f'"{log}"' for log in imported_logs])
+        if logs is not None:
+            log_str = ",".join([f'"{log}"' for log in logs])
             log_check_str = f"AND record.log in [{log_str}]"
         else:
             log_check_str = ""
@@ -121,8 +121,8 @@ class SemanticHeaderQueryLibrary:
         return Query(query_str=query_str)
 
     @staticmethod
-    def get_associated_record_labels_query(imported_logs):
-        log_str = ",".join([f'"{log}"' for log in imported_logs])
+    def get_associated_record_labels_query(logs):
+        log_str = ",".join([f'"{log}"' for log in logs])
         log_str = f"[{log_str}]"
 
         query_str = '''
@@ -281,7 +281,7 @@ class SemanticHeaderQueryLibrary:
 
     @staticmethod
     def get_create_relation_using_record_query(relation_constructor: RelationConstructor,
-                                               imported_logs: Optional[List[str]] = None) -> Query:
+                                               logs: Optional[List[str]] = None) -> Query:
         # find events that are related to different entities of which one event also has a reference to the other entity
         # create a relation between these two entities
         if relation_constructor.model_as_node:
@@ -295,8 +295,8 @@ class SemanticHeaderQueryLibrary:
             merge_str = "MERGE ($from_node_name) -[$rel_pattern] -> ($to_node_name)"
 
         # add check to only transform records from the imported logs
-        if imported_logs is not None:
-            log_str = ",".join([f'"{log}"' for log in imported_logs])
+        if logs is not None:
+            log_str = ",".join([f'"{log}"' for log in logs])
             log_check_str = f"AND record.log in [{log_str}]"
         else:
             log_check_str = ""
