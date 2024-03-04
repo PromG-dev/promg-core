@@ -3,6 +3,7 @@ from typing import Optional, List, Dict, Any
 
 import neo4j
 from neo4j import GraphDatabase
+from neo4j.exceptions import ServiceUnavailable
 
 from . import authentication
 from .authentication import Credentials
@@ -21,7 +22,7 @@ class Query:
         self.database = database
 
 
-class DatabaseConnection(metaclass=Singleton):
+class DatabaseConnection:
     def __init__(self, uri: str, db_name: str, user: str, password: str, verbose: bool = False,
                  batch_size: int = 100000):
         self.db_name = db_name
@@ -40,6 +41,9 @@ class DatabaseConnection(metaclass=Singleton):
         self.driver.close()
 
     def exec_query(self, function, **kwargs):
+        # check whether connection can be made
+        self.verify_connectivity()
+
         result = function(**kwargs)
         if result is None:
             return
@@ -112,3 +116,6 @@ class DatabaseConnection(metaclass=Singleton):
     def set_up_connection(config: Configuration):
         return DatabaseConnection(db_name=config.user, uri=config.uri, user=config.user,
                                   password=config.password, verbose=config.verbose, batch_size=config.batch_size)
+
+    def verify_connectivity(self):
+        self.driver.verify_connectivity()

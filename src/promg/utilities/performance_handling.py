@@ -12,17 +12,21 @@ from ..utilities.configuration import Configuration
 
 
 class Performance(metaclass=Singleton):
-    def __init__(self, perf_path: str):
+    def __init__(self, perf_path: str = None, write_console=True):
         self.start = time.time()
         self.last = self.start
         self.perf = pd.DataFrame(columns=["name", "start", "end", "duration"])
-        self.path = perf_path
+        if perf_path is not None:
+            self.path = perf_path
         self.count = 0
         self.pbar = tqdm(file=sys.stdout)
+        self.status = "Waiting on request"
         self.total = None
         # start python trickery
-        self.ctx = Nostdout()
-        self.ctx.__enter__()
+        self.write_console = write_console
+        if write_console:
+            self.ctx = Nostdout()
+            self.ctx.__enter__()
 
     def string_time(self, epoch_time):
         return datetime.utcfromtimestamp(epoch_time).strftime("%H:%M:%S")
@@ -45,7 +49,7 @@ class Performance(metaclass=Singleton):
     def track(argument: str = None):
         def performance_tracker_wrapper(func):
             def wrapper(self, *args, **kwargs):
-                func(self, *args, **kwargs)
+                result = func(self, *args, **kwargs)
                 end = time.time()
                 perf = Performance()
                 if argument is None or argument not in kwargs:
@@ -60,9 +64,11 @@ class Performance(metaclass=Singleton):
                         "duration": (end - perf.last)
                     }])])
                 perf.pbar.set_description(f"{log_message}: took {round(end - perf.last, 2)} seconds")
+                perf.status = f"{log_message}: took {round(end - perf.last, 2)} seconds"
                 perf.last = end
                 perf.count += 1
                 perf.pbar.update(1)
+                return result
 
             return wrapper
 
@@ -83,11 +89,13 @@ class Performance(metaclass=Singleton):
         self.pbar.set_description(f"Completed")
         self.pbar.close()
         # close python trickery
-        self.ctx.__exit__()
+        if self.write_console:
+            self.ctx.__exit__()
 
     def save(self):
-        os.makedirs(os.path.dirname(self.path), exist_ok=True)
-        self.perf.to_csv(self.path, sep=";", decimal=",")
+        if self.path is not None:
+            os.makedirs(os.path.dirname(self.path), exist_ok=True)
+            self.perf.to_csv(self.path, sep=";", decimal=",")
 
     @staticmethod
     def set_up_performance_with_path(path):

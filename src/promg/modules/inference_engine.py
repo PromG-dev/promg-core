@@ -6,14 +6,8 @@ from ..database_managers.db_connection import DatabaseConnection
 
 
 class InferenceEngine:
-    """
-        Create Inference Engine module
-        Examples:
-            >>> from promg.modules.inference_engine import InferenceEngine
-            >>> inference_engine = InferenceEngine()
-    """
-    def __init__(self):
-        self.connection = DatabaseConnection()
+    def __init__(self, db_connection):
+        self.connection = db_connection
 
     def match_entity_with_batch_position(self, entity_type: str, relative_position_type: str) -> None:
         """
@@ -21,19 +15,10 @@ class InferenceEngine:
 
         Args:
             entity_type: The type of the entity
-            relative_position_type: The type of the relative position
+             relative_position_type: The type of the relative position
 
         Raises:
              ValueError: when the entity has not been defined
-
-        Examples:
-            >>> inference_engine.match_entity_with_batch_position(
-            >>>     entity_type="Box",
-            >>>     relative_position_type="BatchPosition")
-            Infers the missing AT_POS relation between
-            (:Box) and (:BatchPosition) nodes using rule shown below
-
-        ![](assets/inference/RuleC.svg)
         """
         entity = SemanticHeader().get_entity(entity_type)
         relative_position = SemanticHeader().get_entity(relative_position_type)
@@ -60,15 +45,7 @@ class InferenceEngine:
 
         Raises:
              ValueError: when the entity has not been defined
-
-        Examples:
-            >>> inference_engine.infer_items_propagate_downwards_one_level(entity_type="Box")
-            Infers the missing corr relation for the (:Box)
-            entity using the rule shown below
-
-        ![](assets/inference/RuleB.svg)
         """
-
         entity = SemanticHeader().get_entity(entity_type)
         if entity_type is None:
             raise ValueError(f"{entity_type} is not defined in semantic header")
@@ -81,7 +58,7 @@ class InferenceEngine:
     # rule C
     def infer_items_propagate_upwards_multiple_levels(self, entity_type: str, is_load=True) -> None:
         """
-        Infer items while propagating upwards multiple levels
+        Infer items while propagating upwards multiple levels (Rule C)
 
         Args:
             entity_type: The type of the entity
@@ -89,13 +66,6 @@ class InferenceEngine:
 
         Raises:
             ValueError: when the entity has not been defined
-
-        Examples:
-            >>> inference_engine.infer_items_propagate_upwards_multiple_levels(entity_type="Box")
-            Infers the missing corr relation for the (:Box)
-            entity using the rule shown below
-
-        ![](assets/inference/RuleC.svg)
         """
 
         entity = SemanticHeader().get_entity(entity_type)
@@ -115,7 +85,7 @@ class InferenceEngine:
     def infer_items_propagate_downwards_multiple_level_w_batching(self, entity_type: str,
                                                                   relative_position_type: str, ) -> None:
         """
-        Infer items while propagating downwards multiple levels with batching
+        Infer items while propagating downwards multiple levels with batching (rule D)
 
         Args:
             entity_type: The type of the entity
@@ -123,14 +93,6 @@ class InferenceEngine:
 
         Raises:
             ValueError: when the entity has not been defined in semantic header
-
-        Examples:
-            >>> inference_engine.infer_items_propagate_downwards_multiple_level_w_batching(
-            >>>    entity_type="Box")
-            Infers the missing corr relation for the (:Box)
-            entity using the rule shown below
-
-        ![](assets/inference/RuleD.svg)
         """
         entity = SemanticHeader().get_entity(entity_type)
         relative_position = SemanticHeader().get_entity(relative_position_type)

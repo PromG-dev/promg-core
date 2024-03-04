@@ -3,68 +3,36 @@ from typing import List, Set, Optional, Dict
 from tabulate import tabulate
 
 from ..cypher_queries.db_managment_ql import DBManagementQueryLibrary as dbm_ql
-from ..database_managers.db_connection import DatabaseConnection
 from ..utilities.performance_handling import Performance
 
 
 class DBManagement:
-    """
-        Create DBManagement module
-        Examples:
-            >>> from promg.modules.db_management import DBManagement
-            >>> db_manager = DBManagement()
-    """
-
-    def __init__(self):
-        self.connection = DatabaseConnection()
-        self.db_name = self.connection.db_name
+    def __init__(self, db_connection):
+        self.connection = db_connection
 
     @Performance.track()
-    def clear_db(self, replace: bool = True) -> None:
+    def clear_db(self, replace=True) -> None:
         """
-        Replace or clear the entire database by a new one.
-
-        Note:
-            Note about difference between replacing and clearing.
-
-            - Replace: results in an Empty database that is completely replaced with a new database.
-                - Replacing a database is faster than clearing a database.
-                - Only possible when
-                    - you have an Neo4j enterprise license
-                    - you are running a local instance on the free Neo4j desktop version
-
-            - Clear: Results in an empty database, however constraints are still in place.
-                - Clearing a database takes longer
-                - Independent of license
+        Replace or clear the entire database by a new one
 
         Args:
             replace: boolean to indicate whether the database may be replaced
 
-        Examples:
-            >>> db_manager.clear(replace=True)
-            Results in an Empty database that is completely replaced with a new database
-                (i.e. constraints are also removed)
-
-            >>> db_manager.clear(replace=False)
-            Results in an empty database, however constraints are still in place.
-            Clearing an entire database takes longer.
         """
         if replace:
-            self.connection.exec_query(dbm_ql.get_replace_db_query, **{"db_name": self.db_name})
+            result = self.connection.exec_query(dbm_ql.get_replace_db_query, **{"db_name": self.connection.db_name})
+            if result[0]['state'] == 'CaughtUp' and result[0]['success']:
+                return True
+            else:
+                return False
         else:
             self.connection.exec_query(dbm_ql.get_delete_relationships_query)
-            self.connection.exec_query(dbm_ql.get_delete_nodes_query)
+            return self.connection.exec_query(dbm_ql.get_delete_nodes_query)
 
     @Performance.track()
     def set_constraints(self) -> None:
         """
-        Set constraints in Neo4j instance.
-
-        - sysId property is used as index for (:Entity) nodes
-
-        Examples:
-            >>> db_managers.set_constraints()
-            sysId is used as index for (:Entity) nodes
+        Set constraints in Neo4j instance
         """
         # # for implementation only (not required by schema or patterns)
         # self.connection.exec_query(dbm_ql.get_constraint_unique_event_id_query)
@@ -75,6 +43,9 @@ class DBManagement:
         # self.connection.exec_query(dbm_ql.get_constraint_unique_log_id_query)
 
         self.connection.exec_query(dbm_ql.get_set_sysid_index_query)
+        self.connection.exec_query(dbm_ql.get_set_recordid_as_key_node_query)
+        self.connection.exec_query(dbm_ql.get_set_recordid_as_index_query)
+        self.connection.exec_query(dbm_ql.get_set_load_status_as_index_query)
 
     def get_all_rel_types(self) -> List[str]:
         """
@@ -140,3 +111,7 @@ class DBManagement:
         Print the statistics nicely using tabulate
         """
         print(tabulate(self.get_statistics()))
+
+    def get_imported_logs(self) -> List[str]:
+        imported_logs = self.connection.exec_query(dbm_ql.get_imported_logs_query)
+        return imported_logs

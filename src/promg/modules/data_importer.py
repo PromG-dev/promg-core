@@ -1,230 +1,183 @@
-import math
-from typing import List, Dict, Union
+import os
+from string import Template
+from typing import Optional
 
-import numpy as np
-from pandas import DataFrame
-from tqdm import tqdm
-
-from ..data_managers.semantic_header import RecordConstructor, SemanticHeader
+from ..data_managers.semantic_header import SemanticHeader
 from ..database_managers.db_connection import DatabaseConnection
-from ..data_managers.datastructures import DatasetDescriptions, DataStructure
+from ..data_managers.datastructures import DatasetDescriptions
 from ..utilities.performance_handling import Performance
 from ..cypher_queries.data_importer_ql import DataImporterQueryLibrary as di_ql
+from pathlib import Path
 import pandas as pd
 
 
 class Importer:
-    """
-        Create Importer module
-
-        Imports data using the dataset description files
-
-        Args:
-            data_structures: DatasetDescriptions object describing the different datasets
-            use_sample: boolean indicating whether a sample can be used
-            use_preprocessed_files: boolean indicating that preprocessed files can be used
-
-        Examples:
-            Example without sample and preprocessed files
-            >>> from promg.modules.data_importer import Importer
-            >>> # set dataset name
-            >>> dataset_name = 'BPIC17'
-            >>> # location of json file with dataset_description
-            >>> ds_path = Path(f'json_files/{dataset_name}_DS.json')
-            >>> dataset_descriptions = DatasetDescriptions(ds_path)
-            >>> importer = Importer(data_structures = dataset_descriptions)
-            The module to import data is returned.
-            The module won't use a sample, nor the preprocessed files
-
-            Example with sample and preprocessed files
-
-            >>> from promg.modules.data_importer import Importer
-            >>> # set dataset name
-            >>> dataset_name = 'BPIC17'
-            >>> # location of json file with dataset_description
-            >>> ds_path = Path(f'json_files/{dataset_name}_DS.json')
-            >>> dataset_descriptions = DatasetDescriptions(ds_path)
-            >>> importer = Importer(data_structures = dataset_descriptions,
-            >>>                     use_sample = True,
-            >>>                     use_preprocessed_files = True)
-            The module to import data is returned.
-            The module will use the sample and the preprocessed files
-            if they exist, in case they do not exist, they are created
-    """
-
-    def __init__(self, data_structures: DatasetDescriptions,
-                 use_sample: bool = False, use_preprocessed_files: bool = False):
-        self.connection = DatabaseConnection()
+    def __init__(self, database_connection: DatabaseConnection,
+                 data_structures: DatasetDescriptions,
+                 semantic_header: SemanticHeader,
+                 import_directory: Optional[str] = None,
+                 use_sample: bool = False,
+                 use_preprocessed_files: bool = False,
+                 store_files: bool = False):
+        self.connection = database_connection
         self.structures = data_structures.structures
-        self.records = SemanticHeader().records
+        self.records = semantic_header.records
 
         self.load_batch_size = 20000
         self.use_sample = use_sample
         self.use_preprocessed_files = use_preprocessed_files
+        self.store_files = store_files
         self.load_status = 0
 
-    def _update_load_status(self):
-        """
-        Method to keep track of the load status of the different record nodes
-        """
+        self._import_directory = import_directory
+
+    def update_load_status(self):
         self.connection.exec_query(di_ql.get_update_load_status_query,
                                    **{
                                        "current_load_status": self.load_status
                                    })
         self.load_status += 1
 
-    def import_data(self) -> None:
-        """
-        Method that imports the data records into the graph database as (:Record) nodes.
-        The records contain the attributes as described in the dataset descriptions.
-        Method also adds the specific record labels as specified by the semantic header.
-
-        Examples:
-            >>> importer.import_data()
-            The records of the dataset described in the dataset descriptions are imported as (:Record) nodes with
-            appropriate attributes and labels
-        """
+    def import_data(self, imported_logs) -> None:
         for structure in self.structures:
-            record_constructors = self._get_record_constructors_by_labels(structure=structure)
-            file_directory = structure.file_directory
+            required_labels_str = structure.get_required_labels_str(records=self.records)
+
             # read in all file names that match this structure
             for file_name in structure.file_names:
-                # read and import the nodes
-                df_log = structure.read_data_set(file_directory, file_name, use_sample=self.use_sample,
-                                                 use_preprocessed_file=self.use_preprocessed_files)
-                df_log["loadStatus"] = self.load_status
-                self._import_nodes_from_data(df_log=df_log, file_name=file_name,
-                                             record_constructors=record_constructors)
+                if imported_logs is None or file_name not in imported_logs:
+                    # read and import the nodes
+                    df_log = structure.read_data_set(file_name=file_name,
+                                                     use_sample=self.use_sample,
+                                                     use_preprocessed_file=self.use_preprocessed_files,
+                                                     load_status=self.load_status,
+                                                     store_preprocessed_file=self.store_files)
 
-            if structure.has_datetime_attribute():
-                # once all events are imported, we convert the string timestamp to the timestamp as used in Cypher
-                self._reformat_timestamps(structure=structure)
-                self._update_load_status()
+                    df_log = structure.determine_optional_labels_in_log(df_log, records=self.records)
 
-            self._filter_nodes(structure=structure)  # filter nodes according to the structure
+                    self._import_nodes_from_data(df_log=df_log, file_name=file_name,
+                                                 required_labels_str=required_labels_str)
 
-            self._remove_load_status_attribute()  # removes temporary properties
+                    if structure.has_datetime_attribute():
+                        # once all events are imported, we convert the string timestamp to the timestamp as used in
+                        # Cypher
+                        self._reformat_timestamps(structure=structure, required_labels_str=required_labels_str)
+
+                    # TODO: move filtering to pandas dataframe
+                    self._filter_nodes(structure=structure,
+                                       required_labels_str=required_labels_str)  # filter nodes according to the
+                    # structure
+                    self._finalize_import(required_labels_str=required_labels_str)  # removes temporary properties
 
     @Performance.track("structure")
-    def _reformat_timestamps(self, structure: DataStructure):
-        """
-        Method that converts the timestamps of (:Record) nodes imported according to a specific structure
-        from string to DateTime or Time attribute.
-
-        Args:
-            structure: The data structure that contains the just imported nodes
-        """
-
+    def _reformat_timestamps(self, structure, required_labels_str):
         datetime_formats = structure.get_datetime_formats()
         for attribute, datetime_format in datetime_formats.items():
             if datetime_format.is_epoch:
                 self.connection.exec_query(di_ql.get_convert_epoch_to_timestamp_query,
                                            **{
+                                               "required_labels_str": required_labels_str,
                                                "attribute": attribute,
                                                "datetime_object": datetime_format
                                            })
 
             self.connection.exec_query(di_ql.get_make_timestamp_date_query,
                                        **{
+                                           "required_labels_str": required_labels_str,
                                            "attribute": attribute,
                                            "datetime_object": datetime_format,
                                            "load_status": self.load_status
                                        })
 
     @Performance.track("structure")
-    def _filter_nodes(self, structure):
-        # TODO: check function and
-        for boolean in (True, False):
-            attribute_values_pairs_filtered = structure.get_attribute_value_pairs_filtered(exclude=boolean)
+    def _filter_nodes(self, structure, required_labels_str):
+        for exclude in [True, False]:
+            attribute_values_pairs_filtered = structure.get_attribute_value_pairs_filtered(exclude=exclude)
             for name, values in attribute_values_pairs_filtered.items():
-                self.connection.exec_query(di_ql.get_filter_events_by_property_query,
+                self.connection.exec_query(di_ql.get_filter_records_by_property_query,
                                            **{
-                                               "prop": name, "values": values, "exclude": boolean,
-                                               "load_status": self.load_status
+                                               "prop": name,
+                                               "values": values,
+                                               "exclude": exclude,
+                                               "load_status": self.load_status,
+                                               "required_labels_str": required_labels_str
                                            })
 
     @Performance.track("structure")
-    def _remove_load_status_attribute(self):
-        """
-        Method that removes the load status attribute from the (:Record) nodes
-        """
-        self.connection.exec_query(di_ql.get_finalize_import_events_query)
+    def _finalize_import(self, required_labels_str):
+        # finalize the import
+        self.connection.exec_query(di_ql.get_finalize_import_records_query,
+                                   **{
+                                       "load_status": self.load_status,
+                                       "required_labels_str": required_labels_str
+                                   })
+        self.load_status = 0
 
     @Performance.track("file_name")
-    def _import_nodes_from_data(self, df_log: DataFrame, file_name: str,
-                                record_constructors: List[Dict[str, Union[RecordConstructor, bool]]]):
-        """
-        Method that imports records from a dataframe log as (:Record) nodes and assigns the correct labels
+    def _import_nodes_from_data(self, df_log, file_name, required_labels_str):
+        grouped_by_optional_labels = df_log.groupby(by="labels")
+        mapping_str = self._determine_column_mapping_str(df_log)
 
-        Args:
-            df_log: The records to be imported in Dataframe format
-            file_name: The file name from which the records to be imported originate from
-            record_constructors: A list indicating which record labels should be (possibly) assigned to the imported
-            (:Record) nodes
-        """
+        for optional_labels_str, log in grouped_by_optional_labels:
+            labels_str = required_labels_str + optional_labels_str
+            new_file_name = self.determine_new_file_name(file_name, optional_labels_str)
+            self.import_log_into_db(file_name=new_file_name, labels_str=labels_str, mapping_str=mapping_str, log=log)
 
-        # start with batch 0 and increment until everything is imported
-        batch = 0
-        print("\n")
-        pbar = tqdm(total=math.ceil(len(df_log) / self.load_batch_size), position=0)
+    def import_log_into_db(self, file_name, labels_str, mapping_str, log):
+        # Temporary save the file in the import directory
+        self._save_log_grouped_by_labels(log=log, file_name=file_name)
+        self.connection.exec_query(di_ql.get_create_nodes_by_loading_csv_query,
+                                   **{
+                                       "file_name": file_name,
+                                       "labels": labels_str,
+                                       "mapping": mapping_str
+                                   })
 
-        labels_constructor = di_ql.get_label_constructors(record_constructors)
+        # delete the file from the import directory
+        self._delete_log_grouped_by_labels(file_name=file_name)
 
-        while batch * self.load_batch_size < len(df_log):
-            pbar.set_description(f"Loading data from {file_name} from batch {batch}")
+    @staticmethod
+    def determine_new_file_name(file_name, optional_labels_str):
+        if optional_labels_str == "":
+            return file_name
+        return file_name[:-4] + "_" + optional_labels_str.replace(":", "_") + ".csv"
 
-            # import the events in batches, use the records of the log
-            batch_without_nans = [{k: int(v) if isinstance(v, np.integer) else v for k, v in m.items()
-                                   if (isinstance(v, list) and len(v) > 0) or (not pd.isna(v) and v is not None)}
-                                  for m in
-                                  df_log[batch * self.load_batch_size:(batch + 1) * self.load_batch_size].to_dict(
-                                      orient='records')]
+    def _save_log_grouped_by_labels(self, log, file_name):
+        log = log.drop(columns=["labels"])
+        log.to_csv(Path(self.get_import_directory(), file_name), index=False)
 
-            self.connection.exec_query(di_ql.get_create_nodes_by_importing_batch_query,
-                                       **{
-                                           "batch": batch_without_nans,
-                                           "labels_constructors": labels_constructor
-                                       })
+    def _delete_log_grouped_by_labels(self, file_name):
+        path = Path(self.get_import_directory(), file_name)
+        if os.path.exists(path):
+            os.remove(path)
 
-            pbar.update(1)
-            batch += 1
-        pbar.close()
+    @staticmethod
+    def _determine_column_mapping_str(log):
+        mapping = {}
+        dtypes = log.dtypes.to_dict()
+        for col_name, type in dtypes.items():
+            if type == object:
+                continue  # default is STRING
+            elif pd.api.types.is_integer_dtype(type):
+                mapping[col_name] = 'INTEGER'
+            elif pd.api.types.is_float_dtype(type):
+                mapping[col_name] = 'FLOAT'
+            elif pd.api.types.is_bool_dtype(type):
+                mapping[col_name] = 'BOOLEAN'
+            else:
+                raise Exception(f"Type for column {col_name} is not defined")
 
-    def _get_record_constructors_by_labels(self, structure: DataStructure) -> List[
-        Dict[str, Union[RecordConstructor, bool]]]:
-        """
-        Method to determine for the structure which record labels are optional/required for the (:Record) nodes
+        template_str = '$col_name:{type:"$type"}'
+        mapping_list = [Template(template_str).substitute({"col_name": col_name, "type": type}) for col_name, type in
+                        mapping.items()]
+        mapping_str = '{' + ','.join(mapping_list) + '}'
+        return mapping_str
 
+    def retrieve_import_directory(self):
+        result = self.connection.exec_query(di_ql.get_import_directory_query)
+        # get the correct value from the result
+        self._import_directory = result[0]['directory']
 
-        Args:
-            structure: The DataStructure for which the labels are checked
-        """
-
-        constructors = []
-        labels = structure.labels
-
-        # loop over all record constructions
-        for record_constructor in self.records:
-            # if labels are defined, determine the intersection between the labels of structure and the labels of the
-            # record construction
-            if labels is not None:
-                intersection = list(set(labels) & set(record_constructor.record_labels))
-            else:  # take the record labels of the record constructor
-                intersection = record_constructor.record_labels
-            if len(intersection) > 0:  # label of record constructor is in intersection or labels is not defined
-                required = True
-                # if there is a where condition defined, then imported (:Record) nodes might not have the record label
-                # hence required = false
-                if record_constructor.prevalent_record.where_condition != "":
-                    required = False
-                else:
-                    # check whether each required attribute in the record constructor is also required according to
-                    # the structure (except index, is always present)
-                    for required_attribute in record_constructor.required_attributes:
-                        if required_attribute == "index":
-                            continue
-                        if required_attribute not in structure.attributes or structure.attributes[
-                            required_attribute].optional:
-                            required = False
-                constructors.append({"required": required, "record_constructor": record_constructor})
-        return constructors
+    def get_import_directory(self):
+        if self._import_directory is None:
+            self.retrieve_import_directory()
+        return self._import_directory

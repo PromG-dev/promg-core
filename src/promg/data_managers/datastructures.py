@@ -12,7 +12,7 @@ import numpy as np
 import pandas as pd
 from pandas import DataFrame
 
-from .semantic_header import Node
+from .semantic_header import RecordConstructor
 from ..utilities.auxiliary_functions import replace_undefined_value, create_list
 from ..utilities.configuration import Configuration
 
@@ -152,6 +152,7 @@ class DataStructure:
         self.include = include
         self.name = name
         self.file_directory = file_directory
+        self.preprocessed_file_directory = os.path.join(self.file_directory, "preprocessed_files")
         self.file_names = file_names
         self.encoding = encoding
         self.seperator = seperator
@@ -166,6 +167,7 @@ class DataStructure:
         self.samples = samples
         self.attributes = attributes
         self.split_combined_events = split_combined_events
+        self.required_labels = None
 
     def __repr__(self):
         return self.name
@@ -275,6 +277,7 @@ class DataStructure:
                 df_log = df_log.loc[df_log["date_time_conv"].between(start_date, end_date)]
                 df_log = df_log.drop(columns=['date_time_conv'])
 
+        df_log = df_log.reset_index(drop=True)
         return df_log
 
     @staticmethod
@@ -414,7 +417,109 @@ class DataStructure:
             self.attributes["timestamp"] = complete_attribute
             del self.attributes["completeTimestamp"]
 
-    def prepare_event_data_sets(self, input_path, file_name, use_sample):
+    def check_if_required_attributes_are_present(self, record_constructor):
+        # loop over all required attributes of the record constructor
+        # --> check whether they are required by self
+        required = True
+        for required_attribute in record_constructor.required_attributes:
+            if required_attribute == "index":  # records of an always have an index, so records will have
+                # the required attributes = index
+                continue
+            if required_attribute not in self.attributes or self.attributes[required_attribute].optional:
+                # if the required attribute does not occur in the self.attributes or the attribute is
+                # optional, then the record_constructor labels are not required
+                required = False
+        return required
+
+    def determine_required_labels(self, records: List["RecordConstructor"]):
+        # determine the required labels for the records defined by this datastructure
+        # therefore, we have to check for all record constructors in records
+        # whether the required attributes are present by the dataset description definition
+
+        # initially, self.required_labels might be None, hence we need to make it an empty list.
+        if self.required_labels is None:
+            self.required_labels = []
+
+        # loop over all record_constructors in records
+        for record_constructor in records:
+            # check whether self.labels appear in the record constructor
+            if self.labels_appear_in_record_constructor(record_constructor):
+                if record_constructor.prevalent_record.where_condition != "":
+                    # a where condition is specified, then not all records require the record_constructor labels
+                    required = False
+                else:
+                    required = self.check_if_required_attributes_are_present(record_constructor)
+                if required:
+                    # if required = true, then the record_constructor labels are required labels of self
+                    self.required_labels.extend(record_constructor.record_labels)
+        self.required_labels = list(set(self.required_labels))
+
+    def get_required_labels(self, records: List["RecordConstructor"]):
+        if self.required_labels is None:
+            self.determine_required_labels(records)
+        return self.required_labels
+
+    def get_required_labels_str(self, records: List["RecordConstructor"]):
+        """Method to convert the required labels determined by records to a string seperated by :
+        :param records: the required
+        """
+        if self.required_labels is None:
+            self.determine_required_labels(records)
+        required_labels_w_records = self.required_labels[:]
+        required_labels_w_records.insert(0, "Record")
+        required_labels_str = ":".join(required_labels_w_records)
+        return required_labels_str
+
+    def read_data_set(self, file_name, use_sample, load_status: int, store_preprocessed_file=True,
+                      use_preprocessed_file=False):
+        preprocessed_file_name = self._get_preprocessed_file_name(file_name, use_sample)
+        df_log = None
+        if use_preprocessed_file:
+            df_log = self.read_preprocessed_df_log(preprocessed_file_name)
+        if df_log is None:  # no preprocessed file was read
+            df_log = self.read_df_log(file_name, use_sample)
+            if store_preprocessed_file:
+                self.store_df_log(df_log, preprocessed_file_name)
+
+        df_log["loadStatus"] = load_status
+        return df_log
+
+    def read_df_log(self, file_name, use_sample):
+        df_log = self.prepare_event_data_sets(file_name, use_sample)
+        return df_log
+
+    def read_preprocessed_df_log(self, preprocessed_file_name):
+        preprocessed_file_path = os.path.join(self.preprocessed_file_directory, preprocessed_file_name)
+        # first try to read preprocessed file
+        if not os.path.exists(preprocessed_file_path):
+            warning_message = f"No preprocessed file {preprocessed_file_name} found, preprocessed the file " \
+                              f"instead"
+            warnings.warn(warning_message)
+            return None
+        else:  # use_preprocessed_file and file exists
+            df_log = pd.read_pickle(preprocessed_file_path)
+        return df_log
+
+    def store_df_log(self, df_log, preprocessed_file_name):
+        # only store file if we did not read from the stored file
+        os.makedirs(self.preprocessed_file_directory, exist_ok=True)
+
+        preprocessed_file_path = os.path.join(self.preprocessed_file_directory, preprocessed_file_name)
+        df_log.to_pickle(preprocessed_file_path)
+
+    def _get_preprocessed_file_name(self, file_name, use_sample):
+        # change extension from csv to pkl and add sample in case of sample
+        sample_is_used = use_sample and len(self.samples) > 0
+        preprocessed_file_name = f"{file_name[:-4]}_sample.pkl" if sample_is_used else f"{file_name[:-4]}.pkl"
+        return preprocessed_file_name
+
+    @staticmethod
+    def create_record_id_column(df_log, file_name):
+        record_id_column = df_log.index
+        record_id_column = record_id_column.astype(str) + "_" + file_name[:-4]
+        return record_id_column
+
+    def prepare_event_data_sets(self, file_name, use_sample):
         dtypes = self.get_dtype_dict()
         required_columns = self.get_required_columns()
 
@@ -422,7 +527,7 @@ class DataStructure:
         false_values = self.false_values
 
         if file_name.endswith('.csv'):
-            df_log: DataFrame = pd.read_csv(os.path.join(input_path, file_name), keep_default_na=True,
+            df_log: DataFrame = pd.read_csv(os.path.join(self.file_directory, file_name), keep_default_na=True,
                                             usecols=required_columns, dtype=dtypes, true_values=true_values,
                                             false_values=false_values, sep=self.seperator, decimal=self.decimal,
                                             encoding=self.encoding)
@@ -456,32 +561,99 @@ class DataStructure:
         df_log = df_log.dropna(how='all', axis=1)  # drop all columns in which all values are nan (empty)
         df_log = df_log.dropna(how='all')  # drop all columns in which all values are nan (empty)
 
-        return df_log
-
-    def read_data_set(self, input_path, file_name, use_sample, store_preprocessed_file=True,
-                      use_preprocessed_file=False):
-
-        preprocessed_file_directory = os.path.join(input_path, "preprocessed_files")
-        # change extension from csv to pkl and add sample in case of sample
-        sample_is_used = use_sample and len(self.samples) > 0
-        preprocessed_file_name = f"{file_name[:-4]}_sample.pkl" if sample_is_used else f"{file_name[:-4]}.pkl"
-        preprocessed_file_path = os.path.join(preprocessed_file_directory, preprocessed_file_name)
-        preprocessed_file_is_used = False
-        if not use_preprocessed_file:
-            df_log = self.prepare_event_data_sets(input_path, file_name, use_sample)
-        elif not os.path.exists(preprocessed_file_path):
-            warning_message = f"No preprocessed file {preprocessed_file_name} found, preprocessed the file instead"
-            warnings.warn(warning_message)
-            df_log = self.prepare_event_data_sets(input_path, file_name, use_sample)
-        else:  # use_preprocessed_file and file exists
-            df_log = pd.read_pickle(preprocessed_file_path)
-            preprocessed_file_is_used = True
-
-        if store_preprocessed_file and not preprocessed_file_is_used:
-            os.makedirs(preprocessed_file_directory, exist_ok=True)
-            df_log.to_pickle(preprocessed_file_path)
+        df_log["recordId"] = self.create_record_id_column(df_log, file_name)
 
         return df_log
+
+    def determine_optional_labels_in_log(self, df_log, records):
+        df_log["labels"] = ""
+
+        if self.required_labels is None:
+            self.determine_required_labels(records)
+
+        if set(self.required_labels) == set(self.labels):
+            return df_log
+
+        for record_constructor in records:
+            if self.labels_appear_in_record_constructor(record_constructor):
+                if set(record_constructor.record_labels) <= set(self.required_labels):
+                    continue  # record constructor only contains required labels
+
+                # one of possible labels appear in record constructor
+                should_have_label = self.all_required_attributes_are_present_in_df_log(df_log, record_constructor)
+                if should_have_label.any():  # check whether there is still a row that can have the label
+                    should_have_label = should_have_label & self.is_where_condition_satisfied(
+                        df_log, record_constructor)
+                if should_have_label.any():
+                    for label in record_constructor.record_labels:
+                        df_log.loc[should_have_label, "labels"] += ":" + label
+
+        return df_log
+
+    def labels_appear_in_record_constructor(self, record_constructor):
+        if self.labels is not None:
+            # check whether the labels have overlap with the labels of the record_constructor
+            intersection = list(set(self.labels) & set(record_constructor.record_labels))
+        else:
+            # no labels are defined, hence we consider all labels of the record constructor
+            intersection = record_constructor.record_labels
+
+        return len(intersection) > 0
+
+    def all_required_attributes_are_present_in_df_log(self, df_log, record_constructor):
+        required_attributes_are_present = pd.Series(True, index=np.arange(len(df_log)), name='present')
+        for required_attribute in record_constructor.required_attributes:
+            if required_attribute == "index" or required_attribute == "log":
+                continue
+            if required_attribute in self.attributes:
+                if self.attributes[required_attribute].optional:
+                    # if the required attribute is optional in the structure, check whether the required attribute is
+                    # not null
+                    required_attributes_are_present = required_attributes_are_present & df_log[
+                        required_attribute].notnull()
+                # else the required attributes is required in the structure, hence nothing changes
+            else:  # the required attribute is missing in the structure -> hence not all are present
+                required_attributes_are_present = pd.Series(False, index=np.arange(len(df_log)), name='present')
+                # since for all rows, at least an attribute is missing, we can return
+                return required_attributes_are_present
+
+        return required_attributes_are_present
+
+    @staticmethod
+    def is_where_condition_satisfied(df_log, record_constructor):
+        # TODO split where_condition
+        where_condition = record_constructor.prevalent_record.where_condition
+        where_condition_satisfied = pd.Series(True, index=np.arange(len(df_log)), name='satisfied')
+        if where_condition == "":
+            return where_condition_satisfied
+        where_conditions = where_condition.split("AND")
+        for condition in where_conditions:
+            stripped_condition = condition.strip()
+            if "=" in condition:
+                condition_list = stripped_condition.split("=")
+                column_name = condition_list[0].strip()
+                if "." in column_name:
+                    column_name = column_name.split(".")[1].strip()
+                column_value = condition_list[1].strip().strip('"')
+                where_condition_satisfied = where_condition_satisfied & (
+                        df_log[column_name].astype("string") == column_value)
+            elif "STARTS WITH" in condition:
+                condition_list = stripped_condition.split("STARTS WITH")
+                column_name = condition_list[0].strip()
+                if "." in column_name:
+                    column_name = column_name.split(".")[1].strip()
+                column_value = condition_list[1].strip().strip('"')
+                where_condition_satisfied = where_condition_satisfied & df_log[
+                    column_name].str.startswith(column_value)
+            elif "ENDS WITH" in condition:
+                condition_list = stripped_condition.split("ENDS WITH")
+                column_name = condition_list[0].strip()
+                if "." in column_name:
+                    column_name = column_name.split(".")[1].strip()
+                column_value = condition_list[1].strip().strip('"')
+                where_condition_satisfied = where_condition_satisfied & df_log[
+                    column_name].str.endswith(column_value)
+        return where_condition_satisfied
 
     def get_datetime_formats(self) -> Dict[str, DatetimeObject]:
         datetime_formats = {}
@@ -492,9 +664,8 @@ class DataStructure:
 
         return datetime_formats
 
-    def get_attribute_value_pairs_filtered(self, exclude: bool = True) -> Dict[str, List[str]]:
+    def get_attribute_value_pairs_filtered(self, exclude: bool) -> Dict[str, List[str]]:
         attribute_value_pairs = {}
-
         for attribute_name, attribute in self.attributes.items():
             if attribute.use_filter:
                 attribute_value_pairs[attribute_name] \
