@@ -13,12 +13,31 @@ class EKGUsingSemanticHeaderBuilder:
         self.connection = database_connection
         self.semantic_header = semantic_header
 
-    def create_nodes_by_records(self, node_types: Optional[List[str]]) -> None:
+    def create_nodes_by_records(self, node_types: Optional[List[str]], logs: Optional[List[str]]) -> None:
+        # request all associated record labels of the imported logs
+        associated_records = self.get_associated_records(logs)
+
         for node_constructor in self.semantic_header.get_node_by_record_constructors(node_types):
-            self._create_node_by_record(node_constructor=node_constructor)
+            # check if node_constructor is subset of associated record labels
+            # if so, we need to create nodes for this record
+            is_subset = set(node_constructor.prevalent_record.labels).issubset(set(associated_records))
+            if logs is None or is_subset:
+                self._create_node_by_record(node_constructor=node_constructor, logs=logs)
+
+    def get_associated_records(self, logs):
+        # if imported logs, we can return an empty list
+        if logs is None:
+            return []
+        else:
+            # request the associated record labels
+            result = self.connection.exec_query(sh_ql.get_associated_record_labels_query,
+                                   **{
+                                       "logs": logs
+                                   })
+            return result[0]["labels"]
 
     @Performance.track("node_constructor")
-    def _create_node_by_record(self, node_constructor: NodeConstructor):
+    def _create_node_by_record(self, node_constructor: NodeConstructor, logs: Optional[List[str]]):
         num_ids = self.connection.exec_query(sh_ql.get_number_of_ids_query,
                                              **{
                                                  "node_constructor": node_constructor,
@@ -31,7 +50,8 @@ class EKGUsingSemanticHeaderBuilder:
         self.connection.exec_query(sh_ql.get_create_node_by_record_constructor_query,
                                    **{
                                        "node_constructor": node_constructor,
-                                       "merge": merge_first
+                                       "merge": merge_first,
+                                       "logs": logs
                                    })
 
         self.connection.exec_query(sh_ql.get_reset_created_record_query)
@@ -66,18 +86,31 @@ class EKGUsingSemanticHeaderBuilder:
     def _create_node_by_relation(self, node_constructor: NodeConstructor):
         pass
 
-    def create_relations_using_records(self, relation_types: Optional[List[str]]) -> None:
+    def create_relations_using_records(self, relation_types: Optional[List[str]],
+                                       logs: Optional[List[str]] = None) -> None:
         # find events that are related to different entities of which one event also has a reference to the other entity
         # create a relation between these two entities
         relation: ConstructedRelation
+
+        # request all associated record labels of the imported logs
+        associated_records = self.get_associated_records(logs)
+
         for relation_constructor in self.semantic_header.get_relations_constructed_by_record(relation_types):
-            self._create_relations_using_record(relation_constructor=relation_constructor)
+            # check if node_constructor is subset of associated record labels
+            # if so, we need to create nodes for this record
+            is_subset = set(relation_constructor.prevalent_record.labels).issubset(set(associated_records))
+            if logs is None or is_subset:
+                self._create_relations_using_record(relation_constructor=relation_constructor,
+                                                    logs=logs)
+
+
 
     @Performance.track("relation_constructor")
-    def _create_relations_using_record(self, relation_constructor):
+    def _create_relations_using_record(self, relation_constructor, logs: Optional[List[str]] = None):
         self.connection.exec_query(sh_ql.get_create_relation_using_record_query,
                                    **{
-                                       "relation_constructor": relation_constructor
+                                       "relation_constructor": relation_constructor,
+                                       "logs": logs
                                    })
         self.connection.exec_query(sh_ql.get_reset_created_record_query)
         self._create_corr_from_parents(relation_constructor=relation_constructor)

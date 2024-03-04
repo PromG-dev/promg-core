@@ -38,13 +38,14 @@ class Importer:
                                    })
         self.load_status += 1
 
-    def import_data(self, imported_logs) -> None:
+    def import_data(self, to_be_imported_logs) -> None:
         for structure in self.structures:
             required_labels_str = structure.get_required_labels_str(records=self.records)
 
             # read in all file names that match this structure
             for file_name in structure.file_names:
-                if imported_logs is None or file_name not in imported_logs:
+                # only load files that are not imported yet
+                if to_be_imported_logs is None or file_name in to_be_imported_logs:
                     # read and import the nodes
                     df_log = structure.read_data_set(file_name=file_name,
                                                      use_sample=self.use_sample,

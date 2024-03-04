@@ -684,3 +684,17 @@ class DatasetDescriptions:
 
         self.structures = [DataStructure.from_dict(item) for item in json_event_tables]
         self.structures = [item for item in self.structures if item is not None]
+
+    def get_structure_name_file_mapping(self):
+        # request the file names per structure
+        file_names = {}
+        for structure in self.structures:
+            file_names[structure.name] = structure.file_names
+        return file_names
+
+    def get_files_list(self):
+        # request all file names specified in self.structures in a list
+        files = []
+        for structure in self.structures:
+            files.extend(structure.file_names)
+        return files
