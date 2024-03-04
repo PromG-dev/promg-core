@@ -103,9 +103,14 @@ class OcedPg:
             imported_logs: list of logs that need to be transformed
 
         """
-        # TODO add imported logs not defined
-        self.create_relations_using_record(relation_types=relation_types, imported_logs=imported_logs)
-        self.create_relations_using_relations(relation_types=relation_types)
+        if imported_logs is None:
+            files = self.dataset_descriptions.get_file_names()
+            for name, files in files.items():
+                self.create_relations_using_record(relation_types=relation_types, imported_logs=files)
+                self.create_relations_using_relations(relation_types=relation_types)
+        else:
+            self.create_relations_using_record(relation_types=relation_types, imported_logs=imported_logs)
+            self.create_relations_using_relations(relation_types=relation_types)
 
     def create_relations_using_record(self, relation_types: Optional[List[str]] = None,
                                       imported_logs: Optional[List[str]] = None) -> None:
