@@ -18,6 +18,8 @@ class Performance(metaclass=Singleton):
         self.perf = pd.DataFrame(columns=["name", "start", "end", "duration"])
         if perf_path is not None:
             self.path = perf_path
+        else:
+            self.path = None
         self.count = 0
         self.pbar = tqdm(file=sys.stdout)
         self.status = "Waiting on request"
