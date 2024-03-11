@@ -104,7 +104,7 @@ class DatabaseConnection:
                 if _result_records is not None and _result_records != []:  # return the values if result is not none or empty list
                     return _result_records, _summary
                 else:
-                    return None
+                    return None, _summary
 
         if self.verbose:
             print(query)
