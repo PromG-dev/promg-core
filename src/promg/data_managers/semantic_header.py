@@ -278,10 +278,10 @@ class Relationship:
                                                                where_condition=self.where_condition)
         # don't add from and to nodes if they should be excluded
         if exclude_nodes:
-            if with_brackets: # add brackets
+            if with_brackets:  # add brackets
                 rel_pattern_str = "[$rel_pattern]"
                 rel_pattern = Template(rel_pattern_str).substitute(rel_pattern=rel_pattern)
-        else: # add from and to nodes (brackets are always added)
+        else:  # add from and to nodes (brackets are always added)
             from_node_pattern = self.from_node.get_pattern()
             to_node_pattern = self.to_node.get_pattern()
             rel_pattern_str = "($from_node) - [$rel_pattern] -> ($to_node)" if self.has_direction \
@@ -623,17 +623,19 @@ class ConstructedNodes:
         return "|".join(corr_types)
 
     def get_df_label(self):
-        if self.include_label_in_df:
-            return f'DF_{self.type.upper()}'
-        else:
-            return f'DF'
+        return self._get_df_label_affix(include_label=self.include_label_in_df, affix="")
 
     def get_df_a_label(self, include_label_in_df_a: bool = None):
         include_label_in_df_a = self.include_label_in_df if include_label_in_df_a is None else include_label_in_df_a
-        if include_label_in_df_a:
-            return f'DF_A_{self.type.upper()}'
-        else:
-            return f'DF_A'
+        return self._get_df_label_affix(include_label=include_label_in_df_a, affix="A")
+
+    def get_df_ti_label(self):
+        return self._get_df_label_affix(include_label=self.include_label_in_df, affix="TI")
+
+    def _get_df_label_affix(self, include_label, affix=""):
+        df = "DF" if affix == "" else f"DF_{affix}"
+        df = f'{df}_{self.type.upper()}' if include_label else df
+        return df
 
 
 class RelationConstructor:
