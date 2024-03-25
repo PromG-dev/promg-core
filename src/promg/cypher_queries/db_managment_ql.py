@@ -113,8 +113,38 @@ class DBManagementQueryLibrary:
     def get_set_sysid_index_query() -> Query:
         # language=SQL
         query_str = '''
-            CREATE INDEX entity_sys_id_index IF NOT EXISTS FOR (n:Entity) ON (n.sysId)
+            CREATE RANGE INDEX entity_sys_id_index IF NOT EXISTS FOR (n:Entity) ON (n.sysId)
         '''
+        return Query(query_str=query_str,
+                     template_string_parameters={},
+                     parameters={})
+
+    @staticmethod
+    def get_set_activity_index_query() -> Query:
+        # language=SQL
+        query_str = '''
+                CREATE RANGE INDEX activity_index IF NOT EXISTS FOR (a:Activity) ON (a.activity)
+            '''
+        return Query(query_str=query_str,
+                     template_string_parameters={},
+                     parameters={})
+
+    @staticmethod
+    def get_set_activity_event_index_query() -> Query:
+        # language=SQL
+        query_str = '''
+                CREATE RANGE INDEX activity_event_index IF NOT EXISTS FOR (e:event) ON (e.activity)
+            '''
+        return Query(query_str=query_str,
+                     template_string_parameters={},
+                     parameters={})
+
+    @staticmethod
+    def get_set_timestamp_event_index_query() -> Query:
+        # language=SQL
+        query_str = '''
+                CREATE RANGE INDEX timestamp_event_index IF NOT EXISTS FOR (e:event) ON (e.timestamp)
+            '''
         return Query(query_str=query_str,
                      template_string_parameters={},
                      parameters={})
@@ -133,8 +163,28 @@ class DBManagementQueryLibrary:
     def get_set_recordid_as_index_query() -> Query:
         # language=SQL
         query_str = '''
-            CREATE INDEX record_id_as_index IF NOT EXISTS FOR (r:Record) ON (r.recordId)
+            CREATE RANGE INDEX record_id_as_index IF NOT EXISTS FOR (r:Record) ON (r.recordId)
         '''
+        return Query(query_str=query_str,
+                     template_string_parameters={},
+                     parameters={})
+
+    @staticmethod
+    def get_set_record_log_as_index_query() -> Query:
+        # language=SQL
+        query_str = '''
+                CREATE RANGE INDEX record_log_as_index IF NOT EXISTS FOR (r:Record) ON (r.log)
+            '''
+        return Query(query_str=query_str,
+                     template_string_parameters={},
+                     parameters={})
+
+    @staticmethod
+    def get_set_record_created_as_index_query() -> Query:
+        # language=SQL
+        query_str = '''
+                    CREATE RANGE INDEX record_created_as_index IF NOT EXISTS FOR (r:Record) ON (r.created)
+                '''
         return Query(query_str=query_str,
                      template_string_parameters={},
                      parameters={})

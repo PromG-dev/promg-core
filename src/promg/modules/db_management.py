@@ -38,13 +38,18 @@ class DBManagement:
         # self.connection.exec_query(dbm_ql.get_constraint_unique_event_id_query)
         #
         # required by core pattern
-        # self.connection.exec_query(dbm_ql.get_constraint_unique_entity_uid_query)
+        self.connection.exec_query(dbm_ql.get_constraint_unique_entity_uid_query)
         #
         # self.connection.exec_query(dbm_ql.get_constraint_unique_log_id_query)
 
         self.connection.exec_query(dbm_ql.get_set_sysid_index_query)
+        self.connection.exec_query(dbm_ql.get_set_activity_index_query)
+        self.connection.exec_query(dbm_ql.get_set_timestamp_event_index_query)
+        self.connection.exec_query(dbm_ql.get_set_activity_event_index_query)
         self.connection.exec_query(dbm_ql.get_set_recordid_as_key_node_query)
         self.connection.exec_query(dbm_ql.get_set_recordid_as_index_query)
+        self.connection.exec_query(dbm_ql.get_set_record_log_as_index_query)
+        self.connection.exec_query(dbm_ql.get_set_record_created_as_index_query)
         self.connection.exec_query(dbm_ql.get_set_load_status_as_index_query)
 
     def get_all_rel_types(self) -> List[str]:
