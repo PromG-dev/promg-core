@@ -88,14 +88,19 @@ class DBManagementQueryLibrary:
                      parameters={})
 
     @staticmethod
-    def get_constraint_unique_entity_uid_query() -> Query:
+    def get_constraint_unique_entity_uid_query(node_type=None) -> Query:
+        if node_type is None:
+            node_type = "Entity"
         # language=SQL
         query_str = '''
-            CREATE CONSTRAINT unique_entity_ids IF NOT EXISTS 
-            FOR (en:Entity) REQUIRE en.sysId IS UNIQUE
+            CREATE CONSTRAINT $constraint_name IF NOT EXISTS 
+            FOR (en:$node_type) REQUIRE en.sysId IS UNIQUE
         '''
         return Query(query_str=query_str,
-                     template_string_parameters={},
+                     template_string_parameters={
+                         "node_type": node_type,
+                         "constraint_name": f"unique_{node_type.lower()}_ids"
+                     },
                      parameters={})
 
     @staticmethod

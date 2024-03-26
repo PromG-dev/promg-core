@@ -613,10 +613,10 @@ class ConstructedNodes:
             return self.type
         return self.node_constructors[0].get_label_string()
 
-    def get_labels(self):
+    def get_labels(self, as_str=True):
         if len(self.node_constructors) == 0:
             return self.type
-        return self.node_constructors[0].get_labels()
+        return self.node_constructors[0].get_labels(as_str=as_str)
 
     def get_corr_type_strings(self):
         corr_types = list(set([node_constructor.corr_type for node_constructor in self.node_constructors]))
