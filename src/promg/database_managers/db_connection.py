@@ -83,7 +83,9 @@ class DatabaseConnection:
         @return: The result of the query or None
         """
 
-        def run_query(tx: neo4j.Transaction, _query: str, **_kwargs) -> Optional[List[Dict[str, Any]]]:
+        def run_query(tx: neo4j.Transaction, _query: str, **_kwargs) -> Optional[tuple[
+            List[Dict[str, Any]], neo4j.ResultSummary]]:
+
             """
                 Run the query and return the result of the query
                 @param tx: transaction class on which we can perform queries to the database
@@ -92,15 +94,17 @@ class DatabaseConnection:
             """
             # get the results after the query is executed
             try:
-                _result = tx.run(_query, _kwargs).data()
+                _result = tx.run(_query, _kwargs)
+                _result_records = _result.data()
+                _summary = _result.consume()
             except Exception as inst:
                 self.close_connection()
                 print(inst)
             else:
-                if _result is not None and _result != []:  # return the values if result is not none or empty list
-                    return _result
+                if _result_records is not None and _result_records != []:  # return the values if result is not none or empty list
+                    return _result_records, _summary
                 else:
-                    return None
+                    return None, _summary
 
         if self.verbose:
             print(query)
@@ -109,7 +113,7 @@ class DatabaseConnection:
             database = self.db_name
 
         with self.driver.session(database=database) as session:
-            result = session.write_transaction(run_query, query, **kwargs)
+            result, summary = session.execute_write(run_query, query, **kwargs)
             return result
 
     @staticmethod
