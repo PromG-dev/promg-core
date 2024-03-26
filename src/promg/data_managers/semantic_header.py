@@ -832,16 +832,19 @@ class ConstructedRelation:
         return "|".join(corr_types)
 
     def get_df_label(self):
-        if self.include_label_in_df:
-            return f'DF_{self.type.upper()}'
-        else:
-            return f'DF'
+        return self._get_df_label_affix(include_label=self.include_label_in_df, affix="")
 
-    def get_df_a_label(self):
-        if self.include_label_in_df:
-            return f'DF_A_{self.type.upper()}'
-        else:
-            return f'DF_A'
+    def get_df_a_label(self, include_label_in_df_a: bool = None):
+        include_label_in_df_a = self.include_label_in_df if include_label_in_df_a is None else include_label_in_df_a
+        return self._get_df_label_affix(include_label=include_label_in_df_a, affix="A")
+
+    def get_df_ti_label(self):
+        return self._get_df_label_affix(include_label=self.include_label_in_df, affix="TI")
+
+    def _get_df_label_affix(self, include_label, affix=""):
+        df = "DF" if affix == "" else f"DF_{affix}"
+        df = f'{df}_{self.type.upper()}' if include_label else df
+        return df
 
 
 class RecordConstructor:
