@@ -1,13 +1,7 @@
 from string import Template
-from typing import Optional, List, Dict, Any
+from typing import Optional, List, Dict, Any, Tuple
 
-import neo4j
-from neo4j import GraphDatabase
-from neo4j.exceptions import ServiceUnavailable
-
-from . import authentication
-from .authentication import Credentials
-from ..utilities.singleton import Singleton
+from neo4j import GraphDatabase, ResultSummary, Transaction
 from ..utilities.configuration import Configuration
 
 
@@ -83,8 +77,7 @@ class DatabaseConnection:
         @return: The result of the query or None
         """
 
-        def run_query(tx: neo4j.Transaction, _query: str, **_kwargs) -> Optional[tuple[
-            List[Dict[str, Any]], neo4j.ResultSummary]]:
+        def run_query(tx: Transaction, _query: str, **_kwargs) -> Tuple[Optional[List[Dict[str, Any]]], ResultSummary]:
 
             """
                 Run the query and return the result of the query
@@ -101,7 +94,8 @@ class DatabaseConnection:
                 self.close_connection()
                 print(inst)
             else:
-                if _result_records is not None and _result_records != []:  # return the values if result is not none or empty list
+                if _result_records is not None and _result_records != []:  # return the values if result is not none
+                    # or empty list
                     return _result_records, _summary
                 else:
                     return None, _summary
@@ -113,7 +107,7 @@ class DatabaseConnection:
             database = self.db_name
 
         with self.driver.session(database=database) as session:
-            result, summary = session.execute_write(run_query, query, **kwargs)
+            result, _ = session.execute_write(run_query, query, **kwargs)
             return result
 
     @staticmethod
