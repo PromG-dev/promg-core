@@ -15,15 +15,12 @@ class SemanticHeaderQueryLibrary:
         # create a new entity node if it not exists yet with properties
         merge_or_create = 'MERGE' if merge else 'CREATE'
         set_label_str = ""
-        set_property_str = ""
+        set_property_str = node_constructor.get_set_result_properties_query()
         infer_corr_str = ""
         infer_observed_str = ""
 
         if node_constructor.set_labels is not None:
             set_label_str = f'SET $set_labels'''
-
-        if len(node_constructor.result.optional_properties) > 0:
-            set_property_str = 'SET $set_result_properties'
 
         if len(node_constructor.inferred_relationships) > 0:
             infer_corr_str = '''WITH record, $result_node_name'''
@@ -96,7 +93,6 @@ class SemanticHeaderQueryLibrary:
                      template_string_parameters={
                          "record": node_constructor.get_prevalent_record_pattern(node_name="record"),
                          "record_name": "record",
-                         "conditions": node_constructor.get_where_condition(node_name="record", include_start_and=True),
                          "result_node": node_constructor.result.get_pattern(),
                          "result_node_name": node_constructor.result.get_name(),
                          "set_result_properties": node_constructor.get_set_result_properties_query(),
