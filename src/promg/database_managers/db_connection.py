@@ -83,8 +83,8 @@ class DatabaseConnection:
         @return: The result of the query or None
         """
 
-        def run_query(tx: neo4j.Transaction, _query: str, **_kwargs) -> Tuple[Optional[
-            List[Dict[str, Any]], neo4j.ResultSummary]]:
+        def run_query(tx: neo4j.Transaction, _query: str, **_kwargs) \
+                -> Tuple[Optional[List[Dict[str, Any]]], neo4j.ResultSummary]:
 
             """
                 Run the query and return the result of the query
