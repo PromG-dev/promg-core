@@ -109,7 +109,7 @@ class DatabaseConnection:
             database = self.db_name
 
         with self.driver.session(database=database) as session:
-            result, summary = session.execute_write(run_query, query, **kwargs)
+            result = session.write_transaction(run_query, query, **kwargs)
             return result
 
     @staticmethod
