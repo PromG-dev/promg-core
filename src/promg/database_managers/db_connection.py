@@ -1,5 +1,5 @@
 from string import Template
-from typing import Optional, List, Dict, Any
+from typing import Optional, List, Dict, Any, Tuple
 
 import neo4j
 from neo4j import GraphDatabase
@@ -83,7 +83,7 @@ class DatabaseConnection:
         @return: The result of the query or None
         """
 
-        def run_query(tx: neo4j.Transaction, _query: str, **_kwargs) -> Optional[tuple[
+        def run_query(tx: neo4j.Transaction, _query: str, **_kwargs) -> Tuple[Optional[
             List[Dict[str, Any]], neo4j.ResultSummary]]:
 
             """
