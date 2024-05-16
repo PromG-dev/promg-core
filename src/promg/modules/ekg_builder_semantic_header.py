@@ -38,13 +38,8 @@ class EKGUsingSemanticHeaderBuilder:
 
     @Performance.track("node_constructor")
     def _create_node_by_record(self, node_constructor: NodeConstructor, logs: Optional[List[str]]):
-        num_ids = self.connection.exec_query(sh_ql.get_number_of_ids_query,
-                                             **{
-                                                 "node_constructor": node_constructor,
-                                                 "use_record": True
-                                             })
-        merge_first = num_ids[0]['num_ids'] < 1000 \
-                      and "Event" not in node_constructor.get_labels() \
+
+        merge_first = "Event" not in node_constructor.get_labels() \
                       and "EntityAttribute" not in node_constructor.get_labels()
 
         self.connection.exec_query(sh_ql.get_create_node_by_record_constructor_query,
@@ -54,8 +49,6 @@ class EKGUsingSemanticHeaderBuilder:
                                        "logs": logs
                                    })
 
-        self.connection.exec_query(sh_ql.get_reset_created_record_query)
-
         if merge_first:
             print(
                 f"Node ({node_constructor.get_pattern(with_properties=False)})"
@@ -64,18 +57,6 @@ class EKGUsingSemanticHeaderBuilder:
             print(f"Node ({node_constructor.get_pattern(with_properties=False)}) "
                   f"using ({node_constructor.get_prevalent_record_pattern()}) "
                   f"created")
-            if not ("Event" in node_constructor.get_labels() or "EntityAttribute" in node_constructor.get_labels()):
-                self.connection.exec_query(sh_ql.get_merge_nodes_with_same_id_query,
-                                           **{
-                                               "node_constructor": node_constructor
-                                           }
-                                           )
-
-                self.connection.exec_query(sh_ql.get_reset_merged_in_nodes_query,
-                                           **{
-                                               "node_constructor": node_constructor
-                                           }
-                                           )
 
     def create_nodes_by_relations(self, node_types: Optional[List[str]]) -> None:
         for node_constructors in self.semantic_header.get_nodes_constructed_by_relations(node_types).values():
@@ -112,7 +93,6 @@ class EKGUsingSemanticHeaderBuilder:
                                        "relation_constructor": relation_constructor,
                                        "logs": logs
                                    })
-        self.connection.exec_query(sh_ql.get_reset_created_record_query)
         self._create_corr_from_parents(relation_constructor=relation_constructor)
 
     def create_relations_using_relations(self, relation_types: Optional[List[str]]) -> None:
