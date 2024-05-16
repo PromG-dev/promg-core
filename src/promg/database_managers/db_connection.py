@@ -1,7 +1,7 @@
 from string import Template
-from typing import Optional, List, Dict, Any
+from typing import Optional, List, Dict, Any, Tuple
 
-from neo4j import GraphDatabase
+import neo4j
 from ..utilities.configuration import Configuration
 
 
@@ -28,7 +28,7 @@ class DatabaseConnection:
     def start_connection(uri: str, user: str, password: str):
         # begin config
         # connection to Neo4J database
-        driver = GraphDatabase.driver(uri, auth=(user, password), max_connection_lifetime=200)
+        driver = neo4j.GraphDatabase.driver(uri, auth=(user, password), max_connection_lifetime=200)
         return driver
 
     def close_connection(self):
@@ -77,7 +77,8 @@ class DatabaseConnection:
         @return: The result of the query or None
         """
 
-        def run_query(tx: Transaction, _query: str, **_kwargs) -> Tuple[Optional[List[Dict[str, Any]]], ResultSummary]:
+        def run_query(tx: neo4j.Transaction, _query: str, **_kwargs) -> Tuple[
+            Optional[List[Dict[str, Any]]], neo4j.ResultSummary]:
 
             """
                 Run the query and return the result of the query
@@ -86,19 +87,12 @@ class DatabaseConnection:
                 @return: The result of the query or None if there is no result
             """
             # get the results after the query is executed
-            try:
-                _result = tx.run(_query, _kwargs)
-                _result_records = _result.data()
-                _summary = _result.consume()
-            except Exception as inst:
-                self.close_connection()
-                print(inst)
-            else:
-                if _result_records is not None and _result_records != []:  # return the values if result is not none
-                    # or empty list
-                    return _result_records, _summary
-                else:
-                    return None, _summary
+            _result = tx.run(_query, _kwargs)
+            _result_records = _result.data()  # obtain dict representation
+            _summary = _result.consume()  # exhaust the result
+
+            # or empty list
+            return _result_records, _summary
 
         if self.verbose:
             print(query)
@@ -107,8 +101,14 @@ class DatabaseConnection:
             database = self.db_name
 
         with self.driver.session(database=database) as session:
-            result, _ = session.execute_write(run_query, query, **kwargs)
-            return result
+            try: # try to commit the transaction, if the transaction fails, it is rolled back automatically
+                result, summary = session.execute_write(run_query, query, **kwargs)
+                return result
+            except Exception as inst: # let user know the transaction failed and close the connection
+                self.close_connection()
+                print("Latest transaction was rolled back")
+                print(f"This was your latest query: {query}")
+                print(inst)
 
     @staticmethod
     def set_up_connection(config: Configuration):
