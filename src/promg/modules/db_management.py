@@ -7,8 +7,9 @@ from ..utilities.performance_handling import Performance
 
 
 class DBManagement:
-    def __init__(self, db_connection):
+    def __init__(self, db_connection, semantic_header=None):
         self.connection = db_connection
+        self.semantic_header = semantic_header
 
     @Performance.track()
     def clear_db(self, replace=True) -> None:
@@ -38,14 +39,29 @@ class DBManagement:
         # self.connection.exec_query(dbm_ql.get_constraint_unique_event_id_query)
         #
         # required by core pattern
-        # self.connection.exec_query(dbm_ql.get_constraint_unique_entity_uid_query)
+        if self.semantic_header is not None:
+            self._set_unique_sysid_constraints()
         #
         # self.connection.exec_query(dbm_ql.get_constraint_unique_log_id_query)
 
         self.connection.exec_query(dbm_ql.get_set_sysid_index_query)
+        self.connection.exec_query(dbm_ql.get_set_activity_index_query)
+        self.connection.exec_query(dbm_ql.get_set_timestamp_event_index_query)
+        self.connection.exec_query(dbm_ql.get_set_activity_event_index_query)
         self.connection.exec_query(dbm_ql.get_set_recordid_as_key_node_query)
         self.connection.exec_query(dbm_ql.get_set_recordid_as_index_query)
+        self.connection.exec_query(dbm_ql.get_set_record_log_as_index_query)
+        self.connection.exec_query(dbm_ql.get_set_record_created_as_index_query)
         self.connection.exec_query(dbm_ql.get_set_load_status_as_index_query)
+
+    def _set_unique_sysid_constraints(self):
+        for node in self.semantic_header.nodes:
+            node_labels = node.get_labels(as_str=False)
+            if "Entity" in node_labels:
+                self.connection.exec_query(dbm_ql.get_constraint_unique_entity_uid_query,
+                                           **{
+                                               "node_type": node.type
+                                           })
 
     def get_all_rel_types(self) -> List[str]:
         """

@@ -65,25 +65,22 @@ class SemanticHeaderQueryLibrary:
         # add check to only transform records from the imported logs
         if logs is not None:
             log_str = ",".join([f'"{log}"' for log in logs])
-            log_check_str = f"AND record.log in [{log_str}]"
+            log_check_str = f"WHERE record.log in [{log_str}]"
         else:
             log_check_str = ""
 
         # language=SQL
         query_str = '''
-                    CALL apoc.periodic.commit(
-                        'MATCH ($record) 
-                        WHERE NOT record:RecordCreated $log_check_str
-                            WITH $record_name limit $limit
-                            $merge_or_create ($result_node)
-                            SET $record_name:RecordCreated
-                            $set_label_str
-                            $set_property_str
-                            MERGE (record) <- [:EXTRACTED_FROM] - ($result_node_name)
-                            $infer_corr_str
-                            $infer_observed_str
-                            RETURN count(*)',
-                            {limit: $batch_size})
+                    CALL apoc.periodic.iterate(
+                    'MATCH ($record) 
+                          $log_check_str
+                          RETURN record',
+                          '$merge_or_create ($result_node)
+                          $set_label_str
+                          $set_property_str
+                          MERGE (record) <- [:EXTRACTED_FROM] - ($result_node_name)
+                          $infer_corr_str
+                          $infer_observed_str', {batchSize:$batch_size})
                     '''
 
         query_str = Template(query_str).safe_substitute({
@@ -109,18 +106,6 @@ class SemanticHeaderQueryLibrary:
                      })
 
     @staticmethod
-    def get_reset_created_record_query():
-        query_str = '''
-                    CALL apoc.periodic.commit(
-                        'MATCH (record:RecordCreated) 
-                            WITH record limit $limit
-                            REMOVE record:RecordCreated
-                            RETURN count(*)',
-                            {limit: $batch_size})
-                    '''
-        return Query(query_str=query_str)
-
-    @staticmethod
     def get_associated_record_labels_query(logs):
         log_str = ",".join([f'"{log}"' for log in logs])
         log_str = f"[{log_str}]"
@@ -136,22 +121,6 @@ class SemanticHeaderQueryLibrary:
                      template_string_parameters={"log_str": log_str})
 
     @staticmethod
-    def get_number_of_ids_query(node_constructor: NodeConstructor, use_record: bool = False):
-        query_str = '''MATCH (n:$labels)
-                        RETURN count(DISTINCT n.sysId) as num_ids'''
-
-        if use_record:
-            query_str = '''MATCH ($record) 
-                           RETURN count(DISTINCT record.$attribute) as num_ids'''
-
-        return Query(query_str=query_str,
-                     template_string_parameters={
-                         "labels": node_constructor.get_label_string(),
-                         "attribute": node_constructor.result.required_properties[0].ref_attribute,
-                         "record": node_constructor.get_prevalent_record_pattern(node_name="record")
-                     })
-
-    @staticmethod
     def get_number_of_records_query(node_constructor: NodeConstructor):
 
         query_str = '''MATCH ($record) 
@@ -160,62 +129,6 @@ class SemanticHeaderQueryLibrary:
         return Query(query_str=query_str,
                      template_string_parameters={
                          "record": node_constructor.get_prevalent_record_pattern(node_name="record")
-                     })
-
-    @staticmethod
-    def get_reset_merged_in_nodes_query(node_constructor: NodeConstructor):
-        query_str = '''
-                           CALL apoc.periodic.commit(
-                                  'MATCH (n:$labels)
-                                  WHERE n.merged = True
-                                  WITH n LIMIT $limit
-                                  SET n.merged = Null
-                           RETURN COUNT(*)',
-                           {limit:$batch_size})
-                       '''
-
-        return Query(query_str=query_str,
-                     template_string_parameters={
-                         "labels": node_constructor.get_label_string(),
-                     })
-
-    @staticmethod
-    def get_merge_nodes_with_same_id_query(node_constructor: NodeConstructor):
-        if "Event" in node_constructor.get_labels():
-            return None
-
-        query_str = '''
-                    CALL apoc.periodic.commit(
-                           'MATCH (n:$labels)
-                           WHERE n.merged IS NULL
-                           // we order by sysId
-                           WITH n ORDER BY n.sysId LIMIT $limit
-                           WITH collect(n) as collection
-                           WITH collection, last(collection) as last_node, size(collection) as collection_size
-                           UNWIND collection as n
-                           WITH $idt_properties, collect(n) as same_nodes, last_node, collection_size
-                           CALL {WITH same_nodes, last_node
-                                MATCH (last_node)
-                                // last node could be the first of the list of same_nodes, we do not set to merged=true
-                                // for this node
-                                 WHERE size(same_nodes) = 1 and  head(same_nodes) <> last_node
-                                 SET head(same_nodes).merged = True}             
-                           WITH same_nodes, collection_size                   
-                           WHERE size(same_nodes) > 1
-                           UNWIND range(0, toInteger(floor(size(same_nodes)/100))) as i
-                           WITH same_nodes, i*100 as min_range, apoc.coll.min([(i+1)*100, size(same_nodes)]) AS 
-                           max_range, collection_size
-                           WITH same_nodes[min_range..max_range] as lim_nodes, collection_size
-                           CALL apoc.refactor.mergeNodes(lim_nodes, {properties: "discard", mergeRels: true})
-                           YIELD node
-                           RETURN collection_size',
-                           {limit:$batch_size})
-                       '''
-
-        return Query(query_str=query_str,
-                     template_string_parameters={
-                         "labels": node_constructor.get_label_string(),
-                         "idt_properties": node_constructor.get_idt_properties_query()
                      })
 
     @staticmethod
@@ -228,13 +141,12 @@ class SemanticHeaderQueryLibrary:
             from_or_to = "TO"
 
         query_str = '''
-            CALL apoc.periodic.commit('
+            CALL apoc.periodic.iterate('
                 MATCH (e:Event) --> ($node) - [:$from_or_to] - (relation:$relation_label_str)
                 WHERE NOT EXISTS ((e) - [:CORR] -> (relation))
-                WITH DISTINCT relation, e limit $limit
-                MERGE (e) - [:$corr_type] -> (relation)
-                RETURN COUNT(*)',
-                {limit:$batch_size}
+                RETURN DISTINCT relation, e',
+                'MERGE (e) - [:$corr_type] -> (relation)',
+                {batchSize:$batch_size}
                 )       
             '''
 
@@ -297,20 +209,19 @@ class SemanticHeaderQueryLibrary:
         # add check to only transform records from the imported logs
         if logs is not None:
             log_str = ",".join([f'"{log}"' for log in logs])
-            log_check_str = f"AND record.log in [{log_str}]"
+            log_check_str = f"WHERE record.log in [{log_str}]"
         else:
             log_check_str = ""
 
-        query_str = '''     CALL apoc.periodic.commit('
+        query_str = '''     CALL apoc.periodic.iterate('
                             MATCH (record:$record_labels)
-                            WHERE NOT record:RecordCreated $log_check_str
-                            WITH  record limit $limit
+                            $log_check_str
+                            RETURN record',
+                            '
                             MATCH ($from_node) - [:EXTRACTED_FROM] -> (record)
                             MATCH ($to_node) - [:EXTRACTED_FROM] -> (record)
-                            $merge_str
-                            SET record:RecordCreated
-                            RETURN COUNT(*)',
-                            {limit:$batch_size})
+                            $merge_str',
+                            {batchSize:$batch_size})
                         '''
 
         query_str = Template(query_str).safe_substitute({
@@ -329,26 +240,6 @@ class SemanticHeaderQueryLibrary:
                          "rel_pattern": relation_constructor.result.get_pattern("relation"),
                          "relation_labels": relation_constructor.result.get_relation_types_str(as_list=True),
                          "relation_label_str": relation_constructor.result.get_relation_types_str()
-                     })
-
-    @staticmethod
-    def get_reset_created_relation_query(relation_constructor: RelationConstructor) -> Query:
-        # find events that are related to different entities of which one event also has a reference to the other entity
-        # create a relation between these two entities
-
-        query_str = '''     CALL apoc.periodic.commit('
-                              MATCH (record:$record_labels)
-                              WHERE record.rel_created = True
-                              WITH record limit $limit
-                              SET record.rel_created = Null
-                              RETURN COUNT(*)',
-                              {limit:$batch_size})
-                          '''
-
-        return Query(query_str=query_str,
-                     template_string_parameters={
-                         "record_labels": relation_constructor.prevalent_record.get_label_str(
-                             include_first_colon=False)
                      })
 
     @staticmethod
