@@ -7,6 +7,7 @@ from typing import List, Any, Optional, Union, Dict
 
 from dataclasses import dataclass
 
+from .properties import Properties
 from ..utilities.auxiliary_functions import replace_undefined_value, create_list, get_id_attribute_from_label
 from ..utilities.configuration import Configuration
 import re
@@ -14,64 +15,12 @@ import re
 from ..utilities.singleton import Singleton
 
 
-class Property:
-    def __init__(self, attribute: str, value: str, node_name: Optional[str],
-                 node_attribute: Optional[str], ref_node: Optional[str], ref_attribute: Optional[str]):
-        self.attribute = attribute
-        self.value = value
-        self.node_name = node_name,
-        self.node_attribute = node_attribute,
-        self.ref_node = ref_node
-        self.ref_attribute = ref_attribute
-
-    @staticmethod
-    def from_string(property_description):
-        if property_description is None:
-            return None
-        if ":" in property_description:
-            components = property_description.split(":")
-        else:
-            components = property_description.split("=")
-        attribute = components[0]
-        value = components[1]
-        attribute = attribute.strip()
-        value = value.strip()
-
-        ref_node, ref_attribute, node_name, node_attribute = None, None, None, None
-        if "." in value:
-            components = value.split(".")
-            ref_node = components[0]
-            ref_attribute = components[1]
-
-        if "." in attribute:
-            components = attribute.split(".")
-            node_name = components[0]
-            node_attribute = components[1]
-
-        return Property(attribute=attribute, value=value, node_name=node_name,
-                        node_attribute=node_attribute, ref_node=ref_node, ref_attribute=ref_attribute)
-
-    def get_pattern(self, is_set=False, node_name=None):
-        if not is_set:
-            return f"{self.attribute}: {self.value}"
-        else:
-            if node_name is None:
-                return f"{self.attribute} = {self.value}"
-            else:
-                return f"{node_name}.{self.attribute} = COALESCE({node_name}.{self.attribute}, {self.value})"
-
-    def __repr__(self):
-        return self.get_pattern()
-
-
 @dataclass()
 class Node:
-    def __init__(self, name: str, labels: List[str], required_properties: List[Property],
-                 optional_properties: List[Property], where_condition: str):
+    def __init__(self, name: str, labels: List[str], properties: Properties, where_condition: str):
         self.name = name
         self.labels = labels
-        self.required_properties = required_properties
-        self.optional_properties = optional_properties
+        self.properties = properties
         self.where_condition = where_condition
 
     @staticmethod
@@ -84,8 +33,7 @@ class Node:
         name = node_components[0]
         labels = ""
         where_condition = ""
-        required_properties = []
-        optional_properties = []
+        properties = None
         if len(node_components) > 1:
             node_labels_prop_where = node_components[1]
             node_labels_prop_where = node_labels_prop_where.replace("'", "\"")
@@ -94,23 +42,17 @@ class Node:
                 where_condition = node_labels_prop_where.split(" WHERE ")[1]
             elif "{" in node_labels_prop_where:
                 labels = node_labels_prop_where.split(" {")[0]
-                properties = node_labels_prop_where.split(" {")[1]
-                properties = properties.replace("}", "")
-                properties = properties.split(",")
-
-                required_properties = [prop for prop in properties if "OPTIONAL" not in prop]
-                optional_properties = [prop.replace("OPTIONAL", "") for prop in properties if "OPTIONAL" in prop]
-
-                required_properties = [Property.from_string(prop) for prop in required_properties]
-                optional_properties = [Property.from_string(prop) for prop in optional_properties]
+                property_str = node_labels_prop_where.split(" {")[1]
+                properties = Properties.from_string(property_str)
             else:
                 labels = node_labels_prop_where
 
         labels = labels.strip()
         labels = labels.split(":")
 
-        return Node(name=name, labels=labels, required_properties=required_properties,
-                    optional_properties=optional_properties,
+        return Node(name=name,
+                    labels=labels,
+                    properties=properties,
                     where_condition=where_condition)
 
     def get_name(self, with_brackets=False):
@@ -120,24 +62,12 @@ class Node:
             return self.name
 
     def get_condition_string(self, with_brackets=False, with_where=False, with_optional=False):
-        properties = self.required_properties + self.optional_properties if with_optional else self.required_properties
-        if len(properties) > 0:
-            return self._get_property_string(with_brackets, with_optional)
+        if self.properties is not None and self.properties.has_required_properties(with_optional):
+            return self.properties.get_string(with_brackets, with_optional)
         elif self.where_condition != "":
             return self._get_where_condition_string(with_where)
         else:
             return ""
-
-    def _get_property_string(self, with_brackets=False, with_optional=False):
-        properties = [req_prop.get_pattern() for req_prop in self.required_properties]
-        if with_optional:
-            properties += [f"OPTIONAL {prop.get_pattern()}" for prop in self.optional_properties]
-
-        properties = ", ".join(properties)
-        if with_brackets:
-            property_string = "{$properties}"
-            properties = Template(property_string).substitute(properties=properties)
-        return properties
 
     def _get_where_condition_string(self, with_where=False):
         condition = self.where_condition
@@ -147,7 +77,6 @@ class Node:
         return condition
 
     def get_pattern(self, name: Optional[str] = None, with_brackets=False, with_properties=True, forbidden_label=None):
-
         node_pattern_str = "$node_name"
         sep = ":"
         if self.get_label_str() != "":
@@ -184,6 +113,14 @@ class Node:
             return sep * include_first_colon + sep.join(self.labels)
         return ""
 
+    def get_set_optional_properties_query(self, node_name):
+        if self.properties is None:
+            return None
+        return self.properties.get_set_optional_properties_query(node_name=node_name)
+
+    def get_idt_properties_query(self, node_name):
+        return self.properties.get_idt_properties_query(node_name=node_name)
+
     def __repr__(self):
         return self.get_pattern(with_brackets=True)
 
@@ -194,7 +131,7 @@ class Node:
 
 class Relationship:
     def __init__(self, relation_name: str, relation_types: List[str], from_node: Node, to_node: Node,
-                 properties: List[Property], where_condition: str, has_direction: bool):
+                 properties: Properties, where_condition: str, has_direction: bool):
         self.relation_name = relation_name
         self.relation_types = relation_types
         self.from_node = from_node
@@ -229,7 +166,16 @@ class Relationship:
         nodes = re.findall(r'\([^<>]*\)', relation_description)
         _relation_string = re.findall(r'\[[^<>]*]', relation_description)[0]
         _relation_string = re.sub(r"[\[\]]", "", _relation_string)
-        _relation_components = _relation_string.split(":", maxsplit=1)
+
+        if "{" in _relation_string:  # properties are defined
+            name_and_type = _relation_string.split(" {")[0]
+            property_str = _relation_string.split(" {")[1]
+            properties = Properties.from_string(property_str)
+        else:
+            name_and_type = _relation_string
+            properties = None
+
+        _relation_components = name_and_type.split(":", maxsplit=1)
         _relation_name = _relation_components[0]
         _relation_types = _relation_components[1]
         _relation_types = _relation_types.split(":")
@@ -248,7 +194,7 @@ class Relationship:
         _to_node = Node.from_string(nodes[relation_directions[direction]["to_node"]])
 
         return Relationship(relation_name=_relation_name, relation_types=_relation_types,
-                            from_node=_from_node, to_node=_to_node, properties=[], where_condition="",
+                            from_node=_from_node, to_node=_to_node, properties=properties, where_condition="",
                             has_direction=_has_direction)
 
     @staticmethod
@@ -266,8 +212,8 @@ class Relationship:
                                                            rel_type=self.get_relation_type())
 
         # add properties if requested and there are properties defined
-        if with_properties and len(self.properties) > 0:
-            properties_string = ",".join([prop.get_pattern() for prop in self.properties])
+        if with_properties and self.properties is not None:
+            properties_string = self.properties.get_string(with_brackets=False, with_optional=False)
             rel_pattern_str = "$rel_pattern {$properties}"
             rel_pattern = Template(rel_pattern_str).substitute(rel_pattern=rel_pattern,
                                                                properties=properties_string)
@@ -516,26 +462,6 @@ class NodeConstructor:
     def get_prevalent_record_pattern(self, node_name: str = "record", forbidden_label: str = None):
         return self.prevalent_record.get_pattern(name=node_name, forbidden_label=forbidden_label)
 
-    def get_keys(self):
-        keys = []
-        for prop in self.result.required_properties:
-            # only check whether the ref attribute exists, if it should exist in the ref node
-            if prop.ref_node is not None:
-                key = prop.ref_attribute
-                keys.append(key)
-        return keys
-
-    def get_where_condition(self, node_name: str = "record", include_start_and: bool = False):
-        condition_str = " AND ".join(
-            [f'''{node_name}.{key} IS NOT NULL AND {node_name}.{key} <> "Unknown"''' for key
-             in self.get_keys()])
-        if condition_str != "":
-            if include_start_and:
-                return f"AND {condition_str}"
-            else:
-                return condition_str
-        return condition_str
-
     def get_pattern(self, name: Optional[str] = None, with_brackets=False, with_properties=True):
         return self.result.get_pattern(name, with_brackets=with_brackets, with_properties=with_properties)
 
@@ -551,17 +477,19 @@ class NodeConstructor:
     def constructed_by_relation(self):
         return self.relation is not None
 
-    def get_set_result_properties_query(self):
-        if len(self.result.optional_properties) == 0:
-            return None
-        return ",".join(
-            [prop.get_pattern(is_set=True, node_name=self.result.name) for prop in self.result.optional_properties])
+    def get_set_result_properties_query(self, node_name=None):
+        if node_name is None:
+            node_name = self.result.name
+        set_optional_properties_str = self.result.get_set_optional_properties_query(node_name=node_name)
+        if set_optional_properties_str is not None:
+            return f"SET {set_optional_properties_str}"
+        else:
+            return ""
 
     def get_idt_properties_query(self, node_name="n"):
-        if self.result.required_properties is None:
-            return None
-        return ",".join(
-            [f"{node_name}.{prop.attribute} as {prop.attribute}" for prop in self.result.required_properties])
+        if node_name is None:
+            node_name = self.result.name
+        return self.result.get_idt_properties_query(node_name=node_name)
 
     def get_set_result_labels_query(self):
         if self.set_labels is None:
@@ -646,7 +574,6 @@ class RelationConstructor:
                  from_node: "Node",
                  to_node: "Node",
                  result: "Relationship",
-                 optional_properties: List[Property],
                  model_as_node: bool,
                  infer_corr_from_reified_parents: bool,
                  corr_type: str):
@@ -663,7 +590,6 @@ class RelationConstructor:
         self.from_node = from_node
         self.to_node = to_node
         self.result = result
-        self.optional_properties = optional_properties
         self.model_as_node = model_as_node
         self.infer_corr_from_reified_parents = infer_corr_from_reified_parents
         self.corr_type = corr_type
@@ -678,10 +604,6 @@ class RelationConstructor:
         _from_node = Node.from_string(obj.get("from_node"))
         _to_node = Node.from_string(obj.get("to_node"))
         _result = Relationship.from_string(obj.get("result"))
-        _optional_properties = obj.get("set_optional_properties")
-        if _optional_properties is not None:
-            _optional_properties = _optional_properties.split(",")
-            _optional_properties = [Property.from_string(prop) for prop in _optional_properties]
 
         _infer_corr_from_reified_parents = replace_undefined_value(obj.get("infer_corr_from_reified_parents"), False)
         _corr_type = replace_undefined_value(obj.get("corr_type"), "CORR")
@@ -693,7 +615,6 @@ class RelationConstructor:
                                    from_node=_from_node,
                                    to_node=_to_node,
                                    result=_result,
-                                   optional_properties=_optional_properties,
                                    model_as_node=model_as_node,
                                    infer_corr_from_reified_parents=_infer_corr_from_reified_parents,
                                    corr_type=_corr_type)
@@ -713,18 +634,6 @@ class RelationConstructor:
 
     def get_prevalent_record_pattern(self, node_name: str):
         return self.prevalent_record.get_pattern(node_name)
-
-    def get_keys(self):
-        keys = []
-        for prop in self.result.properties:
-            key = prop.ref_attribute
-            keys.append(key)
-        return keys
-
-    def get_where_condition(self, node_name: str = "record"):
-        return " AND ".join(
-            [f'''{node_name}.{key} IS NOT NULL AND {node_name}.{key} <> "Unknown"''' for key
-             in self.get_keys()])
 
     def get_pattern(self, name: Optional[str] = None, with_brackets=False, with_properties=True, exclude_nodes=False):
         return self.result.get_pattern(name=name, with_brackets=with_brackets, with_properties=with_properties,
