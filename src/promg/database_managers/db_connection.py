@@ -1,7 +1,7 @@
 from string import Template
 from typing import Optional, List, Dict, Any, Tuple
 
-from neo4j import GraphDatabase
+import neo4j
 from ..utilities.configuration import Configuration
 
 
@@ -28,7 +28,7 @@ class DatabaseConnection:
     def start_connection(uri: str, user: str, password: str):
         # begin config
         # connection to Neo4J database
-        driver = GraphDatabase.driver(uri, auth=(user, password), max_connection_lifetime=200)
+        driver = neo4j.GraphDatabase.driver(uri, auth=(user, password), max_connection_lifetime=200)
         return driver
 
     def close_connection(self):
