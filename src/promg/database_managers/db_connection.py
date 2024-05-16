@@ -1,7 +1,7 @@
 from string import Template
-from typing import Optional, List, Dict, Any, Tuple
+from typing import Optional, List, Dict, Any
 
-from neo4j import GraphDatabase, ResultSummary, Transaction
+from neo4j import GraphDatabase
 from ..utilities.configuration import Configuration
 
 
