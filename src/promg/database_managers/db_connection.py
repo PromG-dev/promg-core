@@ -1,13 +1,7 @@
 from string import Template
 from typing import Optional, List, Dict, Any, Tuple
 
-import neo4j
 from neo4j import GraphDatabase
-from neo4j.exceptions import ServiceUnavailable
-
-from . import authentication
-from .authentication import Credentials
-from ..utilities.singleton import Singleton
 from ..utilities.configuration import Configuration
 
 
