@@ -238,6 +238,12 @@ class Relationship:
 
         return rel_pattern
 
+    def get_set_optional_properties_query(self, relation_name):
+        if self.properties is not None:
+            return self.properties.get_set_optional_properties_query(node_name=relation_name)
+        return None
+
+
     def __repr__(self):
         return self.get_pattern(exclude_nodes=False)
 
@@ -666,10 +672,14 @@ class RelationConstructor:
         # C = A AND B == self.use_inference AND (not modeled_as_node OR self.model_as_node)
         return self.use_inference and (not modeled_as_nodes or self.model_as_node)
 
-    def get_set_result_properties_query(self):
-        if self.optional_properties is None:
-            return None
-        return ",".join([prop.get_pattern(is_set=True) for prop in self.optional_properties])
+    def get_set_result_properties_query(self, relation_name=None):
+        if relation_name is None:
+            relation_name = self.result.relation_name
+        set_optional_properties_str = self.result.get_set_optional_properties_query(relation_name=relation_name)
+        if set_optional_properties_str is not None:
+            return f"SET {set_optional_properties_str}"
+        else:
+            return ""
 
     def get_relations_query(self):
         relation_queries = [f"MATCH {relation.get_pattern(exclude_nodes=False, with_brackets=True)}" for relation in

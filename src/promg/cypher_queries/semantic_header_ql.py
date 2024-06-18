@@ -159,7 +159,7 @@ class SemanticHeaderQueryLibrary:
         if relation_constructor.model_as_node:
             # language=sql
             merge_str = '''
-                            MERGE ($from_node_name) -[:FROM] -> (relation:$relation_label_str) - [:TO] -> (
+                            MERGE ($from_node_name) -[:FROM] -> (relation:$rel_pattern) - [:TO] -> (
                             $to_node_name)
                             '''
         else:
@@ -170,7 +170,8 @@ class SemanticHeaderQueryLibrary:
                 CALL apoc.periodic.iterate(
                 '$relation_queries                        
                 RETURN distinct $from_node_name, $to_node_name',
-                '$merge_str',                        
+                '$merge_str
+                $set_properties_str',                        
                 {batchSize: $batch_size})
             '''
 
@@ -184,7 +185,7 @@ class SemanticHeaderQueryLibrary:
                          "from_node_name": relation_constructor.from_node.get_name(),
                          "to_node_name": relation_constructor.to_node.get_name(),
                          "rel_pattern": relation_constructor.result.get_pattern(),
-                         "relation_label_str": relation_constructor.result.get_relation_types_str()
+                         "set_properties_str": relation_constructor.get_set_result_properties_query()
                      })
 
     @staticmethod
@@ -195,7 +196,7 @@ class SemanticHeaderQueryLibrary:
         if relation_constructor.model_as_node:
             # language=sql
             merge_str = '''
-                            MERGE ($from_node_name) -[:FROM] -> (relation:$relation_label_str) - [:TO] -> (
+                            MERGE ($from_node_name) -[:FROM] -> (relation:$rel_pattern) - [:TO] -> (
                             $to_node_name)
                             MERGE (relation)  - [:EXTRACTED_FROM] -> (record)
                             '''
@@ -216,7 +217,8 @@ class SemanticHeaderQueryLibrary:
                             '
                             MATCH ($from_node) - [:EXTRACTED_FROM] -> (record)
                             MATCH ($to_node) - [:EXTRACTED_FROM] -> (record)
-                            $merge_str',
+                            $merge_str
+                            $set_properties_str',
                             {batchSize:$batch_size})
                         '''
 
@@ -235,7 +237,7 @@ class SemanticHeaderQueryLibrary:
                              include_first_colon=False),
                          "rel_pattern": relation_constructor.result.get_pattern("relation"),
                          "relation_labels": relation_constructor.result.get_relation_types_str(as_list=True),
-                         "relation_label_str": relation_constructor.result.get_relation_types_str()
+                         "set_properties_str": relation_constructor.get_set_result_properties_query("relation")
                      })
 
     @staticmethod
