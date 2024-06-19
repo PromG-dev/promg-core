@@ -116,7 +116,7 @@ class Node:
     def get_set_optional_properties_query(self, node_name):
         if self.properties is None:
             return None
-        return self.properties.get_set_optional_properties_query(node_name=node_name)
+        return self.properties.get_set_optional_properties_query(name=node_name)
 
     def get_idt_properties_query(self, node_name):
         return self.properties.get_idt_properties_query(node_name=node_name)
@@ -240,7 +240,7 @@ class Relationship:
 
     def get_set_optional_properties_query(self, relation_name):
         if self.properties is not None:
-            return self.properties.get_set_optional_properties_query(node_name=relation_name)
+            return self.properties.get_set_optional_properties_query(name=relation_name)
         return None
 
 

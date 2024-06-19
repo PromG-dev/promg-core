@@ -39,14 +39,14 @@ class Property:
         return Property(attribute=attribute, value=value, node_name=node_name,
                         node_attribute=node_attribute, ref_node=ref_node, ref_attribute=ref_attribute)
 
-    def get_pattern(self, is_set=False, node_name=None):
+    def get_pattern(self, is_set=False, name=None):
         if not is_set:
             return f"{self.attribute}: {self.value}"
         else:
-            if node_name is None:
+            if name is None:
                 return f"{self.attribute} = {self.value}"
             else:
-                return f"{node_name}.{self.attribute} = COALESCE({node_name}.{self.attribute}, {self.value})"
+                return f"{name}.{self.attribute} = COALESCE({name}.{self.attribute}, {self.value})"
 
     def __repr__(self):
         return self.get_pattern()
@@ -98,11 +98,11 @@ class Properties:
             properties = Template(property_string).substitute(properties=properties)
         return properties
 
-    def get_set_optional_properties_query(self, node_name):
+    def get_set_optional_properties_query(self, name):
         if len(self.optional_properties) == 0:
             return None
         return ",".join(
-            [prop.get_pattern(is_set=True, node_name=node_name) for prop in self.optional_properties])
+            [prop.get_pattern(is_set=True, name=name) for prop in self.optional_properties])
 
     def get_idt_properties_query(self, node_name):
         if self.required_properties is None:
