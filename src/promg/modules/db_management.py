@@ -7,7 +7,7 @@ from ..utilities.performance_handling import Performance
 
 
 class DBManagement:
-    def __init__(self, db_connection, semantic_header):
+    def __init__(self, db_connection, semantic_header=None):
         self.connection = db_connection
         self.semantic_header = semantic_header
 
@@ -36,11 +36,16 @@ class DBManagement:
         """
         Set constraints in Neo4j instance
         """
+        # # for implementation only (not required by schema or patterns)
+        # self.connection.exec_query(dbm_ql.get_constraint_unique_event_id_query)
+        #
+        # required by core pattern
+        if self.semantic_header is not None:
+            self._set_unique_sysid_constraints()
+        else:
+            self.connection.exec_query(dbm_ql.get_set_sysid_index_query)
+        # self.connection.exec_query(dbm_ql.get_constraint_unique_log_id_query)
 
-        # set sysid constrains as per semantic header
-        self._set_unique_sysid_constraints()
-
-        # set remaining constraints
         self.connection.exec_query(dbm_ql.get_set_activity_index_query)
         self.connection.exec_query(dbm_ql.get_set_timestamp_event_index_query)
         self.connection.exec_query(dbm_ql.get_set_activity_event_index_query)
