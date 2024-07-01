@@ -7,7 +7,7 @@ from ..utilities.performance_handling import Performance
 
 
 class DBManagement:
-    def __init__(self, db_connection, semantic_header=None):
+    def __init__(self, db_connection, semantic_header):
         self.connection = db_connection
         self.semantic_header = semantic_header
 
@@ -17,11 +17,12 @@ class DBManagement:
         Replace or clear the entire database by a new one
 
         Args:
-            replace: boolean to indicate whether the database may be replaced
+            replace: boolean to indicate whether the database is fully replaced
 
         """
         if replace:
             result = self.connection.exec_query(dbm_ql.get_replace_db_query, **{"db_name": self.connection.db_name})
+            self.set_constraints()
             if result[0]['state'] == 'CaughtUp' and result[0]['success']:
                 return True
             else:
@@ -41,10 +42,10 @@ class DBManagement:
         # required by core pattern
         if self.semantic_header is not None:
             self._set_unique_sysid_constraints()
-        #
+        else:
+            self.connection.exec_query(dbm_ql.get_set_sysid_index_query)
         # self.connection.exec_query(dbm_ql.get_constraint_unique_log_id_query)
 
-        self.connection.exec_query(dbm_ql.get_set_sysid_index_query)
         self.connection.exec_query(dbm_ql.get_set_activity_index_query)
         self.connection.exec_query(dbm_ql.get_set_timestamp_event_index_query)
         self.connection.exec_query(dbm_ql.get_set_activity_event_index_query)
