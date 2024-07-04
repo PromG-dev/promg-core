@@ -88,18 +88,19 @@ class DBManagementQueryLibrary:
                      parameters={})
 
     @staticmethod
-    def get_constraint_unique_entity_uid_query(node_type=None) -> Query:
+    def get_constraint_unique_entity_uid_query(node_type=None, entity_key_name="sysId") -> Query:
         if node_type is None:
             node_type = "Entity"
         # language=SQL
         query_str = '''
             CREATE CONSTRAINT $constraint_name IF NOT EXISTS 
-            FOR (en:$node_type) REQUIRE en.sysId IS UNIQUE
+            FOR (en:$node_type) REQUIRE en.$entity_key_name IS UNIQUE
         '''
         return Query(query_str=query_str,
                      template_string_parameters={
                          "node_type": node_type,
-                         "constraint_name": f"unique_{node_type.lower()}_ids"
+                         "constraint_name": f"unique_{node_type.lower()}_ids",
+                         "entity_key_name": entity_key_name
                      },
                      parameters={})
 
@@ -115,13 +116,14 @@ class DBManagementQueryLibrary:
                      parameters={})
 
     @staticmethod
-    def get_set_sysid_index_query() -> Query:
+    def get_set_sysid_index_query(entity_key_name) -> Query:
         # language=SQL
         query_str = '''
-            CREATE RANGE INDEX entity_sys_id_index IF NOT EXISTS FOR (n:Entity) ON (n.sysId)
+            CREATE RANGE INDEX entity_sys_id_index IF NOT EXISTS FOR (n:Entity) ON (n.$entity_key_name)
         '''
         return Query(query_str=query_str,
-                     template_string_parameters={},
+                     template_string_parameters={
+                         "entity_key_name": entity_key_name},
                      parameters={})
 
     @staticmethod
