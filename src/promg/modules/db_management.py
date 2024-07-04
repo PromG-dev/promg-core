@@ -22,7 +22,6 @@ class DBManagement:
         """
         if replace:
             result = self.connection.exec_query(dbm_ql.get_replace_db_query, **{"db_name": self.connection.db_name})
-            self.set_constraints()
             if result[0]['state'] == 'CaughtUp' and result[0]['success']:
                 return True
             else:
@@ -32,7 +31,7 @@ class DBManagement:
             return self.connection.exec_query(dbm_ql.get_delete_nodes_query)
 
     @Performance.track()
-    def set_constraints(self) -> None:
+    def set_constraints(self, entity_key_name="sysId") -> None:
         """
         Set constraints in Neo4j instance
         """
@@ -41,9 +40,12 @@ class DBManagement:
         #
         # required by core pattern
         if self.semantic_header is not None:
-            self._set_unique_sysid_constraints()
+            self._set_unique_sysid_constraints(entity_key_name=entity_key_name)
         else:
-            self.connection.exec_query(dbm_ql.get_set_sysid_index_query)
+            self.connection.exec_query(dbm_ql.get_set_sysid_index_query,
+                                       **{
+                                           "entity_key_name": entity_key_name
+                                       })
         # self.connection.exec_query(dbm_ql.get_constraint_unique_log_id_query)
 
         self.connection.exec_query(dbm_ql.get_set_activity_index_query)
@@ -55,13 +57,14 @@ class DBManagement:
         self.connection.exec_query(dbm_ql.get_set_record_created_as_index_query)
         self.connection.exec_query(dbm_ql.get_set_load_status_as_index_query)
 
-    def _set_unique_sysid_constraints(self):
+    def _set_unique_sysid_constraints(self, entity_key_name="sysId"):
         for node in self.semantic_header.nodes:
             node_labels = node.get_labels(as_str=False)
             if "Entity" in node_labels:
                 self.connection.exec_query(dbm_ql.get_constraint_unique_entity_uid_query,
                                            **{
-                                               "node_type": node.type
+                                               "node_type": node.type,
+                                               "entity_key_name": entity_key_name
                                            })
 
     def get_all_rel_types(self) -> List[str]:
