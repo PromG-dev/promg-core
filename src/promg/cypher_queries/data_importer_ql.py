@@ -25,6 +25,8 @@ class DataImporterQueryLibrary:
     @staticmethod
     def get_record_types_mapping(is_match, labels):
         if is_match:
+            if len(labels) == 0:
+                return "MATCH (record:Record)"
             labels = [f'''MATCH (record:Record) - [:IS_OF_TYPE] -> (:RecordType {{type:"{label}"}})''' for label in labels]
             record_types = "\n".join(labels)
         else:
