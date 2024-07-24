@@ -384,8 +384,8 @@ class NodesConstructorByQuery:
 
 
 class InferredRelationship:
-    def __init__(self, record_labels: List[str] = None, relation_type: str = "CORR", event: Node = None):
-        self.record_labels = record_labels if record_labels is not None else ["EventRecord"]
+    def __init__(self, record_types: List[str] = None, relation_type: str = "CORR", event: Node = None):
+        self.record_types = record_types if record_types is not None else ["EventRecord"]
         self.relation_type = relation_type
         if event is None:
             event = Node.from_string("(event:Event)")
@@ -400,10 +400,16 @@ class InferredRelationship:
         _record_labels = obj.get("record_labels").split(":")
         _relation_type = obj.get("relation_type")
 
-        return InferredRelationship(event=_event, record_labels=_record_labels, relation_type=_relation_type)
+        return InferredRelationship(event=_event, record_types=_record_labels, relation_type=_relation_type)
 
-    def get_labels_str(self):
-        return ":".join(self.record_labels)
+    def get_record_type_match(self, record_name="record"):
+        all_matches = ""
+        for record_type in self.record_types:
+            match_str = '''MATCH ($record_name:Record) - [:IS_OF_TYPE] -> (:RecordType {type:"$record_type"}) \n'''
+            match = Template(match_str).substitute(record_name=record_name,
+                                                   record_type=record_type)
+            all_matches += match
+        return all_matches
 
 
 class NodeConstructor:
