@@ -55,7 +55,8 @@ class Importer:
 
                     df_log = structure.determine_optional_labels_in_log(df_log, records=self.records)
 
-                    self._import_nodes_from_data(df_log=df_log, file_name=file_name,
+                    self._import_nodes_from_data(df_log=df_log,
+                                                 file_name=file_name,
                                                  required_labels_str=required_labels_str)
 
                     if structure.has_datetime_attribute():
@@ -124,11 +125,24 @@ class Importer:
             self.import_log_into_db(file_name=new_file_name, labels_str=labels_str, mapping_str=mapping_str, log=log)
 
     def import_log_into_db(self, file_name, labels_str, mapping_str, log):
+        # get log name if it is in the log
+        if "log" in log.columns:
+            logs = log["log"].unique()
+            if len(logs) > 1:
+                # todo make error
+                raise Exception("Each file should originate from exactly one log, now there are more logs defined.")
+            else:
+                log_name = logs[0]
+            log = log.drop(columns=["log"])
+        else:
+            log_name = None
+
         # Temporary save the file in the import directory
         self._save_log_grouped_by_labels(log=log, file_name=file_name)
         self.connection.exec_query(di_ql.get_create_nodes_by_loading_csv_query,
                                    **{
                                        "file_name": file_name,
+                                       "log_name": log_name,
                                        "labels": labels_str,
                                        "mapping": mapping_str
                                    })
