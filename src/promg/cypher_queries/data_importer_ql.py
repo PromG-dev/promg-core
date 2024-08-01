@@ -39,18 +39,26 @@ class DataImporterQueryLibrary:
 
         return Query(query_str=query_str)
 
-
     @staticmethod
-    def get_create_nodes_by_loading_csv_query(labels: str, file_name: str, mapping: str) -> Query:
+    def get_create_nodes_by_loading_csv_query(labels: str, file_name: str, mapping: str, log_name: str = None) -> Query:
         """
         Create event nodes for each row in the batch with labels
         The properties of each row are also the property of the node
         @param mapping: The dtype mapping of the imported records as string
         @param file_name: the name of the file to be imported
         @param labels: The labels of the record nodes
+        @param log_name: the name of the log to be imported
 
         @return: Query object to create record nodes by loading csv
+        :param log_name:
         """
+
+        if log_name is not None:
+            log_str = '''MERGE (log:Log {name:$log_name})
+                        MERGE (record)<-[:CONTAINS]-(log)'''
+        else:
+            log_str = ""
+            log_name = ""
 
         # $batch is a variable we can add in tx.run, this allows us to use string properties
         # (keys in our dictionary are string)
@@ -60,15 +68,20 @@ class DataImporterQueryLibrary:
                     CALL apoc.periodic.iterate('
                         CALL apoc.load.csv("$file_name" $mapping_str) yield map as row return row',
                         'CREATE (record:$labels)
+                        $log_str
                         SET record += row'
-                    , {batchSize:10000, parallel:true, retries: 1});                    
+                    , {batchSize:10000, parallel:true, retries: 1, params:{log_name: $log_name}});                    
                 '''
 
         return Query(query_str=query_str,
                      template_string_parameters={
                          "file_name": file_name,
                          "labels": labels,
-                         "mapping_str": DataImporterQueryLibrary.create_mapping_str(mapping)
+                         "mapping_str": DataImporterQueryLibrary.create_mapping_str(mapping),
+                         "log_str": log_str
+                     },
+                     parameters={
+                         "log_name": log_name
                      })
 
     @staticmethod
