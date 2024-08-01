@@ -502,6 +502,9 @@ class NodeConstructor:
     def get_prevalent_record_pattern(self, node_name: str = "record", forbidden_label: str = None):
         return self.prevalent_record.get_pattern(name=node_name, forbidden_label=forbidden_label)
 
+    def get_record_types(self):
+        return ":" + ":".join(self.prevalent_record.record_types)
+
     def get_prevalent_match_record_pattern(self, node_name: str = "record", forbidden_label: str = None):
         return self.prevalent_record.get_record_type_match(name=node_name, forbidden_label=forbidden_label)
 
