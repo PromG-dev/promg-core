@@ -147,6 +147,8 @@ class Importer:
                                        "mapping": mapping_str
                                    })
 
+        self.connection.exec_query(di_ql.get_merge_log_nodes_query)
+
         # delete the file from the import directory
         self._delete_log_grouped_by_labels(file_name=file_name)
 

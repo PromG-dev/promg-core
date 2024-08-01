@@ -85,6 +85,18 @@ class DataImporterQueryLibrary:
                      })
 
     @staticmethod
+    def get_merge_log_nodes_query():
+        query_str = '''
+                            MATCH (log:Log)
+                            WITH log.name as name, collect(log) as logs
+                            CALL apoc.refactor.mergeNodes(logs, {properties: "discard", mergeRels: true})
+                            YIELD node
+                            RETURN node                
+                        '''
+
+        return Query(query_str=query_str)
+
+    @staticmethod
     def get_make_timestamp_date_query(required_labels_str: str, attribute: str, datetime_object: DatetimeObject,
                                       load_status: int) -> Query:
         """
