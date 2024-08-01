@@ -62,15 +62,14 @@ class SemanticHeaderQueryLibrary:
         # add check to only transform records from the imported logs
         if logs is not None:
             log_str = ",".join([f'"{log}"' for log in logs])
-            log_check_str = f"WHERE record.log in [{log_str}]"
+            log_check_str = f"<- [:CONTAINS] - (log:Log) WHERE log.name in [{log_str}]"
         else:
             log_check_str = ""
 
         # language=SQL
         query_str = '''
                     CALL apoc.periodic.iterate(
-                    'MATCH ($record) 
-                          $log_check_str
+                    'MATCH ($record) $log_check_str
                           RETURN record',
                           '$merge_or_create ($result_node)
                           $set_label_str
@@ -107,8 +106,8 @@ class SemanticHeaderQueryLibrary:
         log_str = f"[{log_str}]"
 
         query_str = '''
-            MATCH (r:Record)
-            WHERE r.log in $log_str
+            MATCH (r:Record) <- [:CONTAINS] - (log:Log)
+            WHERE log.name in $log_str
             UNWIND labels(r) as _label
             RETURN collect(distinct _label) as labels
         '''
@@ -206,13 +205,12 @@ class SemanticHeaderQueryLibrary:
         # add check to only transform records from the imported logs
         if logs is not None:
             log_str = ",".join([f'"{log}"' for log in logs])
-            log_check_str = f"WHERE record.log in [{log_str}]"
+            log_check_str = f"<- [:CONTAINS] - (log:Log) WHERE log.name in [{log_str}]"
         else:
             log_check_str = ""
 
         query_str = '''     CALL apoc.periodic.iterate('
-                            MATCH (record:$record_labels)
-                            $log_check_str
+                            MATCH (record:$record_labels) $log_check_str
                             RETURN record',
                             '
                             MATCH ($from_node) - [:EXTRACTED_FROM] -> (record)
