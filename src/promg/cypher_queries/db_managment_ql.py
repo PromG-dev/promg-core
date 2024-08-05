@@ -143,7 +143,7 @@ class DBManagementQueryLibrary:
         # language=SQL
         query_str = '''
             CREATE CONSTRAINT record_id_as_unique_property IF NOT EXISTS 
-            FOR (r:Record) REQUIRE l.recordId IS UNIQUE
+            FOR (r:Record) REQUIRE r.recordId IS UNIQUE
             // also set the range index
             OPTIONS {
               indexProvider: 'range-1.0'
