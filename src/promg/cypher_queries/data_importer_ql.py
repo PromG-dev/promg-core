@@ -6,36 +6,35 @@ from ..data_managers.semantic_header import RecordConstructor
 from ..database_managers.db_connection import Query
 
 
+def create_mapping_str(mapping: str) -> str:
+    """
+    Create the string including the information of the datatypes mapping used when importing records.
+
+    :param mapping: The dtype mapping of the imported records as string
+    :return: str containing the mapping in Cypher format
+    """
+    if mapping == "":
+        return ""
+    mapping_str = ''',{nullValues: [""], mapping:$mapping}''' if mapping != "" else ""
+    mapping_str = Template(mapping_str).safe_substitute({"mapping": mapping})
+    return mapping_str
+
+
+def get_record_types_mapping(is_match, labels):
+    if is_match:
+        if len(labels) == 0:
+            return "MATCH (record:Record)"
+        labels = [f'''MATCH (record:Record) - [:IS_OF_TYPE] -> (:RecordType {{type:"{label}"}})''' for label in
+                  labels]
+        record_types = "\n".join(labels)
+    else:
+        labels = [(f'''MERGE ({label}_record:RecordType {{type:"{label}"}}) \n'''
+                   f'''MERGE (record) - [:IS_OF_TYPE] -> ({label}_record)''') for label in labels]
+        record_types = "\n".join(labels)
+    return record_types
+
+
 class DataImporterQueryLibrary:
-
-    @staticmethod
-    def create_mapping_str(mapping: str) -> str:
-        """
-        Create the string including the information of the datatypes mapping used when importing records.
-
-        :param mapping: The dtype mapping of the imported records as string
-        :return: str containing the mapping in Cypher format
-        """
-        if mapping == "":
-            return ""
-        mapping_str = ''',{nullValues: [""], mapping:$mapping}''' if mapping != "" else ""
-        mapping_str = Template(mapping_str).safe_substitute({"mapping": mapping})
-        return mapping_str
-
-    @staticmethod
-    def get_record_types_mapping(is_match, labels):
-        if is_match:
-            if len(labels) == 0:
-                return "MATCH (record:Record)"
-            labels = [f'''MATCH (record:Record) - [:IS_OF_TYPE] -> (:RecordType {{type:"{label}"}})''' for label in
-                      labels]
-            record_types = "\n".join(labels)
-        else:
-            labels = [(f'''MERGE ({label}_record:RecordType {{type:"{label}"}}) \n'''
-                       f'''MERGE (record) - [:IS_OF_TYPE] -> ({label}_record)''') for label in labels]
-            record_types = "\n".join(labels)
-        return record_types
-
     @staticmethod
     def get_import_directory_query() -> Query:
         """
@@ -54,7 +53,8 @@ class DataImporterQueryLibrary:
         return Query(query_str=query_str)
 
     @staticmethod
-    def get_create_nodes_by_loading_csv_query(labels: List[str], file_name: str, mapping: str, log_name: str = None) -> Query:
+    def get_create_nodes_by_loading_csv_query(labels: List[str], file_name: str, mapping: str,
+                                              log_name: str = None) -> Query:
         """
         Create event nodes for each row in the batch with labels
         The properties of each row are also the property of the node
@@ -87,9 +87,9 @@ class DataImporterQueryLibrary:
         return Query(query_str=query_str,
                      template_string_parameters={
                          "file_name": file_name,
-                         "set_record_types": DataImporterQueryLibrary.get_record_types_mapping(is_match=False,
-                                                                                               labels=labels),
-                         "mapping_str": DataImporterQueryLibrary.create_mapping_str(mapping),
+                         "set_record_types": get_record_types_mapping(is_match=False,
+                                                                      labels=labels),
+                         "mapping_str": create_mapping_str(mapping),
                          "log_str": log_str
                      },
                      parameters={
@@ -143,8 +143,8 @@ class DataImporterQueryLibrary:
 
         return Query(query_str=query_str,
                      template_string_parameters={
-                         "match_record_types": DataImporterQueryLibrary.get_record_types_mapping(is_match=True,
-                                                                                                 labels=required_labels),
+                         "match_record_types": get_record_types_mapping(is_match=True,
+                                                                        labels=required_labels),
                          "datetime_object_format": datetime_object.format,
                          "datetime_object_convert_to": datetime_object.convert_to,
                          "date_type": datetime_object.get_date_type(),
@@ -189,8 +189,8 @@ class DataImporterQueryLibrary:
         return Query(query_str=query_str,
                      template_string_parameters={
                          "attribute": attribute,
-                         "match_record_types": DataImporterQueryLibrary.get_record_types_mapping(is_match=True,
-                                                                                                 labels=required_labels),
+                         "match_record_types": get_record_types_mapping(is_match=True,
+                                                                        labels=required_labels)
                      },
                      parameters={
                          "unit": datetime_object.unit,
@@ -225,8 +225,8 @@ class DataImporterQueryLibrary:
 
         return Query(query_str=query_str,
                      template_string_parameters={
-                         "match_record_types": DataImporterQueryLibrary.get_record_types_mapping(is_match=True,
-                                                                                                 labels=required_labels)
+                         "match_record_types": get_record_types_mapping(is_match=True,
+                                                                        labels=required_labels)
                      },
                      parameters={
                          "load_status": load_status
@@ -288,8 +288,8 @@ class DataImporterQueryLibrary:
             template_string_parameters = {
                 "prop": prop,
                 "negation": negation,
-                "match_record_types": DataImporterQueryLibrary.get_record_types_mapping(is_match=True,
-                                                                                        labels=required_labels)
+                "match_record_types": get_record_types_mapping(is_match=True,
+                                                               labels=required_labels)
             }
 
         # execute query
