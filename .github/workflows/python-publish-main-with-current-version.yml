@@ -1,0 +1,30 @@
+# This workflow will build a new python package with the current version and uploads it to PyPI
+# when a new release is published.
+
+name: Publish Python 🐍 distributions 📦 to PyPI
+
+on: 
+  release:
+    types: [published]
+  workflow_dispatch:
+jobs:
+  set-up-python:
+    uses: ./.github/workflows/call-python-setup.yml
+  build-python-distribution:
+    uses: ./.github/workflows/call-python-build.yml
+    needs: set-up-python
+  publish-artifact:
+    name: Build and publish Python 🐍 distributions 📦 to PyPI
+    needs: build-python-distribution
+    runs-on: ubuntu-latest
+    steps:
+    - name: Download dist artifact
+      uses: actions/download-artifact@v4
+      with:
+        name: dist
+        path: dist
+    - name: Publish distribution 📦 to PyPI
+      uses: pypa/gh-action-pypi-publish@release/v1
+      with:
+        password: ${{ secrets.PYPI_API_TOKEN }}
+  
