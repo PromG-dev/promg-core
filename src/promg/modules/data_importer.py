@@ -40,7 +40,7 @@ class Importer:
 
     def import_data(self, to_be_imported_logs) -> None:
         for structure in self.structures:
-            required_labels_str = structure.get_required_labels_str(records=self.records)
+            required_labels = structure.get_required_labels(records=self.records)
 
             # read in all file names that match this structure
             for file_name in structure.file_names:
@@ -56,41 +56,41 @@ class Importer:
                     df_log = structure.determine_optional_labels_in_log(df_log, records=self.records)
 
                     self._import_nodes_from_data(df_log=df_log, file_name=file_name,
-                                                 required_labels_str=required_labels_str)
+                                                 required_labels=required_labels)
 
                     if structure.has_datetime_attribute():
                         # once all events are imported, we convert the string timestamp to the timestamp as used in
                         # Cypher
-                        self._reformat_timestamps(structure=structure, required_labels_str=required_labels_str)
+                        self._reformat_timestamps(structure=structure, required_labels=required_labels)
 
                     # TODO: move filtering to pandas dataframe
                     self._filter_nodes(structure=structure,
-                                       required_labels_str=required_labels_str)  # filter nodes according to the
+                                       required_labels=required_labels)  # filter nodes according to the
                     # structure
-                    self._finalize_import(required_labels_str=required_labels_str)  # removes temporary properties
+                    self._finalize_import(required_labels=required_labels)  # removes temporary properties
 
     @Performance.track("structure")
-    def _reformat_timestamps(self, structure, required_labels_str):
+    def _reformat_timestamps(self, structure, required_labels):
         datetime_formats = structure.get_datetime_formats()
         for attribute, datetime_format in datetime_formats.items():
             if datetime_format.is_epoch:
                 self.connection.exec_query(di_ql.get_convert_epoch_to_timestamp_query,
                                            **{
-                                               "required_labels_str": required_labels_str,
+                                               "required_labels": required_labels,
                                                "attribute": attribute,
                                                "datetime_object": datetime_format
                                            })
-
             self.connection.exec_query(di_ql.get_make_timestamp_date_query,
                                        **{
-                                           "required_labels_str": required_labels_str,
+                                           "required_labels": required_labels,
                                            "attribute": attribute,
                                            "datetime_object": datetime_format,
                                            "load_status": self.load_status
                                        })
 
+
     @Performance.track("structure")
-    def _filter_nodes(self, structure, required_labels_str):
+    def _filter_nodes(self, structure, required_labels):
         for exclude in [True, False]:
             attribute_values_pairs_filtered = structure.get_attribute_value_pairs_filtered(exclude=exclude)
             for name, values in attribute_values_pairs_filtered.items():
@@ -100,36 +100,39 @@ class Importer:
                                                "values": values,
                                                "exclude": exclude,
                                                "load_status": self.load_status,
-                                               "required_labels_str": required_labels_str
+                                               "required_labels": required_labels
                                            })
 
     @Performance.track("structure")
-    def _finalize_import(self, required_labels_str):
+    def _finalize_import(self, required_labels):
         # finalize the import
         self.connection.exec_query(di_ql.get_finalize_import_records_query,
                                    **{
                                        "load_status": self.load_status,
-                                       "required_labels_str": required_labels_str
+                                       "required_labels": required_labels
                                    })
         self.load_status = 0
 
     @Performance.track("file_name")
-    def _import_nodes_from_data(self, df_log, file_name, required_labels_str):
+    def _import_nodes_from_data(self, df_log, file_name, required_labels):
         grouped_by_optional_labels = df_log.groupby(by="labels")
         mapping_str = self._determine_column_mapping_str(df_log)
 
         for optional_labels_str, log in grouped_by_optional_labels:
-            labels_str = required_labels_str + optional_labels_str
+            optional_labels = optional_labels_str.split(":")
+            labels = required_labels + optional_labels
+            labels = list(set(labels))
+            labels.remove("")
             new_file_name = self.determine_new_file_name(file_name, optional_labels_str)
-            self.import_log_into_db(file_name=new_file_name, labels_str=labels_str, mapping_str=mapping_str, log=log)
+            self.import_log_into_db(file_name=new_file_name, labels=labels, mapping_str=mapping_str, log=log)
 
-    def import_log_into_db(self, file_name, labels_str, mapping_str, log):
+    def import_log_into_db(self, file_name, labels, mapping_str, log):
         # Temporary save the file in the import directory
         self._save_log_grouped_by_labels(log=log, file_name=file_name)
         self.connection.exec_query(di_ql.get_create_nodes_by_loading_csv_query,
                                    **{
                                        "file_name": file_name,
-                                       "labels": labels_str,
+                                       "labels": labels,
                                        "mapping": mapping_str
                                    })
 
