@@ -15,7 +15,6 @@ import re
 from ..utilities.singleton import Singleton
 
 
-@dataclass()
 class Node:
     def __init__(self, name: str, labels: List[str], properties: Properties, where_condition: str):
         self.name = name
@@ -23,8 +22,8 @@ class Node:
         self.properties = properties
         self.where_condition = where_condition
 
-    @staticmethod
-    def from_string(node_description: str) -> Optional["Node"]:
+    @classmethod
+    def from_string(cls, node_description: str) -> Optional["Node"]:
         if node_description is None:
             return None
         # we expect a node to be described in (node_name:Node_label)
@@ -50,10 +49,10 @@ class Node:
         labels = labels.strip()
         labels = labels.split(":")
 
-        return Node(name=name,
-                    labels=labels,
-                    properties=properties,
-                    where_condition=where_condition)
+        return cls(name=name,
+                   labels=labels,
+                   properties=properties,
+                   where_condition=where_condition)
 
     def get_name(self, with_brackets=False):
         if with_brackets:
@@ -127,6 +126,33 @@ class Node:
     @staticmethod
     def from_dict(obj: Any) -> Optional["Node"]:
         return Node.from_string(obj)
+
+
+class RecordNode(Node):
+    def __init__(self, name: str, labels: List[str], properties: Properties, where_condition: str):
+        node_labels = []
+        record_types = []
+        for label in labels:
+            if "Record" in label and label != "Record":
+                record_types.append(label)
+            else:
+                node_labels.append(label)
+
+        if "Record" not in node_labels:
+            node_labels.append("Record")
+
+        super().__init__(name, node_labels, properties, where_condition)
+        self.record_types = record_types
+
+    def get_record_type_match(self, name, forbidden_label=None):
+        all_matches = ""
+        for record_type in self.record_types:
+            if record_type != forbidden_label:
+                match_str = '''MATCH ($record_name:Record) - [:IS_OF_TYPE] -> (:RecordType {type:"$record_type"}) \n'''
+            match = Template(match_str).substitute(record_name=name if name is not None else self.name,
+                                                   record_type=record_type)
+            all_matches += match
+        return all_matches
 
 
 class Relationship:
@@ -243,7 +269,6 @@ class Relationship:
             return self.properties.get_set_optional_properties_query(name=relation_name)
         return None
 
-
     def __repr__(self):
         return self.get_pattern(exclude_nodes=False)
 
@@ -252,14 +277,14 @@ class Relationship:
 class RelationConstructorByNodes(ABC):
     from_node: Node
     to_node: Node
-    prevalent_record: Union["Node", "Relationship"]
+    prevalent_record: Union["RecordNode", "Node", "Relationship"]
 
     @staticmethod
     def from_dict(obj: Any) -> Optional["RelationConstructorByNodes"]:
         if obj is None:
             return None
 
-        _prevalent_record = RelationshipOrNode.from_string(obj.get("prevalent_record"))
+        _prevalent_record = RelationshipOrNode.from_string(obj.get("prevalent_record"), is_record=True)
         _from_node = Node.from_string(obj.get("from_node"))
         _to_node = Node.from_string(obj.get("to_node"))
 
@@ -268,13 +293,16 @@ class RelationConstructorByNodes(ABC):
 
 class RelationshipOrNode(ABC):
     @staticmethod
-    def from_string(relation_description: str) -> Union["Relationship", "Node"]:
-        if relation_description is None:
+    def from_string(description: str, is_record=False) -> Union["Relationship", "Node", "RecordNode"]:
+        if description is None:
             return None
-        if "-" in relation_description:
-            return Relationship.from_string(relation_description)
+        if "-" in description:
+            return Relationship.from_string(description)
         else:
-            return Node.from_string(relation_description)
+            if is_record:
+                return RecordNode.from_string(description)
+            else:
+                return Node.from_string(description)
 
 
 @dataclass
@@ -356,8 +384,8 @@ class NodesConstructorByQuery:
 
 
 class InferredRelationship:
-    def __init__(self, record_labels: List[str] = None, relation_type: str = "CORR", event: Node = None):
-        self.record_labels = record_labels if record_labels is not None else ["EventRecord"]
+    def __init__(self, record_types: List[str] = None, relation_type: str = "CORR", event: Node = None):
+        self.record_types = record_types if record_types is not None else ["EventRecord"]
         self.relation_type = relation_type
         if event is None:
             event = Node.from_string("(event:Event)")
@@ -372,14 +400,20 @@ class InferredRelationship:
         _record_labels = obj.get("record_labels").split(":")
         _relation_type = obj.get("relation_type")
 
-        return InferredRelationship(event=_event, record_labels=_record_labels, relation_type=_relation_type)
+        return InferredRelationship(event=_event, record_types=_record_labels, relation_type=_relation_type)
 
-    def get_labels_str(self):
-        return ":".join(self.record_labels)
+    def get_record_type_match(self, record_name="record"):
+        all_matches = ""
+        for record_type in self.record_types:
+            match_str = '''MATCH ($record_name:Record) - [:IS_OF_TYPE] -> (:RecordType {type:"$record_type"}) \n'''
+            match = Template(match_str).substitute(record_name=record_name,
+                                                   record_type=record_type)
+            all_matches += match
+        return all_matches
 
 
 class NodeConstructor:
-    def __init__(self, prevalent_record: Optional[Union["Relationship", "Node"]],
+    def __init__(self, prevalent_record: Optional[Union["Relationship", "RecordNode"]],
                  node: Optional["Node"],
                  relation: Optional["Relationship"],
                  use_inference: bool,
@@ -416,7 +450,7 @@ class NodeConstructor:
 
     @staticmethod
     def from_dict(obj: Any) -> "NodeConstructor":
-        _prevalent_record = RelationshipOrNode.from_string(obj.get("prevalent_record"))
+        _prevalent_record = RelationshipOrNode.from_string(obj.get("prevalent_record"), is_record=True)
         _node = Relationship.from_string(obj.get("node"))
         _relation = Relationship.from_string(obj.get("relation"))
         _use_inference = replace_undefined_value(obj.get("use_inference"), False)
@@ -467,6 +501,12 @@ class NodeConstructor:
 
     def get_prevalent_record_pattern(self, node_name: str = "record", forbidden_label: str = None):
         return self.prevalent_record.get_pattern(name=node_name, forbidden_label=forbidden_label)
+
+    def get_record_types(self):
+        return ":" + ":".join(self.prevalent_record.record_types)
+
+    def get_prevalent_match_record_pattern(self, node_name: str = "record", forbidden_label: str = None):
+        return self.prevalent_record.get_record_type_match(name=node_name, forbidden_label=forbidden_label)
 
     def get_pattern(self, name: Optional[str] = None, with_brackets=False, with_properties=True):
         return self.result.get_pattern(name, with_brackets=with_brackets, with_properties=with_properties)
@@ -573,7 +613,7 @@ class ConstructedNodes:
 
 
 class RelationConstructor:
-    def __init__(self, prevalent_record: Optional[Union["Relationship", "Node"]],
+    def __init__(self, prevalent_record: Optional[Union["Relationship", "RecordNode"]],
                  nodes: List["Node"],
                  relations: List["Relationship"],
                  use_inference: bool,
@@ -602,7 +642,7 @@ class RelationConstructor:
 
     @staticmethod
     def from_dict(obj: Any, model_as_node: bool) -> "RelationConstructor":
-        _prevalent_record = RelationshipOrNode.from_string(obj.get("prevalent_record"))
+        _prevalent_record = RelationshipOrNode.from_string(obj.get("prevalent_record"), is_record=True)
         _nodes = create_list(Node, obj.get("nodes"))
         _relations = create_list(Relationship, obj.get("relations"))
         _use_inference = replace_undefined_value(obj.get("use_inference"), False)
@@ -640,6 +680,9 @@ class RelationConstructor:
 
     def get_prevalent_record_pattern(self, node_name: str):
         return self.prevalent_record.get_pattern(node_name)
+
+    def get_prevalent_match_record_pattern(self, node_name: str = "record"):
+        return self.prevalent_record.get_record_type_match(name=node_name)
 
     def get_pattern(self, name: Optional[str] = None, with_brackets=False, with_properties=True, exclude_nodes=False):
         return self.result.get_pattern(name=name, with_brackets=with_brackets, with_properties=with_properties,
@@ -769,7 +812,7 @@ class ConstructedRelation:
 class RecordConstructor:
     def __init__(self, record_labels: List[str],
                  required_attributes: List[str], optional_attributes: List[str], node_name: str = "record",
-                 prevalent_record: Optional["Node"] = Node.from_string("(record:Record)")):
+                 prevalent_record: Optional["RecordNode"] = Node.from_string("(record:Record)")):
         self.node_name = node_name
         self.prevalent_record = prevalent_record
         self.record_labels = record_labels
@@ -780,7 +823,7 @@ class RecordConstructor:
     def from_dict(obj: Any) -> "RecordConstructor":
         if isinstance(obj, str):
             return RecordConstructor.from_str(obj)
-        _prevalent_record = Node.from_string(obj.get("prevalent_record"))
+        _prevalent_record = RecordNode.from_string(obj.get("prevalent_record"))
         _record_labels = obj.get("record_labels").split(":")
         _required_attributes = obj.get("required_attributes")
         _optional_attributes = obj.get("optional_attributes")
@@ -821,6 +864,9 @@ class RecordConstructor:
 
     def get_prevalent_record_pattern(self, record_name: str = "record"):
         return self.prevalent_record.get_pattern(record_name)
+
+    def get_prevalent_match_record_pattern(self, record_name: str = "record"):
+        return self.prevalent_record.get_record_type_match(name=record_name)
 
     def get_additional_conditions(self, record_name: str = "record"):
         cond = self.prevalent_record.get_condition_string(with_brackets=False, with_where=False)
