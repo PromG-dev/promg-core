@@ -37,8 +37,7 @@ class DBManagement:
         """
         self._set_sysid_constraints(entity_key_name=entity_key_name)
         self.connection.exec_query(dbm_ql.get_set_unique_log_name_index_query)
-        self.connection.exec_query(dbm_ql.get_set_timestamp_event_index_query)
-        self.connection.exec_query(dbm_ql.get_set_activity_event_index_query)
+        self.connection.exec_query(dbm_ql.get_set_activity_index_query)
         self.connection.exec_query(dbm_ql.get_set_record_id_as_unique_query)
 
     def _set_sysid_constraints(self, entity_key_name="sysId"):
