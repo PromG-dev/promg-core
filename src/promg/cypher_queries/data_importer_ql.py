@@ -27,7 +27,8 @@ class DataImporterQueryLibrary:
         if is_match:
             if len(labels) == 0:
                 return "MATCH (record:Record)"
-            labels = [f'''MATCH (record:Record) - [:IS_OF_TYPE] -> (:RecordType {{type:"{label}"}})''' for label in labels]
+            labels = [f'''MATCH (record:Record) - [:IS_OF_TYPE] -> (:RecordType {{type:"{label}"}})''' for label in
+                      labels]
             record_types = "\n".join(labels)
         else:
             labels = [(f'''MERGE ({label}_record:RecordType {{type:"{label}"}}) \n'''
@@ -122,7 +123,7 @@ class DataImporterQueryLibrary:
         return Query(query_str=query_str,
                      template_string_parameters={
                          "match_record_types": DataImporterQueryLibrary.get_record_types_mapping(is_match=True,
-                                                                                           labels=labels),
+                                                                                                 labels=required_labels),
                          "datetime_object_format": datetime_object.format,
                          "datetime_object_convert_to": datetime_object.convert_to,
                          "date_type": datetime_object.get_date_type(),
@@ -168,7 +169,7 @@ class DataImporterQueryLibrary:
                      template_string_parameters={
                          "attribute": attribute,
                          "match_record_types": DataImporterQueryLibrary.get_record_types_mapping(is_match=True,
-                                                                                            labels=labels),
+                                                                                                 labels=required_labels),
                      },
                      parameters={
                          "unit": datetime_object.unit,
@@ -190,19 +191,21 @@ class DataImporterQueryLibrary:
 
         # language=SQL
         query_str = '''
-            CALL apoc.periodic.commit(
+            CALL apoc.periodic.iterate(
+                // find all correct record types with the correct load status
                 '$match_record_types
                 USING INDEX record:Record(loadStatus)
                 WHERE record.loadStatus = $load_status
-                WITH record LIMIT $limit
-                REMOVE record.loadStatus
-                RETURN count(*)',
-                {limit:$batch_size, load_status:$load_status})
+                RETURN record',
+                // remove the status
+                'REMOVE record.loadStatus',
+                {batchSize:$batch_size, params:{load_status:$load_status}})
             '''
 
         return Query(query_str=query_str,
                      template_string_parameters={
-                         "match_record_types": DataImporterQueryLibrary.get_record_types_mapping(is_match=True, labels=required_labels)
+                         "match_record_types": DataImporterQueryLibrary.get_record_types_mapping(is_match=True,
+                                                                                                 labels=required_labels)
                      },
                      parameters={
                          "load_status": load_status
@@ -232,10 +235,16 @@ class DataImporterQueryLibrary:
             # query to delete all records and its relationship with property
             # language=SQL
             query_str = '''
-                    MATCH (record:Record {loadStatus: $load_status})
-                    $record_types
+                    CALL apoc.periodic.iterate(
+                    // match all records that match loadstatus and property
+                    '$match_record_types 
+                    WHERE record.loadStatus = $load_status
                     WHERE record.$prop IS $negation NULL
-                    DETACH DELETE r
+                    RETURN record',
+                    // delete record and its relationships
+                    'DETACH DELETE record',
+                    // pass the query parameters
+                    {batchSize:$batch_size, params:{load_status:$load_status}})
                     '''
             template_string_parameters = {"prop": prop, "negation": negation}
         else:  # match all events with specific property and value
@@ -243,22 +252,32 @@ class DataImporterQueryLibrary:
             # match all r and delete them and its relationship
             # language=SQL
             query_str = '''
-                    $match_record_types 
+            CALL apoc.periodic.iterate(
+                // match all records that match loadstatus and property
+                    '$match_record_types 
                     WHERE record.loadStatus = $load_status
                     AND $negation record.$prop IN $values
-                    DETACH DELETE record
+                    RETURN record',
+                    // delete record and its relationships
+                    'DETACH DELETE record',
+                    // pass the query parameters
+                    {batchSize:$batch_size, params:{load_status:$load_status, values:$values}})
+                    
                 '''
             template_string_parameters = {
                 "prop": prop,
                 "negation": negation,
-                "values": values,
-                "load_status": load_status,
-                "match_record_types": DataImporterQueryLibrary.get_record_types_mapping(is_match=True, labels=labels)
+                "match_record_types": DataImporterQueryLibrary.get_record_types_mapping(is_match=True,
+                                                                                        labels=required_labels)
             }
 
         # execute query
         return Query(query_str=query_str,
-                     template_string_parameters=template_string_parameters)
+                     template_string_parameters=template_string_parameters,
+                     parameters={
+                         "load_status": load_status,
+                         "values": values
+                     })
 
     @staticmethod
     def get_update_load_status_query(current_load_status: int):
@@ -271,15 +290,16 @@ class DataImporterQueryLibrary:
 
         """
 
+        # language=SQL
         query_str = '''
-        CALL apoc.periodic.commit(
+        CALL apoc.periodic.iterate(
+        // match records with correct load status
             'MATCH (record:Record) 
             WHERE record.loadStatus = $old_value
-            WITH record LIMIT $limit
-            SET record.loadStatus = record.loadStatus + 1
-            RETURN COUNT(*)',
-            {old_value: $old_value,
-            limit: $batch_size})
+            RETURN record',
+            // update the load status
+            'SET record.loadStatus = record.loadStatus + 1',
+            {batchSize:$batch_size, params:{old_value:$old_value}})
                             '''
         return Query(query_str=query_str,
                      parameters={
