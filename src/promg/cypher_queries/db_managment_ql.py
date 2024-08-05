@@ -151,7 +151,7 @@ class DBManagementQueryLibrary:
     def get_set_record_id_as_unique_query() -> Query:
         # language=SQL
         query_str = '''
-            CREATE CONSTRAINT record_id_as_key_node IF NOT EXISTS 
+            CREATE CONSTRAINT record_id_as_unique_property IF NOT EXISTS 
             FOR (r:Record) REQUIRE l.recordId IS UNIQUE
             // also set the range index
             OPTIONS {
