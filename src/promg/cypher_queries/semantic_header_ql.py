@@ -79,7 +79,7 @@ class SemanticHeaderQueryLibrary:
         # add check to only transform records from the imported logs
         if logs is not None:
             log_str = ",".join([f'"{log}"' for log in logs])
-            log_check_str = f"WHERE record.log in [{log_str}]"
+            log_check_str = f"<- [:CONTAINS] - (log:Log) WHERE log.name in [{log_str}]"
         else:
             log_check_str = ""
 
@@ -88,10 +88,12 @@ class SemanticHeaderQueryLibrary:
         # language=SQL
         query_str = '''
                     CALL apoc.periodic.iterate(
-                    'MATCH ($record) 
+                    'MATCH ($record) $log_check_str
                     $record_matches
-                          $log_check_str
-                          RETURN record',
+                    // order records by elementId, this will determine the order in which events are created
+                    // this is important for the temporal ordering of :Event nodes 
+                    // when creating DF edges in case the timestamps are similar
+                          RETURN record ORDER BY elementId(record)',
                           '$merge_or_create_node
                           $set_label_str
                           $set_property_str
@@ -129,7 +131,8 @@ class SemanticHeaderQueryLibrary:
         # request all associated record types for specific logs
         query_str = '''
             MATCH (record:Record) - [:IS_OF_TYPE] -> (record_type:RecordType)
-            WHERE record.log in $log_str
+            MATCH (record) <- [:CONTAINS] - (log:Log)
+            WHERE log.name in $log_str
             RETURN collect(distinct record_type.type) as labels
         '''
 
@@ -217,7 +220,7 @@ class SemanticHeaderQueryLibrary:
         # add check to only transform records from the imported logs
         if logs is not None:
             log_str = ",".join([f'"{log}"' for log in logs])
-            log_check_str = f"WHERE record.log in [{log_str}]"
+            log_check_str = f"<- [:CONTAINS] - (log:Log) WHERE log.name in [{log_str}]"
         else:
             log_check_str = ""
 
@@ -226,10 +229,9 @@ class SemanticHeaderQueryLibrary:
         # merge the resulting node
         # set the optional properties
         query_str = '''     CALL apoc.periodic.iterate('
-                                MATCH ($record)
-                                $record_matches
-                                $log_check_str
-                                RETURN record',
+                            MATCH ($record) $log_check_str
+                            $record_matches
+                            RETURN record',
                             '
                             MATCH ($from_node) - [:EXTRACTED_FROM] -> (record)
                             MATCH ($to_node) - [:EXTRACTED_FROM] -> (record)

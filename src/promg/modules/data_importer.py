@@ -11,6 +11,21 @@ from pathlib import Path
 import pandas as pd
 
 
+def pop_log_name(log):
+    # get log name if it is in the log
+    if "log" in log.columns:
+        log_names = log.pop("log")
+        log_names = log_names.unique()
+        if len(log_names) > 1:
+            # todo make error
+            raise Exception("Each file should originate from exactly one log, now there are more logs defined.")
+        else:
+            log_name = log_names[0]
+    else:
+        log_name = None
+    return log, log_name
+
+
 class Importer:
     def __init__(self, database_connection: DatabaseConnection,
                  data_structures: DatasetDescriptions,
@@ -55,7 +70,8 @@ class Importer:
 
                     df_log = structure.determine_optional_labels_in_log(df_log, records=self.records)
 
-                    self._import_nodes_from_data(df_log=df_log, file_name=file_name,
+                    self._import_nodes_from_data(df_log=df_log,
+                                                 file_name=file_name,
                                                  required_labels=required_labels)
 
                     if structure.has_datetime_attribute():
@@ -80,6 +96,7 @@ class Importer:
                                                "attribute": attribute,
                                                "datetime_object": datetime_format
                                            })
+
             self.connection.exec_query(di_ql.get_make_timestamp_date_query,
                                        **{
                                            "required_labels": required_labels,
@@ -87,7 +104,6 @@ class Importer:
                                            "datetime_object": datetime_format,
                                            "load_status": self.load_status
                                        })
-
 
     @Performance.track("structure")
     def _filter_nodes(self, structure, required_labels):
@@ -128,13 +144,18 @@ class Importer:
 
     def import_log_into_db(self, file_name, labels, mapping_str, log):
         # Temporary save the file in the import directory
+        log, log_name = pop_log_name(log)
+
         self._save_log_grouped_by_labels(log=log, file_name=file_name)
         self.connection.exec_query(di_ql.get_create_nodes_by_loading_csv_query,
                                    **{
                                        "file_name": file_name,
+                                       "log_name": log_name,
                                        "labels": labels,
                                        "mapping": mapping_str
                                    })
+
+        self.connection.exec_query(di_ql.get_merge_log_nodes_query)
 
         # delete the file from the import directory
         self._delete_log_grouped_by_labels(file_name=file_name)

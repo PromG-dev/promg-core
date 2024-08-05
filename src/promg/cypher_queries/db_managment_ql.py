@@ -121,20 +121,11 @@ class DBManagementQueryLibrary:
                          "entity_key_name": entity_key_name})
 
     @staticmethod
-    def get_set_activity_event_index_query() -> Query:
+    def get_set_activity_index_query() -> Query:
         # language=SQL
         query_str = '''
-                CREATE RANGE INDEX activity_event_index 
-                IF NOT EXISTS FOR (e:Event) ON (e.activity)
-            '''
-        return Query(query_str=query_str)
-
-    @staticmethod
-    def get_set_timestamp_event_index_query() -> Query:
-        # language=SQL
-        query_str = '''
-                CREATE RANGE INDEX timestamp_event_index 
-                IF NOT EXISTS FOR (e:Event) ON (e.timestamp)
+                CREATE RANGE INDEX activity_index 
+                IF NOT EXISTS FOR (a:Activity) ON (a.activity)
             '''
         return Query(query_str=query_str)
 
