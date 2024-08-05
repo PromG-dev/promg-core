@@ -90,7 +90,10 @@ class SemanticHeaderQueryLibrary:
                     CALL apoc.periodic.iterate(
                     'MATCH ($record) $log_check_str
                     $record_matches
-                          RETURN record',
+                    // order records by elementId, this will determine the order in which events are created
+                    // this is important for the temporal ordering of :Event nodes 
+                    // when creating DF edges in case the timestamps are similar
+                          RETURN record ORDER BY elementId(record)',
                           '$merge_or_create_node
                           $set_label_str
                           $set_property_str
