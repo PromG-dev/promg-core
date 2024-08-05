@@ -75,15 +75,15 @@ class DataImporterQueryLibrary:
                         CALL apoc.load.csv("$file_name" $mapping_str) yield map as row return row',
                         'CREATE (record:Record)
                         SET record += row
-                        $record_types'
+                        $set_record_types'
                     , {batchSize:10000, parallel:true, retries: 1});                    
                 '''
 
         return Query(query_str=query_str,
                      template_string_parameters={
                          "file_name": file_name,
-                         "record_types": DataImporterQueryLibrary.get_record_types_mapping(is_match=False,
-                                                                                           labels=labels),
+                         "set_record_types": DataImporterQueryLibrary.get_record_types_mapping(is_match=False,
+                                                                                               labels=labels),
                          "mapping_str": DataImporterQueryLibrary.create_mapping_str(mapping)
                      })
 
