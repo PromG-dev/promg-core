@@ -35,37 +35,29 @@ class DBManagement:
         """
         Set constraints in Neo4j instance
         """
-        # # for implementation only (not required by schema or patterns)
-        # self.connection.exec_query(dbm_ql.get_constraint_unique_event_id_query)
-        #
-        # required by core pattern
+        self._set_sysid_constraints(entity_key_name=entity_key_name)
+        self.connection.exec_query(dbm_ql.get_set_unique_log_name_index_query)
+        self.connection.exec_query(dbm_ql.get_set_timestamp_event_index_query)
+        self.connection.exec_query(dbm_ql.get_set_activity_event_index_query)
+        self.connection.exec_query(dbm_ql.get_set_record_id_as_unique_query)
+
+    def _set_sysid_constraints(self, entity_key_name="sysId"):
         if self.semantic_header is not None:
-            self._set_unique_sysid_constraints(entity_key_name=entity_key_name)
+            for node in self.semantic_header.nodes:
+                # set the unique constraint per entity type node
+                node_labels = node.get_labels(as_str=False)
+                if "Entity" in node_labels:
+                    self.connection.exec_query(dbm_ql.get_constraint_unique_entity_uid_query,
+                                               **{
+                                                   "node_type": node.type,
+                                                   "entity_key_name": entity_key_name
+                                               })
         else:
+            # is semantic header is not defined, we just set sysid as range (instead of uniqueness constraint)
             self.connection.exec_query(dbm_ql.get_set_sysid_index_query,
                                        **{
                                            "entity_key_name": entity_key_name
                                        })
-        # self.connection.exec_query(dbm_ql.get_constraint_unique_log_id_query)
-
-        self.connection.exec_query(dbm_ql.get_set_activity_index_query)
-        self.connection.exec_query(dbm_ql.get_set_timestamp_event_index_query)
-        self.connection.exec_query(dbm_ql.get_set_activity_event_index_query)
-        self.connection.exec_query(dbm_ql.get_set_recordid_as_key_node_query)
-        self.connection.exec_query(dbm_ql.get_set_recordid_as_index_query)
-        self.connection.exec_query(dbm_ql.get_set_record_log_as_index_query)
-        self.connection.exec_query(dbm_ql.get_set_record_created_as_index_query)
-        self.connection.exec_query(dbm_ql.get_set_load_status_as_index_query)
-
-    def _set_unique_sysid_constraints(self, entity_key_name="sysId"):
-        for node in self.semantic_header.nodes:
-            node_labels = node.get_labels(as_str=False)
-            if "Entity" in node_labels:
-                self.connection.exec_query(dbm_ql.get_constraint_unique_entity_uid_query,
-                                           **{
-                                               "node_type": node.type,
-                                               "entity_key_name": entity_key_name
-                                           })
 
     def get_all_rel_types(self) -> List[str]:
         """
