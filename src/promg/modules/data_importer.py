@@ -72,7 +72,7 @@ class Importer:
 
                     self._import_nodes_from_data(df_log=df_log,
                                                  file_name=file_name,
-                                                 required_labels_str=required_labels)
+                                                 required_labels=required_labels)
 
                     if structure.has_datetime_attribute():
                         # once all events are imported, we convert the string timestamp to the timestamp as used in

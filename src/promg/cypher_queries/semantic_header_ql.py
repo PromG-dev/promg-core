@@ -90,7 +90,6 @@ class SemanticHeaderQueryLibrary:
                     CALL apoc.periodic.iterate(
                     'MATCH ($record) $log_check_str
                     $record_matches
-                          $log_check_str
                           RETURN record',
                           '$merge_or_create_node
                           $set_label_str
@@ -131,8 +130,7 @@ class SemanticHeaderQueryLibrary:
             MATCH (record:Record) - [:IS_OF_TYPE] -> (record_type:RecordType)
             MATCH (record) <- [:CONTAINS] - (log:Log)
             WHERE log.name in $log_str
-            UNWIND labels(r) as _label
-            RETURN collect(distinct _label) as labels
+            RETURN collect(distinct record_type.type) as labels
         '''
 
         return Query(query_str=query_str,
