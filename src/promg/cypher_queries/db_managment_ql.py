@@ -121,15 +121,6 @@ class DBManagementQueryLibrary:
                          "entity_key_name": entity_key_name})
 
     @staticmethod
-    def get_set_activity_index_query() -> Query:
-        # language=SQL
-        query_str = '''
-                CREATE RANGE INDEX activity_index 
-                IF NOT EXISTS FOR (a:Activity) ON (a.activity)
-            '''
-        return Query(query_str=query_str)
-
-    @staticmethod
     def get_set_activity_event_index_query() -> Query:
         # language=SQL
         query_str = '''
@@ -157,30 +148,6 @@ class DBManagementQueryLibrary:
             OPTIONS {
               indexProvider: 'range-1.0'
             }
-        '''
-        return Query(query_str=query_str)
-
-    @staticmethod
-    def get_set_recordid_as_index_query() -> Query:
-        # language=SQL
-        query_str = '''
-            CREATE RANGE INDEX record_id_as_index IF NOT EXISTS FOR (r:Record) ON (r.recordId)
-        '''
-        return Query(query_str=query_str)
-
-    @staticmethod
-    def get_set_record_created_as_index_query() -> Query:
-        # language=SQL
-        query_str = '''
-                    CREATE RANGE INDEX record_created_as_index IF NOT EXISTS FOR (r:Record) ON (r.created)
-                '''
-        return Query(query_str=query_str)
-
-    @staticmethod
-    def get_set_load_status_as_index_query() -> Query:
-        # language=SQL
-        query_str = '''
-            CREATE INDEX load_status_as_index IF NOT EXISTS FOR (r:Record) ON (r.loadStatus)
         '''
         return Query(query_str=query_str)
 
