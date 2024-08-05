@@ -128,9 +128,9 @@ class SemanticHeaderQueryLibrary:
 
         # request all associated record types for specific logs
         query_str = '''
-            MATCH (r:Record) - [:IS_OF_TYPE] -> (rt:RecordType)
-            WHERE r.log in $log_str
-            RETURN collect(distinct rt.type) as labels
+            MATCH (record:Record) - [:IS_OF_TYPE] -> (record_type:RecordType)
+            WHERE record.log in $log_str
+            RETURN collect(distinct record_type.type) as labels
         '''
 
         return Query(query_str=query_str,
@@ -369,12 +369,12 @@ class SemanticHeaderQueryLibrary:
 
         # language=sql
         query_str = '''
-                        MATCH (n1:Event)-[r:$df_entity {entityType: '$entity_type'}]->(n2:Event)
-                        WITH n1, n2, collect(r) AS rels
+                        MATCH (n1:Event)-[rel:$df_entity {entityType: '$entity_type'}]->(n2:Event)
+                        WITH n1, n2, collect(rel) AS rels
                         WHERE size(rels) > 1
                         // only include this and the next line if you want to remove the existing relationships
-                        UNWIND rels AS r 
-                        DELETE r
+                        UNWIND rels AS rel 
+                        DELETE rel
                         MERGE (n1)
                             -[:$df_entity {entityType: '$entity_type', count:size(rels), type: 'DF'}]->
                               (n2)
