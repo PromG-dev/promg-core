@@ -130,15 +130,20 @@ class DBManagementQueryLibrary:
         return Query(query_str=query_str)
 
     @staticmethod
-    def get_set_record_id_as_unique_query() -> Query:
+    def get_set_record_id_as_range_query() -> Query:
         # language=SQL
         query_str = '''
-            CREATE CONSTRAINT record_id_as_unique_property IF NOT EXISTS 
-            FOR (r:Record) REQUIRE r.recordId IS UNIQUE
-            // also set the range index
-            OPTIONS {
-              indexProvider: 'range-1.0'
-            }
+                CREATE RANGE INDEX record_id_range 
+                IF NOT EXISTS FOR (r:Record) ON (r.recordId)
+        '''
+        return Query(query_str=query_str)
+
+    @staticmethod
+    def get_set_record_type_range_query() -> Query:
+        # language=SQL
+        query_str = '''
+                CREATE RANGE INDEX record_type_range 
+                IF NOT EXISTS FOR (rt:RecordType) ON (rt.type)
         '''
         return Query(query_str=query_str)
 
