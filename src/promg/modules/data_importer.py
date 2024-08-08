@@ -42,8 +42,16 @@ class Importer:
         self.use_sample = use_sample
         self.use_preprocessed_files = use_preprocessed_files
         self.store_files = store_files
+        self.load_status = 0
 
         self._import_directory = import_directory
+
+    def update_load_status(self):
+        self.connection.exec_query(di_ql.get_update_load_status_query,
+                                   **{
+                                       "current_load_status": self.load_status
+                                   })
+        self.load_status += 1
 
     def import_data(self, to_be_imported_logs) -> None:
         for structure in self.structures:
@@ -57,6 +65,7 @@ class Importer:
                     df_log = structure.read_data_set(file_name=file_name,
                                                      use_sample=self.use_sample,
                                                      use_preprocessed_file=self.use_preprocessed_files,
+                                                     load_status=self.load_status,
                                                      store_preprocessed_file=self.store_files)
 
                     df_log = structure.determine_optional_labels_in_log(df_log, records=self.records)
@@ -74,6 +83,7 @@ class Importer:
                     self._filter_nodes(structure=structure,
                                        required_labels=required_labels)  # filter nodes according to the
                     # structure
+                    self._finalize_import(required_labels=required_labels)  # removes temporary properties
 
     @Performance.track("structure")
     def _reformat_timestamps(self, structure, required_labels):
@@ -91,7 +101,8 @@ class Importer:
                                        **{
                                            "required_labels": required_labels,
                                            "attribute": attribute,
-                                           "datetime_object": datetime_format
+                                           "datetime_object": datetime_format,
+                                           "load_status": self.load_status
                                        })
 
     @Performance.track("structure")
@@ -104,8 +115,19 @@ class Importer:
                                                "prop": name,
                                                "values": values,
                                                "exclude": exclude,
+                                               "load_status": self.load_status,
                                                "required_labels": required_labels
                                            })
+
+    @Performance.track("structure")
+    def _finalize_import(self, required_labels):
+        # finalize the import
+        self.connection.exec_query(di_ql.get_finalize_import_records_query,
+                                   **{
+                                       "load_status": self.load_status,
+                                       "required_labels": required_labels
+                                   })
+        self.load_status = 0
 
     @Performance.track("file_name")
     def _import_nodes_from_data(self, df_log, file_name, required_labels):
@@ -125,13 +147,6 @@ class Importer:
         log, log_name = pop_log_name(log)
 
         self._save_log_grouped_by_labels(log=log, file_name=file_name)
-        # first create the record types and log nodes
-        self.connection.exec_query(di_ql.get_create_record_types_and_log_query,
-                                   **{
-                                       "labels": labels,
-                                       "log_name": log_name
-                                   })
-        # when creating the records nodes, relations between the record types and log nodes are created
         self.connection.exec_query(di_ql.get_create_nodes_by_loading_csv_query,
                                    **{
                                        "file_name": file_name,
