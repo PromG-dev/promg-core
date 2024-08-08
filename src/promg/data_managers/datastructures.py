@@ -470,7 +470,7 @@ class DataStructure:
         required_labels_str = ":".join(required_labels_w_records)
         return required_labels_str
 
-    def read_data_set(self, file_name, use_sample, store_preprocessed_file=True,
+    def read_data_set(self, file_name, use_sample, load_status: int, store_preprocessed_file=True,
                       use_preprocessed_file=False):
         preprocessed_file_name = self._get_preprocessed_file_name(file_name, use_sample)
         df_log = None
@@ -481,6 +481,7 @@ class DataStructure:
             if store_preprocessed_file:
                 self.store_df_log(df_log, preprocessed_file_name)
 
+        df_log["loadStatus"] = load_status
         return df_log
 
     def read_df_log(self, file_name, use_sample):
