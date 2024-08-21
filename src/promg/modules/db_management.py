@@ -12,7 +12,7 @@ class DBManagement:
         self.semantic_header = semantic_header
 
     @Performance.track()
-    def clear_db(self, replace=True) -> None:
+    def clear_db(self, replace=True) -> bool:
         """
         Replace or clear the entire database by a new one
 
@@ -28,7 +28,8 @@ class DBManagement:
                 return False
         else:
             self.connection.exec_query(dbm_ql.get_delete_relationships_query)
-            return self.connection.exec_query(dbm_ql.get_delete_nodes_query)
+            self.connection.exec_query(dbm_ql.get_delete_nodes_query)
+            return True
 
     @Performance.track()
     def set_constraints(self, entity_key_name="sysId") -> None:
@@ -125,5 +126,5 @@ class DBManagement:
         print(tabulate(self.get_statistics()))
 
     def get_imported_logs(self) -> List[str]:
-        imported_logs = self.connection.exec_query(dbm_ql.get_imported_logs_query)
-        return imported_logs
+        result = self.connection.exec_query(dbm_ql.get_imported_logs_query)
+        return result[0]['logs']
