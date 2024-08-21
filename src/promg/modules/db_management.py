@@ -42,6 +42,14 @@ class DBManagement:
         self.connection.exec_query(dbm_ql.get_set_record_id_as_range_query)
         self.connection.exec_query(dbm_ql.get_set_record_type_range_query)
 
+    def get_constraints(self, ignore_defaults=True):
+        results = self.connection.exec_query(dbm_ql.get_constraints_query)
+        constraint_names = [result['name'] for result in results]
+        if ignore_defaults:
+            constraint_names.remove("index_343aff4e")  # default token lookup index for node labels
+            constraint_names.remove("index_f7700477")  # default token lookup index for relationship types
+        return constraint_names
+
     def _set_sysid_constraints(self, entity_key_name="sysId"):
         if self.semantic_header is not None:
             for node in self.semantic_header.nodes:
