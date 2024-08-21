@@ -46,8 +46,8 @@ class DBManagement:
         results = self.connection.exec_query(dbm_ql.get_constraints_query)
         constraint_names = [result['name'] for result in results]
         if ignore_defaults:
-            constraint_names.remove("index_343aff4e")
-            constraint_names.remove("index_f7700477")
+            constraint_names.remove("index_343aff4e") # default token lookup index for node labels
+            constraint_names.remove("index_f7700477")# default token lookup index for relationship types
         return constraint_names
 
     def _set_sysid_constraints(self, entity_key_name="sysId"):
