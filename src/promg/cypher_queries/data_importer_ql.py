@@ -92,7 +92,7 @@ class DataImporterQueryLibrary:
                         CREATE (record:Record)
                         $create_records
                         SET record += row '
-                    , {batchSize:10000, parallel:true, retries: 1, params:{log_name: $log_name}});                    
+                    , {batchSize:$batch_size, parallel:true, retries: 1, params:{log_name: $log_name}});                    
                 '''
 
         return Query(query_str=query_str,
@@ -105,18 +105,6 @@ class DataImporterQueryLibrary:
                      parameters={
                          "log_name": log_name
                      })
-
-    @staticmethod
-    def get_merge_log_nodes_query():
-        query_str = '''
-                            MATCH (log:Log)
-                            WITH log.name as name, collect(log) as logs
-                            CALL apoc.refactor.mergeNodes(logs, {properties: "discard", mergeRels: true})
-                            YIELD node
-                            RETURN node                
-                        '''
-
-        return Query(query_str=query_str)
 
     @staticmethod
     def get_make_timestamp_date_query(required_labels: List[str], attribute: str,
@@ -177,14 +165,15 @@ class DataImporterQueryLibrary:
         query_str = '''
                 CALL apoc.periodic.iterate(
                 '$match_record_types 
-                WHERE record.$attribute IS NOT NULL AND NOT apoc.meta.cypher.isType(record.$attribute, "$date_type")
+                WHERE record.$attribute IS NOT NULL AND NOT apoc.meta.cypher.isType(record.$attribute, $date_type)
                 WITH record, record.$attribute as timezone_dt
                 WITH record, apoc.date.format(timezone_dt, $unit, $dt_format) as converted
                 RETURN record, converted',
                 'SET record.$attribute = converted',
                 {batchSize:$batch_size, parallel:false, 
                 params: {unit: $unit,
-                        dt_format: $datetime_object_format}})
+                        dt_format: $datetime_object_format,
+                        date_type: $date_type}})
             '''
 
         return Query(query_str=query_str,
@@ -194,9 +183,9 @@ class DataImporterQueryLibrary:
                      },
                      parameters={
                          "unit": datetime_object.unit,
-                         "datetime_object_format": datetime_object.format
+                         "datetime_object_format": datetime_object.format,
+                         "date_type": datetime_object.convert_to.replace("ISO_", "")
                      })
-
 
 
 @staticmethod
