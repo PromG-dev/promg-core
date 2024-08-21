@@ -1,5 +1,6 @@
 from string import Template
 from typing import Optional, List, Dict, Any, Tuple
+import traceback
 
 import neo4j
 from ..utilities.configuration import Configuration
@@ -16,28 +17,32 @@ class Query:
         self.database = database
 
 
+class Driver(object):
+    def __init__(self, uri, auth):
+        self._driver = neo4j.GraphDatabase.driver(uri=uri, auth=auth, max_connection_lifetime=200)
+
+    def __enter__(self):
+        self._driver.verify_connectivity()
+        return self._driver
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        if exc_type is not None:
+            traceback.print_exception(exc_type, exc_val, exc_tb)
+
+        self._driver.close()
+
+
 class DatabaseConnection:
     def __init__(self, uri: str, db_name: str, user: str, password: str, verbose: bool = False,
                  batch_size: int = 100000):
         self.db_name = db_name
-        self.driver = self.start_connection(uri, user, password)
+        self.uri = uri
+        self.auth = (user, password)
         self.verbose = verbose
         self.batch_size = batch_size
 
-    @staticmethod
-    def start_connection(uri: str, user: str, password: str):
-        # begin config
-        # connection to Neo4J database
-        driver = neo4j.GraphDatabase.driver(uri, auth=(user, password), max_connection_lifetime=200)
-        return driver
-
-    def close_connection(self):
-        self.driver.close()
-
     def exec_query(self, function, **kwargs):
         # check whether connection can be made
-        self.verify_connectivity()
-
         result = function(**kwargs)
         if result is None:
             return
@@ -46,9 +51,11 @@ class DatabaseConnection:
         database = result.database
         if kwargs is None:
             kwargs = {}  # replace None value by an emtpy dictionary
-        if "$batch_size" in query:
+        if ("$batch_size" in query
+                and "batch_size" not in kwargs):  # ensure to not override batch_size if already defined
             kwargs["batch_size"] = self.batch_size
-        if "$limit" in query:
+        if ("$limit" in query
+                and "limit" not in kwargs):  # ensure to not override limit if already defined
             kwargs["limit"] = self.batch_size
 
         if "apoc.periodic.commit" in query:
@@ -66,7 +73,6 @@ class DatabaseConnection:
 
             return result
         else:
-
             return self._exec_query(query, database, **kwargs)
 
     def _exec_query(self, query: str, database: str = None, **kwargs) -> Optional[List[Dict[str, Any]]]:
@@ -100,20 +106,17 @@ class DatabaseConnection:
         if database is None:
             database = self.db_name
 
-        with self.driver.session(database=database) as session:
-            try: # try to commit the transaction, if the transaction fails, it is rolled back automatically
-                result, summary = session.execute_write(run_query, query, **kwargs)
-                return result
-            except Exception as inst: # let user know the transaction failed and close the connection
-                self.close_connection()
-                print("Latest transaction was rolled back")
-                print(f"This was your latest query: {query}")
-                print(inst)
+        with Driver(uri=self.uri, auth=self.auth) as driver:
+            with driver.session(database=database) as session:
+                try:  # try to commit the transaction, if the transaction fails, it is rolled back automatically
+                    result, summary = session.execute_write(run_query, query, **kwargs)
+                    return result
+                except Exception as inst:  # let user know the transaction failed and close the connection
+                    print("Latest transaction was rolled back")
+                    print(f"This was your latest query: {query}")
+                    print(inst)
 
     @staticmethod
     def set_up_connection(config: Configuration):
         return DatabaseConnection(db_name=config.user, uri=config.uri, user=config.user,
                                   password=config.password, verbose=config.verbose, batch_size=config.batch_size)
-
-    def verify_connectivity(self):
-        self.driver.verify_connectivity()
