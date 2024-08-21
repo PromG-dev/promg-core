@@ -59,8 +59,8 @@ class OcedPg:
 
         # only import logs that are not imported yet
         # dataset name is considered to be unique
-        already_imported_logs = self.db_manager.get_imported_logs()[0]['logs']
-        if logs is None:
+        already_imported_logs = self.db_manager.get_imported_logs()
+        if logs is None: # no logs are predefined
             logs = self.dataset_descriptions.get_files_list()
         to_be_imported_logs = [log for log in logs if log not in already_imported_logs]
 

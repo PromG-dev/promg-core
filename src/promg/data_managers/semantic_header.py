@@ -235,7 +235,7 @@ class Relationship:
 
         name = name if name is not None else self.relation_name
         rel_pattern = Template(rel_pattern_str).substitute(rel_name=name,
-                                                           rel_type=self.get_relation_type())
+                                                           rel_type=self.get_relation_types_str())
 
         # add properties if requested and there are properties defined
         if with_properties and self.properties is not None:

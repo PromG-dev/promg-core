@@ -75,6 +75,14 @@ class DBManagementQueryLibrary:
                      template_string_parameters={"db_name": db_name})
 
     @staticmethod
+    def get_constraints_query() -> Query:
+        query_str = '''
+            SHOW INDEX
+        '''
+
+        return Query(query_str=query_str)
+
+    @staticmethod
     def get_constraint_unique_entity_uid_query(node_type=None, entity_key_name="sysId") -> Query:
         if node_type is None:
             node_type = "Entity"
@@ -207,8 +215,8 @@ class DBManagementQueryLibrary:
     def get_imported_logs_query() -> Query:
         # language = SQL
         query_str = '''
-            MATCH (n:Record)
-            RETURN COLLECT(DISTINCT n.log) AS logs
+            MATCH (l:Log)
+            RETURN COLLECT(DISTINCT l.name) AS logs
         '''
 
         return Query(query_str=query_str)
