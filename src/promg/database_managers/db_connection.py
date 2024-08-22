@@ -1,6 +1,7 @@
 from string import Template
 from typing import Optional, List, Dict, Any, Tuple
 import traceback
+from datetime import datetime
 
 import neo4j
 from ..utilities.configuration import Configuration
@@ -20,26 +21,19 @@ class Query:
 class Driver(object):
     def __init__(self, uri, auth):
         self._driver = neo4j.GraphDatabase.driver(uri=uri, auth=auth, max_connection_lifetime=200)
-
-    def __enter__(self):
         self._driver.verify_connectivity()
-        return self._driver
 
-    def __exit__(self, exc_type, exc_val, exc_tb):
-        if exc_type is not None:
-            traceback.print_exception(exc_type, exc_val, exc_tb)
-
-        self._driver.close()
+    def get_session(self, database):
+        return self._driver.session(database=database)
 
 
 class DatabaseConnection:
     def __init__(self, uri: str, db_name: str, user: str, password: str, verbose: bool = False,
                  batch_size: int = 100000):
         self.db_name = db_name
-        self.uri = uri
-        self.auth = (user, password)
         self.verbose = verbose
         self.batch_size = batch_size
+        self.driver = Driver(uri=uri, auth=(user, password))
 
     def exec_query(self, function, **kwargs):
         # check whether connection can be made
@@ -106,15 +100,14 @@ class DatabaseConnection:
         if database is None:
             database = self.db_name
 
-        with Driver(uri=self.uri, auth=self.auth) as driver:
-            with driver.session(database=database) as session:
-                try:  # try to commit the transaction, if the transaction fails, it is rolled back automatically
-                    result, summary = session.execute_write(run_query, query, **kwargs)
-                    return result
-                except Exception as inst:  # let user know the transaction failed and close the connection
-                    print("Latest transaction was rolled back")
-                    print(f"This was your latest query: {query}")
-                    print(inst)
+        with self.driver.get_session(database=database) as session:
+            try:  # try to commit the transaction, if the transaction fails, it is rolled back automatically
+                result, summary = session.execute_write(run_query, query, **kwargs)
+                return result
+            except Exception as inst:  # let user know the transaction failed and close the connection
+                print("Latest transaction was rolled back")
+                print(f"This was your latest query: {query}")
+                print(inst)
 
     @staticmethod
     def set_up_connection(config: Configuration):
