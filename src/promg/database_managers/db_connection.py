@@ -1,7 +1,5 @@
 from string import Template
 from typing import Optional, List, Dict, Any, Tuple
-import traceback
-from datetime import datetime
 
 import neo4j
 from ..utilities.configuration import Configuration
