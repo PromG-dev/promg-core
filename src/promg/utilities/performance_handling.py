@@ -28,7 +28,6 @@ class Performance(metaclass=Singleton):
         self.write_console = write_console
         if write_console:
             self.ctx = Nostdout()
-            self.ctx.__enter__()
 
     def string_time(self, epoch_time):
         return datetime.utcfromtimestamp(epoch_time).strftime("%H:%M:%S")
@@ -43,7 +42,7 @@ class Performance(metaclass=Singleton):
                     "end": self.string_time(end),
                     "duration": (end - self.last)
                 }])])
-        self.pbar.set_description(f"{log_message}: took {round(end - self.last, 2)} seconds")
+        self.pbar.set_postfix_str(f"{log_message}: took {round(end - self.last, 2)} seconds")
         self.last = end
         self.count += 1
         self.pbar.update(1)
@@ -51,9 +50,13 @@ class Performance(metaclass=Singleton):
     def track(argument: str = None):
         def performance_tracker_wrapper(func):
             def wrapper(self, *args, **kwargs):
+                perf = Performance()
+                if perf.write_console:
+                    perf.ctx.__enter__()
+
                 result = func(self, *args, **kwargs)
                 end = time.time()
-                perf = Performance()
+
                 if argument is None or argument not in kwargs:
                     log_message = func.__name__
                 else:
@@ -65,11 +68,15 @@ class Performance(metaclass=Singleton):
                         "end": perf.string_time(end),
                         "duration": (end - perf.last)
                     }])])
-                perf.pbar.set_description(f"{log_message}: took {round(end - perf.last, 2)} seconds")
+                perf.pbar.set_postfix_str(f"{log_message}: took {round(end - perf.last, 2)} seconds")
                 perf.status = f"{log_message}: took {round(end - perf.last, 2)} seconds"
                 perf.last = end
                 perf.count += 1
                 perf.pbar.update(1)
+
+                if perf.write_console:
+                    perf.ctx.__exit__()
+
                 return result
 
             return wrapper
@@ -88,7 +95,7 @@ class Performance(metaclass=Singleton):
             }])])
         self.total = round(end - self.start, 2)
         print(f"Total: took {round(end - self.start, 2)} seconds")
-        self.pbar.set_description(f"Completed")
+        self.pbar.set_postfix_str(f"Completed")
         self.pbar.close()
         # close python trickery
         if self.write_console:
