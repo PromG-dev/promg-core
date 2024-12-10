@@ -19,7 +19,6 @@ class Query:
 class Driver(object):
     def __init__(self, uri, auth):
         self._driver = neo4j.GraphDatabase.driver(uri=uri, auth=auth, max_connection_lifetime=200)
-        self._driver.verify_connectivity()
 
     def get_session(self, database):
         return self._driver.session(database=database)
