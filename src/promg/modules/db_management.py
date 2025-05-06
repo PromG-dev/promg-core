@@ -12,12 +12,12 @@ class DBManagement:
         self.semantic_header = semantic_header
 
     @Performance.track()
-    def clear_db(self, replace=True) -> None:
+    def clear_db(self, replace=True) -> bool:
         """
         Replace or clear the entire database by a new one
 
         Args:
-            replace: boolean to indicate whether the database may be replaced
+            replace: boolean to indicate whether the database is fully replaced
 
         """
         if replace:
@@ -28,40 +28,45 @@ class DBManagement:
                 return False
         else:
             self.connection.exec_query(dbm_ql.get_delete_relationships_query)
-            return self.connection.exec_query(dbm_ql.get_delete_nodes_query)
+            self.connection.exec_query(dbm_ql.get_delete_nodes_query)
+            return True
 
     @Performance.track()
-    def set_constraints(self) -> None:
+    def set_constraints(self, entity_key_name="sysId") -> None:
         """
         Set constraints in Neo4j instance
         """
-        # # for implementation only (not required by schema or patterns)
-        # self.connection.exec_query(dbm_ql.get_constraint_unique_event_id_query)
-        #
-        # required by core pattern
-        if self.semantic_header is not None:
-            self._set_unique_sysid_constraints()
-        #
-        # self.connection.exec_query(dbm_ql.get_constraint_unique_log_id_query)
-
-        self.connection.exec_query(dbm_ql.get_set_sysid_index_query)
+        self._set_sysid_constraints(entity_key_name=entity_key_name)
+        self.connection.exec_query(dbm_ql.get_set_unique_log_name_index_query)
         self.connection.exec_query(dbm_ql.get_set_activity_index_query)
-        self.connection.exec_query(dbm_ql.get_set_timestamp_event_index_query)
-        self.connection.exec_query(dbm_ql.get_set_activity_event_index_query)
-        self.connection.exec_query(dbm_ql.get_set_recordid_as_key_node_query)
-        self.connection.exec_query(dbm_ql.get_set_recordid_as_index_query)
-        self.connection.exec_query(dbm_ql.get_set_record_log_as_index_query)
-        self.connection.exec_query(dbm_ql.get_set_record_created_as_index_query)
-        self.connection.exec_query(dbm_ql.get_set_load_status_as_index_query)
+        self.connection.exec_query(dbm_ql.get_set_record_id_as_range_query)
+        self.connection.exec_query(dbm_ql.get_set_record_type_range_query)
 
-    def _set_unique_sysid_constraints(self):
-        for node in self.semantic_header.nodes:
-            node_labels = node.get_labels(as_str=False)
-            if "Entity" in node_labels:
-                self.connection.exec_query(dbm_ql.get_constraint_unique_entity_uid_query,
-                                           **{
-                                               "node_type": node.type
-                                           })
+    def get_constraints(self, ignore_defaults=True):
+        results = self.connection.exec_query(dbm_ql.get_constraints_query)
+        constraint_names = [result['name'] for result in results]
+        if ignore_defaults:
+            constraint_names.remove("index_343aff4e")  # default token lookup index for node labels
+            constraint_names.remove("index_f7700477")  # default token lookup index for relationship types
+        return constraint_names
+
+    def _set_sysid_constraints(self, entity_key_name="sysId"):
+        if self.semantic_header is not None:
+            for node in self.semantic_header.nodes:
+                # set the unique constraint per entity type node
+                node_labels = node.get_labels(as_str=False)
+                if "Entity" in node_labels:
+                    self.connection.exec_query(dbm_ql.get_constraint_unique_entity_uid_query,
+                                               **{
+                                                   "node_type": node.type,
+                                                   "entity_key_name": entity_key_name
+                                               })
+        else:
+            # is semantic header is not defined, we just set sysid as range (instead of uniqueness constraint)
+            self.connection.exec_query(dbm_ql.get_set_sysid_index_query,
+                                       **{
+                                           "entity_key_name": entity_key_name
+                                       })
 
     def get_all_rel_types(self) -> List[str]:
         """
@@ -129,5 +134,5 @@ class DBManagement:
         print(tabulate(self.get_statistics()))
 
     def get_imported_logs(self) -> List[str]:
-        imported_logs = self.connection.exec_query(dbm_ql.get_imported_logs_query)
-        return imported_logs
+        result = self.connection.exec_query(dbm_ql.get_imported_logs_query)
+        return result[0]['logs']

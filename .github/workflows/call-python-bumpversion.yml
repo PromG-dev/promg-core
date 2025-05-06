@@ -27,7 +27,7 @@ jobs:
     - name: Read bumped version
       run: echo "$(grep '# version' version.md | cut -d ' ' -f3)"
     - name: Save source directory after updating version
-      uses: actions/upload-artifact@v3
+      uses: actions/upload-artifact@v4
       with:
         name: ${{ inputs.artifact-name-version-file }} 
         path: version.md

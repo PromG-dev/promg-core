@@ -10,36 +10,47 @@ class SemanticHeaderQueryLibrary:
     @staticmethod
     def get_create_node_by_record_constructor_query(node_constructor: NodeConstructor, merge=True,
                                                     logs: Optional[List[str]] = None) -> Query:
-        # find events that contain the entity as property and not nan
-        # save the value of the entity property as id and also whether it is a virtual entity
-        # create a new entity node if it not exists yet with properties
-        merge_or_create = 'MERGE' if merge else 'CREATE'
-        set_label_str = ""
-        set_property_str = ""
-        infer_corr_str = ""
-        infer_observed_str = ""
+        if merge:
+            # for each result node, merge the node if it does not exist yet. Then merge it to the record node.
+            # So, even though a Entity may appear in multiple records, it is only created once.
+            merge_or_create_node = '''MERGE ($result_node)
+                                 MERGE (record) <- [:EXTRACTED_FROM] - ($result_node_name)'''
+        else:
+            # for each result node, merge the node if it does not exist yet NEITHER does its relation to the record
+            # node.
+            # This ensures that for each record node, exactly one result node is created.
+            # e.g. When creating (:Event) nodes, we create one (:Event) node for each (:EventRecord)
+            merge_or_create_node = '''MERGE (record) <- [:EXTRACTED_FROM] - ($result_node)'''
 
+        # get the string for optional properties
+        set_property_str = node_constructor.get_set_result_properties_query()
+
+        # in case some labels need to be set, we define the string
+        set_label_str = ""
         if node_constructor.set_labels is not None:
             set_label_str = f'SET $set_labels'''
 
-        if len(node_constructor.result.optional_properties) > 0:
-            set_property_str = 'SET $set_result_properties'
-
+        # in case a correlation needs to be created, we define the string
+        infer_corr_str = ""
+        # in case multiple correlations can be inferred depending on the record types, we create a string for each
+        # inference
         if len(node_constructor.inferred_relationships) > 0:
             infer_corr_str = '''WITH record, $result_node_name'''
             for relationship in node_constructor.inferred_relationships:
                 infer_rel_str = '''
                     CALL {WITH record, $result_node_name
-                            MATCH ($event_node) - [:EXTRACTED_FROM] -> (record:$record_labels) <- [:EXTRACTED_FROM] - (
+                            $record_match
+                            MATCH ($event_node) - [:EXTRACTED_FROM] -> (record) <- [:EXTRACTED_FROM] - (
                                 $result_node_name)
                                 MERGE (event) - [:$relation_type] -> ($result_node_name)}'''
                 infer_rel_str = Template(infer_rel_str).safe_substitute({
                     "event_node": relationship.event.get_pattern(name="event"),
-                    "record_labels": relationship.get_labels_str(),
+                    "record_match": relationship.get_record_type_match(record_name="record"),
                     "relation_type": relationship.relation_type
                 })
                 infer_corr_str += infer_rel_str
         elif node_constructor.infer_corr_from_event_record:
+            # only one correlation is created, create a string for this with the corr type
             # language=SQL
             infer_corr_str = '''
             WITH record, $result_node_name
@@ -53,32 +64,39 @@ class SemanticHeaderQueryLibrary:
                                 MATCH (event:$event_label) - [:EXTRACTED_FROM] -> (record) <- [:EXTRACTED_FROM] - (
                                 $result_node_name)
                                 MERGE (event) - [:$corr_type] -> ($result_node_name)'''
-        elif node_constructor.infer_observed:
+
+        # in case an observed relations needs to be created, we define the string
+        infer_observed_str = ""
+        if node_constructor.infer_observed:
             # language=SQL
             infer_observed_str = '''
             WITH record, $result_node_name
                                 MATCH (event:$event_label) - [:EXTRACTED_FROM] -> (record) <- [:EXTRACTED_FROM] - (
                                 $result_node_name)
-                                CREATE (event) <- [:OBSERVED] - ($result_node_name)
+                                MERGE (event) <- [:OBSERVED] - ($result_node_name)
                                 '''
 
         # add check to only transform records from the imported logs
         if logs is not None:
             log_str = ",".join([f'"{log}"' for log in logs])
-            log_check_str = f"WHERE record.log in [{log_str}]"
+            log_check_str = f"<- [:CONTAINS] - (log:Log) WHERE log.name in [{log_str}]"
         else:
             log_check_str = ""
 
+        # create the overall query where we match the correct record nodes
+        # then we create/merge the resulting node and set all labels, properties and inferred relations
         # language=SQL
         query_str = '''
                     CALL apoc.periodic.iterate(
-                    'MATCH ($record) 
-                          $log_check_str
-                          RETURN record',
-                          '$merge_or_create ($result_node)
+                    'MATCH ($record) $log_check_str
+                    $record_matches
+                    // order records by elementId, this will determine the order in which events are created
+                    // this is important for the temporal ordering of :Event nodes 
+                    // when creating DF edges in case the timestamps are similar
+                          RETURN record ORDER BY elementId(record)',
+                          '$merge_or_create_node
                           $set_label_str
                           $set_property_str
-                          MERGE (record) <- [:EXTRACTED_FROM] - ($result_node_name)
                           $infer_corr_str
                           $infer_observed_str', {batchSize:$batch_size})
                     '''
@@ -88,15 +106,15 @@ class SemanticHeaderQueryLibrary:
             "set_property_str": set_property_str,
             "infer_corr_str": infer_corr_str,
             "infer_observed_str": infer_observed_str,
-            "merge_or_create": merge_or_create,
+            "merge_or_create_node": merge_or_create_node,
             "log_check_str": log_check_str
         })
 
         return Query(query_str=query_str,
                      template_string_parameters={
                          "record": node_constructor.get_prevalent_record_pattern(node_name="record"),
+                         "record_matches": node_constructor.get_prevalent_match_record_pattern(node_name="record"),
                          "record_name": "record",
-                         "conditions": node_constructor.get_where_condition(node_name="record", include_start_and=True),
                          "result_node": node_constructor.result.get_pattern(),
                          "result_node_name": node_constructor.result.get_name(),
                          "set_result_properties": node_constructor.get_set_result_properties_query(),
@@ -106,30 +124,21 @@ class SemanticHeaderQueryLibrary:
                      })
 
     @staticmethod
-    def get_associated_record_labels_query(logs):
+    def get_associated_record_types_query(logs):
         log_str = ",".join([f'"{log}"' for log in logs])
         log_str = f"[{log_str}]"
 
+        # request all associated record types for specific logs
         query_str = '''
-            MATCH (r:Record)
-            WHERE r.log in $log_str
-            UNWIND labels(r) as _label
-            RETURN collect(distinct _label) as labels
+            MATCH (record:Record) - [:IS_OF_TYPE] -> (record_type:RecordType)
+            MATCH (record) <- [:CONTAINS] - (log:Log)
+            WHERE log.name in $log_str
+            RETURN collect(distinct record_type.type) as labels
         '''
 
         return Query(query_str=query_str,
                      template_string_parameters={"log_str": log_str})
 
-    @staticmethod
-    def get_number_of_records_query(node_constructor: NodeConstructor):
-
-        query_str = '''MATCH ($record) 
-                           RETURN count(record) as count'''
-
-        return Query(query_str=query_str,
-                     template_string_parameters={
-                         "record": node_constructor.get_prevalent_record_pattern(node_name="record")
-                     })
 
     @staticmethod
     def get_infer_corr_from_parent_query(relation_constructor, use_from):
@@ -140,6 +149,7 @@ class SemanticHeaderQueryLibrary:
             node = relation_constructor.to_node.get_pattern()
             from_or_to = "TO"
 
+        # add correlation to a child node if its parent is correlated to an event
         query_str = '''
             CALL apoc.periodic.iterate('
                 MATCH (e:Event) --> ($node) - [:$from_or_to] - (relation:$relation_label_str)
@@ -163,7 +173,7 @@ class SemanticHeaderQueryLibrary:
         if relation_constructor.model_as_node:
             # language=sql
             merge_str = '''
-                            MERGE ($from_node_name) -[:FROM] -> (relation:$relation_label_str) - [:TO] -> (
+                            MERGE ($from_node_name) -[:FROM] -> (relation:$rel_pattern) - [:TO] -> (
                             $to_node_name)
                             '''
         else:
@@ -174,7 +184,8 @@ class SemanticHeaderQueryLibrary:
                 CALL apoc.periodic.iterate(
                 '$relation_queries                        
                 RETURN distinct $from_node_name, $to_node_name',
-                '$merge_str',                        
+                '$merge_str
+                $set_properties_str',                        
                 {batchSize: $batch_size})
             '''
 
@@ -188,7 +199,7 @@ class SemanticHeaderQueryLibrary:
                          "from_node_name": relation_constructor.from_node.get_name(),
                          "to_node_name": relation_constructor.to_node.get_name(),
                          "rel_pattern": relation_constructor.result.get_pattern(),
-                         "relation_label_str": relation_constructor.result.get_relation_types_str()
+                         "set_properties_str": relation_constructor.get_set_result_properties_query()
                      })
 
     @staticmethod
@@ -199,7 +210,7 @@ class SemanticHeaderQueryLibrary:
         if relation_constructor.model_as_node:
             # language=sql
             merge_str = '''
-                            MERGE ($from_node_name) -[:FROM] -> (relation:$relation_label_str) - [:TO] -> (
+                            MERGE ($from_node_name) -[:FROM] -> (relation:$rel_pattern) - [:TO] -> (
                             $to_node_name)
                             MERGE (relation)  - [:EXTRACTED_FROM] -> (record)
                             '''
@@ -209,18 +220,23 @@ class SemanticHeaderQueryLibrary:
         # add check to only transform records from the imported logs
         if logs is not None:
             log_str = ",".join([f'"{log}"' for log in logs])
-            log_check_str = f"WHERE record.log in [{log_str}]"
+            log_check_str = f"<- [:CONTAINS] - (log:Log) WHERE log.name in [{log_str}]"
         else:
             log_check_str = ""
 
+        # match all records that are related to the correct record types and in specific logs
+        # then match all from and to nodes that are extracted from these records
+        # merge the resulting node
+        # set the optional properties
         query_str = '''     CALL apoc.periodic.iterate('
-                            MATCH (record:$record_labels)
-                            $log_check_str
+                            MATCH ($record) $log_check_str
+                            $record_matches
                             RETURN record',
                             '
                             MATCH ($from_node) - [:EXTRACTED_FROM] -> (record)
                             MATCH ($to_node) - [:EXTRACTED_FROM] -> (record)
-                            $merge_str',
+                            $merge_str
+                            $set_properties_str',
                             {batchSize:$batch_size})
                         '''
 
@@ -235,11 +251,11 @@ class SemanticHeaderQueryLibrary:
                          "from_node_name": relation_constructor.from_node.get_name(),
                          "to_node": relation_constructor.to_node.get_pattern(),
                          "to_node_name": relation_constructor.to_node.get_name(),
-                         "record_labels": relation_constructor.prevalent_record.get_label_str(
-                             include_first_colon=False),
+                         "record": relation_constructor.get_prevalent_record_pattern(node_name="record"),
+                         "record_matches": relation_constructor.get_prevalent_match_record_pattern(node_name="record"),
                          "rel_pattern": relation_constructor.result.get_pattern("relation"),
                          "relation_labels": relation_constructor.result.get_relation_types_str(as_list=True),
-                         "relation_label_str": relation_constructor.result.get_relation_types_str()
+                         "set_properties_str": relation_constructor.get_set_result_properties_query("relation")
                      })
 
     @staticmethod
@@ -355,12 +371,12 @@ class SemanticHeaderQueryLibrary:
 
         # language=sql
         query_str = '''
-                        MATCH (n1:Event)-[r:$df_entity {entityType: '$entity_type'}]->(n2:Event)
-                        WITH n1, n2, collect(r) AS rels
+                        MATCH (n1:Event)-[rel:$df_entity {entityType: '$entity_type'}]->(n2:Event)
+                        WITH n1, n2, collect(rel) AS rels
                         WHERE size(rels) > 1
                         // only include this and the next line if you want to remove the existing relationships
-                        UNWIND rels AS r 
-                        DELETE r
+                        UNWIND rels AS rel 
+                        DELETE rel
                         MERGE (n1)
                             -[:$df_entity {entityType: '$entity_type', count:size(rels), type: 'DF'}]->
                               (n2)

@@ -12,9 +12,7 @@ class DBManagementQueryLibrary:
                 MATCH () - [rel] - () RETURN DISTINCT type(rel) AS rel_type
             '''
 
-        return Query(query_str=query_str,
-                     template_string_parameters={},
-                     parameters={})
+        return Query(query_str=query_str)
 
     @staticmethod
     def get_all_node_labels_query() -> Query:
@@ -25,9 +23,7 @@ class DBManagementQueryLibrary:
             MATCH (n) RETURN DISTINCT labels(n) AS label
         '''
 
-        return Query(query_str=query_str,
-                     template_string_parameters={},
-                     parameters={})
+        return Query(query_str=query_str)
 
     @staticmethod
     def get_clear_db_query(db_name) -> Query:
@@ -74,135 +70,90 @@ class DBManagementQueryLibrary:
                     WAIT
                 '''
 
-        return Query(query_str=query_str, database="system", template_string_parameters={"db_name": db_name})
-
-    @staticmethod
-    def get_constraint_unique_event_id_query() -> Query:
-        # language=SQL
-        query_str = '''
-            CREATE CONSTRAINT unique_event_ids IF NOT EXISTS 
-            FOR (e:Event) REQUIRE e.ID IS UNIQUE
-        '''
         return Query(query_str=query_str,
-                     template_string_parameters={},
-                     parameters={})
+                     database="system",
+                     template_string_parameters={"db_name": db_name})
 
     @staticmethod
-    def get_constraint_unique_entity_uid_query(node_type=None) -> Query:
+    def get_constraints_query() -> Query:
+        query_str = '''
+            SHOW INDEX
+        '''
+
+        return Query(query_str=query_str)
+
+    @staticmethod
+    def get_constraint_unique_entity_uid_query(node_type=None, entity_key_name="sysId") -> Query:
         if node_type is None:
             node_type = "Entity"
         # language=SQL
         query_str = '''
             CREATE CONSTRAINT $constraint_name IF NOT EXISTS 
-            FOR (en:$node_type) REQUIRE en.sysId IS UNIQUE
+            FOR (en:$node_type) REQUIRE en.$entity_key_name IS UNIQUE
+            // also set the range index
+            OPTIONS {
+              indexProvider: 'range-1.0'
+            }
         '''
         return Query(query_str=query_str,
                      template_string_parameters={
                          "node_type": node_type,
-                         "constraint_name": f"unique_{node_type.lower()}_ids"
-                     },
-                     parameters={})
+                         "constraint_name": f"unique_{node_type.lower()}_ids",
+                         "entity_key_name": entity_key_name
+                     })
+
+
 
     @staticmethod
-    def get_constraint_unique_log_id_query() -> Query:
+    def get_set_unique_log_name_index_query() -> Query:
         # language=SQL
         query_str = '''
             CREATE CONSTRAINT unique_entity_ids IF NOT EXISTS 
-            FOR (l:Log) REQUIRE l.ID IS UNIQUE
+            FOR (l:Log) REQUIRE l.name IS UNIQUE
+            // also set the range index
+            OPTIONS {
+              indexProvider: 'range-1.0'
+            }
         '''
-        return Query(query_str=query_str,
-                     template_string_parameters={},
-                     parameters={})
+        return Query(query_str=query_str)
 
     @staticmethod
-    def get_set_sysid_index_query() -> Query:
+    def get_set_sysid_index_query(entity_key_name) -> Query:
         # language=SQL
         query_str = '''
-            CREATE RANGE INDEX entity_sys_id_index IF NOT EXISTS FOR (n:Entity) ON (n.sysId)
+            CREATE RANGE INDEX entity_sys_id_index 
+            IF NOT EXISTS FOR (n:Entity) ON (n.$entity_key_name)
         '''
         return Query(query_str=query_str,
-                     template_string_parameters={},
-                     parameters={})
+                     template_string_parameters={
+                         "entity_key_name": entity_key_name})
 
     @staticmethod
     def get_set_activity_index_query() -> Query:
         # language=SQL
         query_str = '''
-                CREATE RANGE INDEX activity_index IF NOT EXISTS FOR (a:Activity) ON (a.activity)
+                CREATE RANGE INDEX activity_index 
+                IF NOT EXISTS FOR (a:Activity) ON (a.activity)
             '''
-        return Query(query_str=query_str,
-                     template_string_parameters={},
-                     parameters={})
+        return Query(query_str=query_str)
 
     @staticmethod
-    def get_set_activity_event_index_query() -> Query:
+    def get_set_record_id_as_range_query() -> Query:
         # language=SQL
         query_str = '''
-                CREATE RANGE INDEX activity_event_index IF NOT EXISTS FOR (e:event) ON (e.activity)
-            '''
-        return Query(query_str=query_str,
-                     template_string_parameters={},
-                     parameters={})
-
-    @staticmethod
-    def get_set_timestamp_event_index_query() -> Query:
-        # language=SQL
-        query_str = '''
-                CREATE RANGE INDEX timestamp_event_index IF NOT EXISTS FOR (e:event) ON (e.timestamp)
-            '''
-        return Query(query_str=query_str,
-                     template_string_parameters={},
-                     parameters={})
-
-    @staticmethod
-    def get_set_recordid_as_key_node_query() -> Query:
-        # language=SQL
-        query_str = '''
-            CREATE CONSTRAINT record_id_as_key_node IF NOT EXISTS FOR (r:Record) REQUIRE (r.recordId) IS NODE KEY
+                CREATE RANGE INDEX record_id_range 
+                IF NOT EXISTS FOR (r:Record) ON (r.recordId)
         '''
-        return Query(query_str=query_str,
-                     template_string_parameters={},
-                     parameters={})
+        return Query(query_str=query_str)
 
     @staticmethod
-    def get_set_recordid_as_index_query() -> Query:
+    def get_set_record_type_range_query() -> Query:
         # language=SQL
         query_str = '''
-            CREATE RANGE INDEX record_id_as_index IF NOT EXISTS FOR (r:Record) ON (r.recordId)
+                CREATE RANGE INDEX record_type_range 
+                IF NOT EXISTS FOR (rt:RecordType) ON (rt.type)
         '''
-        return Query(query_str=query_str,
-                     template_string_parameters={},
-                     parameters={})
-
-    @staticmethod
-    def get_set_record_log_as_index_query() -> Query:
-        # language=SQL
-        query_str = '''
-                CREATE RANGE INDEX record_log_as_index IF NOT EXISTS FOR (r:Record) ON (r.log)
-            '''
-        return Query(query_str=query_str,
-                     template_string_parameters={},
-                     parameters={})
-
-    @staticmethod
-    def get_set_record_created_as_index_query() -> Query:
-        # language=SQL
-        query_str = '''
-                    CREATE RANGE INDEX record_created_as_index IF NOT EXISTS FOR (r:Record) ON (r.created)
-                '''
-        return Query(query_str=query_str,
-                     template_string_parameters={},
-                     parameters={})
-
-    @staticmethod
-    def get_set_load_status_as_index_query() -> Query:
-        # language=SQL
-        query_str = '''
-            CREATE INDEX load_status_as_index IF NOT EXISTS FOR (r:Record) ON (r.loadStatus)
-        '''
-        return Query(query_str=query_str,
-                     template_string_parameters={},
-                     parameters={})
+        return Query(query_str=query_str)
 
     @staticmethod
     def get_node_count_query() -> Query:
@@ -264,8 +215,8 @@ class DBManagementQueryLibrary:
     def get_imported_logs_query() -> Query:
         # language = SQL
         query_str = '''
-            MATCH (n:Record)
-            RETURN COLLECT(DISTINCT n.log) AS logs
+            MATCH (l:Log)
+            RETURN COLLECT(DISTINCT l.name) AS logs
         '''
 
         return Query(query_str=query_str)
