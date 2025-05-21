@@ -10,7 +10,7 @@ class TaskIdentifierLibrary:
         query_str = '''
                 CALL apoc.periodic.iterate(
                 "MATCH (e1:Event)-[:$df_resource]->(e2:Event)
-                 WHERE (e1)-[:$df_case]->(e2)
+                 WHERE (e1)-[:$df_case]->(e2) AND date(e1.timestamp) = date(e2.timestamp)
                  RETURN e1,e2",
                 "WITH e1,e2
                     MERGE (e1)-[:DF_JOINT]->(e2)",
@@ -34,11 +34,16 @@ class TaskIdentifierLibrary:
                     MATCH p=(e1)-[:DF_JOINT*]->(e2)
                     RETURN p, e1, e2
                     UNION
-                    MATCH (e:Event) WHERE (e)-[:CORR]->(:$resource_node_label)
+                    MATCH (e:Event) WHERE (e)-[:$corr_type]->(:$resource_node_label)
                     AND NOT ()-[:DF_JOINT]->(e) AND NOT (e)-[:DF_JOINT]->()
                     MATCH p=(e) RETURN p, e AS e1, e AS e2
                  }
-                 RETURN [event in nodes(p) | event.activity+'+'+event.lifecycle] AS variant,
+                     RETURN [event in nodes(p) | 
+                        CASE 
+                            WHEN event.lifecycle IS NOT NULL THEN event.activity + '+' + event.lifecycle 
+                            ELSE event.activity 
+                        END
+                    ] AS variant,
                     nodes(p) AS events, e1.timestamp AS start_time, e2.timestamp AS end_time",
                 "WITH variant, events, start_time, end_time
                     CREATE (ti:TaskInstance {variant:variant, start_time:start_time, end_time:end_time})
@@ -50,71 +55,9 @@ class TaskIdentifierLibrary:
 
         return Query(query_str=query_str,
                      template_string_parameters={
-                         "resource_node_label": resource.type
+                         "resource_node_label": resource.type,
+                         "corr_type": resource.get_corr_type_strings()
                      })
-
-    @staticmethod
-    def get_split_ti_nodes_create_new_1_query():
-        # language=sql
-        query_str = '''
-                CALL apoc.periodic.iterate(
-                "MATCH (ti:TaskInstance)-[:CONTAINS]->(e:Event) WHERE date(ti.start_time) <> date(ti.end_time)
-                 WITH ti, date(e.timestamp) AS date, e ORDER BY e.timestamp
-                 WITH DISTINCT ti, date, COLLECT(e) AS events
-                 WITH events[0] AS e_start, events[size(events)-1] AS e_end
-                 WITH e_start, e_end
-                 MATCH p=(e_start)-[:DF_JOINT*]->(e_end)
-                 WITH p, e_start AS e1, e_end AS e2
-                 RETURN [event in nodes(p) | event.activity+'+'+event.lifecycle] AS variant, 
-                    nodes(p) AS events, e1.timestamp AS start_time, e2.timestamp AS end_time",
-                "WITH variant, events, start_time, end_time
-                    CREATE (ti:TaskInstance {variant:variant, start_time:start_time, end_time:end_time})
-                    WITH ti, events
-                    UNWIND events AS e
-                    CREATE (e)<-[:CONTAINS]-(ti)",
-                {batchSize:$batch_size})
-                '''
-
-        return Query(query_str=query_str)
-
-    @staticmethod
-    def get_split_ti_nodes_create_new_2_query():
-        # language=sql
-        query_str = '''
-                CALL apoc.periodic.iterate(
-                "MATCH (ti:TaskInstance)-[:CONTAINS]->(e:Event) WHERE date(ti.start_time) <> date(ti.end_time)
-                 WITH ti, date(e.timestamp) AS date, e ORDER BY e.timestamp
-                 WITH DISTINCT ti, date, COLLECT(e) AS events
-                 WITH events[0] AS e_start, events[size(events)-1] AS e_end
-                 WITH e_start, e_end
-                 MATCH (e_start) MATCH (e_end) WHERE e_start = e_end
-                 MATCH p=(e_start)
-                 WITH p, e_start AS e1, e_end AS e2
-                 RETURN [event in nodes(p) | event.activity+'+'+event.lifecycle] AS variant, 
-                    nodes(p) AS events, e1.timestamp AS start_time, e2.timestamp AS end_time",
-                "WITH variant, events, start_time, end_time
-                 CREATE (ti:TaskInstance {variant:variant, start_time:start_time, end_time:end_time})
-                 WITH ti, events
-                 UNWIND events AS e
-                 CREATE (e)<-[:CONTAINS]-(ti)",
-                {batchSize:$batch_size})
-                '''
-
-        return Query(query_str=query_str)
-
-    @staticmethod
-    def get_split_ti_nodes_remove_old_query():
-        # language=sql
-        query_str = '''
-                CALL apoc.periodic.iterate(
-                "MATCH (ti:TaskInstance) WHERE date(ti.start_time) <> date(ti.end_time)
-                 RETURN ti",
-                "WITH ti
-                 DETACH DELETE ti",
-                {batchSize:$batch_size})
-                '''
-
-        return Query(query_str=query_str)
 
     @staticmethod
     def get_remove_df_joint_query():
@@ -131,36 +74,31 @@ class TaskIdentifierLibrary:
         # language=sql
         query_str = '''
                 CALL apoc.periodic.iterate(
-                "MATCH (ti:TaskInstance)-[:CONTAINS]->(:Event)-[:CORR]->(n:$entity_node_label)
+                "MATCH (ti:TaskInstance)-[:CONTAINS]->(:Event)-[:$corr_type]->(n:$entity_node_label)
                  RETURN DISTINCT ti, n",
                 "WITH ti, n
-                    CREATE (ti)-[:CORR]->(n)",
+                    CREATE (ti)-[:$corr_type]->(n)",
                 {batchSize:$batch_size})
                     '''
 
         return Query(query_str=query_str,
                      template_string_parameters={
-                         "entity_node_label": entity.type
+                         "entity_node_label": entity.type,
+                         "corr_type": entity.get_corr_type_strings()
                      })
 
     @staticmethod
     def get_lift_df_to_task_instances_query(entity):
         # language=sql
         query_str = '''
-                CALL apoc.periodic.iterate(
-                'MATCH (n:$entity_node_label)
-                 MATCH (ti:TaskInstance)-[:CORR]->(n)
-                 WITH n, ti AS nodes ORDER BY ti.start_time, ID(ti)
-                 WITH n, COLLECT (nodes) as nodeList
-                 UNWIND range(0, size(nodeList)-2) AS i
-                 RETURN n, nodeList[i] as ti_first, nodeList[i+1] as ti_second',
-                'WITH n, ti_first, ti_second
-                    MERGE (ti_first)-[df:$df_ti_entity {entityType: "$entity_node_label"}]->(ti_second)',
-                {batchSize:$batch_size})
+                MATCH (ti1:TaskInstance)-[:CONTAINS]->(e1:Event)-[:$df_entity]
+                    ->(e2:Event)<-[:CONTAINS]-(ti2:TaskInstance) WHERE ti1 <>ti2
+                MERGE (ti1)-[df:$df_ti_entity {entityType:"$entity_node_label"}]->(ti2)
                     '''
 
         return Query(query_str=query_str,
                      template_string_parameters={
+                         "df_entity": entity.get_df_label(),
                          "entity_node_label": entity.type,
                          "df_ti_entity": entity.get_df_ti_label()
                      })
