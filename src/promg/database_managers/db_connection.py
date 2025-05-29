@@ -44,7 +44,7 @@ class DatabaseConnection:
             transformed_query = query(**kwargs)  # run function that returns Query object
 
             if not isinstance(transformed_query, Query):  # Type checker expects Query return
-                raise TypeError(f"Expected function to return Query, got {type(query)}")
+                raise TypeError(f"Expected function to return Query, got {type(transformed_query)}")
         else:
             raise TypeError(f'Unsupported query type: {type(query)}')
 
