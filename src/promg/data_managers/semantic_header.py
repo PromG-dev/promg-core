@@ -54,6 +54,9 @@ class Node:
                    properties=properties,
                    where_condition=where_condition)
 
+    def get_identifier(self):
+        return self.properties.get_identifier_property_attributes()
+
     def get_name(self, with_brackets=False):
         if with_brackets:
             return f"({self.name})"
@@ -420,13 +423,15 @@ class NodeConstructor:
                  result: "Node",
                  set_labels: str,
                  infer_observed: bool = False,
+                 infer_observed_str: str = "OBSERVED",
                  infer_corr_from_event_record: bool = False,
                  infer_corr_from_entity_record: bool = False,
                  infer_corr_from_reified_parents: bool = False,
                  inferred_relationships: List[InferredRelationship] = None,
                  event_label: str = "Event",
                  corr_type: str = "CORR",
-                 infer_reified_relation: bool = False):
+                 infer_reified_relation: bool = False,
+                 merge: bool = None):
         # node can be constructed using several methods
         # 1) via a prevalent record
         self.prevalent_record = prevalent_record
@@ -440,6 +445,7 @@ class NodeConstructor:
         self.set_labels = set_labels
         self.infer_prevalence_record = prevalent_record is not None
         self.infer_observed = infer_observed
+        self.infer_observed_str = infer_observed_str
         self.infer_corr_from_event_record = infer_corr_from_event_record
         self.infer_corr_from_entity_record = infer_corr_from_entity_record
         self.infer_corr_from_reified_parents = infer_corr_from_reified_parents
@@ -447,6 +453,9 @@ class NodeConstructor:
         self.event_label = event_label
         self.corr_type = corr_type
         self.infer_reified_relation = infer_reified_relation
+        self.merge = merge
+        if self.merge is None: # if merge is undefined, we try to determine it using common labels
+            self.merge = self.determine_merge()
 
     @staticmethod
     def from_dict(obj: Any) -> "NodeConstructor":
@@ -457,6 +466,7 @@ class NodeConstructor:
         _result = Node.from_string(obj.get("result"))
         _set_labels = obj.get("set_labels")
         _infer_observed = replace_undefined_value(obj.get("infer_observed"), False)
+        _infer_observed_str = replace_undefined_value(obj.get("infer_observed_str"), "OBSERVED")
         _infer_corr_from_event_record = replace_undefined_value(obj.get("infer_corr_from_event_record"), False)
         _infer_corr_from_entity_record = replace_undefined_value(obj.get("infer_corr_from_entity_record"), False)
         _infer_corr_from_reified_parents = replace_undefined_value(obj.get("infer_corr_from_reified_parents"), False)
@@ -466,12 +476,15 @@ class NodeConstructor:
 
         _inferred_relations = create_list(InferredRelationship, obj.get("inferred_relationships"))
 
+        _merge = obj.get("merge")
+
         return NodeConstructor(prevalent_record=_prevalent_record,
                                relation=_relation,
                                node=_node,
                                use_inference=_use_inference,
                                result=_result,
                                infer_observed=_infer_observed,
+                               infer_observed_str=_infer_observed_str,
                                infer_corr_from_event_record=_infer_corr_from_event_record,
                                infer_corr_from_entity_record=_infer_corr_from_entity_record,
                                infer_corr_from_reified_parents=_infer_corr_from_reified_parents,
@@ -479,7 +492,8 @@ class NodeConstructor:
                                corr_type=_corr_type,
                                event_label=_event_label,
                                infer_reified_relation=_infer_reified_relation,
-                               set_labels=_set_labels)
+                               set_labels=_set_labels,
+                               merge=_merge)
 
     def __name__(self):
         if self.prevalent_record is not None:
@@ -490,6 +504,13 @@ class NodeConstructor:
             return "constructed_by_relation"
         elif self.use_inference:
             return "constructed_by_inference"
+
+    def determine_merge(self):
+        return ("Event" not in self.get_labels() and "EntityAttribute" not in self.get_labels()) \
+            or ("EventType" in self.get_labels())
+
+    def get_merge(self):
+        return self.merge
 
     def get_label_string(self):
         return self.result.get_label_str()
@@ -558,6 +579,19 @@ class ConstructedNodes:
 
     def __repr__(self):
         return f"(:{self.get_label_string()})"
+
+    def get_identifier_properties(self):
+        identifiers = None
+        for node in self.node_constructors:
+            new_identifers = node.result.get_identifier()
+            if identifiers is None:
+                identifiers = new_identifers
+            else:
+                if set(new_identifers) != set(identifiers):
+                    raise ValueError(
+                        f"Identifiers for {self.type} are different across constructors {identifiers} != "
+                        f"{new_identifers}")
+        return identifiers
 
     @staticmethod
     def from_dict(obj: Any) -> Optional["ConstructedNodes"]:

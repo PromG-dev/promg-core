@@ -53,9 +53,18 @@ class Property:
 
 
 class Properties:
-    def __init__(self, required_properties: List[Property], optional_properties: List[Property]):
+    def __init__(self, identifier_properties: List[Property],
+                 required_properties: List[Property],
+                 optional_properties: List[Property]):
+        self.identifier_properties = identifier_properties
         self.required_properties = required_properties
         self.optional_properties = optional_properties
+
+    def get_required_properties(self):
+        return self.identifier_properties + self.required_properties
+
+    def get_identifier_property_attributes(self):
+        return [prop.attribute for prop in self.identifier_properties]
 
     @staticmethod
     def from_string(properties_str: str):
@@ -70,13 +79,19 @@ class Properties:
         properties_str = properties_str.replace("}", "")
         properties = properties_str.split(",")
 
-        required_properties = [prop for prop in properties if "OPTIONAL" not in prop]
-        optional_properties = [prop.replace("OPTIONAL", "") for prop in properties if "OPTIONAL" in prop]
+        # identify whether properties are identifier or other
+        other_properties = [prop for prop in properties if "IDENTIFIER" not in prop]
+        identifier_properties = [prop.replace("IDENTIFIER", "") for prop in properties if "IDENTIFIER" in prop]
 
+        required_properties = [prop for prop in other_properties if "OPTIONAL" not in prop]
+        optional_properties = [prop.replace("OPTIONAL", "") for prop in other_properties if "OPTIONAL" in prop]
+
+        identifier_properties = [Property.from_string(prop) for prop in identifier_properties]
         required_properties = [Property.from_string(prop) for prop in required_properties]
         optional_properties = [Property.from_string(prop) for prop in optional_properties]
 
         return Properties(
+            identifier_properties=identifier_properties,
             required_properties=required_properties,
             optional_properties=optional_properties
         )
@@ -88,7 +103,7 @@ class Properties:
         :param with_optional:
         :return:
         '''
-        properties = [req_prop.get_pattern() for req_prop in self.required_properties]
+        properties = [req_prop.get_pattern() for req_prop in self.get_required_properties()]
         if with_optional:
             properties += [f"OPTIONAL {prop.get_pattern()}" for prop in self.optional_properties]
 
@@ -105,12 +120,12 @@ class Properties:
             [prop.get_pattern(is_set=True, name=name) for prop in self.optional_properties])
 
     def get_idt_properties_query(self, node_name):
-        if self.required_properties is None:
+        if self.identifier_properties is None:
             return None
         return ",".join(
-            [f"{node_name}.{prop.attribute} as {prop.attribute}" for prop in self.required_properties])
+            [f"{node_name}.{prop.attribute} as {prop.attribute}" for prop in self.identifier_properties])
 
     def has_required_properties(self, with_optional=False):
         if with_optional:
-            return len(self.required_properties) + len(self.optional_properties) > 0
-        return len(self.required_properties) > 0
+            return len(self.get_required_properties()) + len(self.optional_properties) > 0
+        return len(self.get_required_properties()) > 0

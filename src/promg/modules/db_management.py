@@ -36,7 +36,7 @@ class DBManagement:
         """
         Set constraints in Neo4j instance
         """
-        self._set_sysid_constraints(entity_key_name=entity_key_name)
+        self._set_identifier_constraints(entity_key_name=entity_key_name)
         self.connection.exec_query(dbm_ql.get_set_unique_log_name_index_query)
         self.connection.exec_query(dbm_ql.get_set_activity_index_query)
         self.connection.exec_query(dbm_ql.get_set_record_id_as_range_query)
@@ -50,15 +50,25 @@ class DBManagement:
             constraint_names.remove("index_f7700477")  # default token lookup index for relationship types
         return constraint_names
 
-    def _set_sysid_constraints(self, entity_key_name="sysId"):
+    def _set_identifier_constraints(self, entity_key_name="sysId"):
         if self.semantic_header is not None:
             for node in self.semantic_header.nodes:
                 # set the unique constraint per entity type node
                 node_labels = node.get_labels(as_str=False)
-                if "Entity" in node_labels:
-                    self.connection.exec_query(dbm_ql.get_constraint_unique_entity_uid_query,
+                node_type = node.type
+
+                identifier_properties = node.get_identifier_properties()
+                if len(identifier_properties) > 0:
+                    self.connection.exec_query(dbm_ql.get_set_identifier_index_query,
                                                **{
                                                    "node_type": node.type,
+                                                   "identifier_properties": identifier_properties
+                                               })
+
+                elif "Entity" in node_labels:
+                    self.connection.exec_query(dbm_ql.get_constraint_unique_entity_uid_query,
+                                               **{
+                                                   "node_type": node_type,
                                                    "entity_key_name": entity_key_name
                                                })
         else:
