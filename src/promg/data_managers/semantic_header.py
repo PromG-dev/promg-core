@@ -509,6 +509,9 @@ class NodeConstructor:
         return ("Event" not in self.get_labels() and "EntityAttribute" not in self.get_labels()) \
             or ("EventType" in self.get_labels())
 
+    def get_merge(self):
+        return self.merge
+
     def get_label_string(self):
         return self.result.get_label_str()
 
