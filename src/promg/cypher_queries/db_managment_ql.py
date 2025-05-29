@@ -1,3 +1,5 @@
+from typing import List
+
 from ..data_managers.semantic_header import ConstructedNodes
 from ..database_managers.db_connection import Query
 
@@ -102,7 +104,24 @@ class DBManagementQueryLibrary:
                          "entity_key_name": entity_key_name
                      })
 
-
+    @staticmethod
+    def get_set_identifier_index_query(node_type: str, identifier_properties: List[str]):
+        properties = f"( {','.join(['en.' + prop for prop in identifier_properties])})"
+        # language=SQL
+        query_str = '''
+                    CREATE CONSTRAINT $constraint_name IF NOT EXISTS 
+                    FOR (en:$node_type) REQUIRE $properties IS UNIQUE
+                    // also set the range index
+                    OPTIONS {
+                      indexProvider: 'range-1.0'
+                    }
+                '''
+        return Query(query_str=query_str,
+                     template_string_parameters={
+                         "node_type": node_type,
+                         "constraint_name": f"unique_{node_type.lower()}_ids",
+                         "properties": properties
+                     })
 
     @staticmethod
     def get_set_unique_log_name_index_query() -> Query:
@@ -126,7 +145,8 @@ class DBManagementQueryLibrary:
         '''
         return Query(query_str=query_str,
                      template_string_parameters={
-                         "entity_key_name": entity_key_name})
+                         "entity_key_name": entity_key_name
+                     })
 
     @staticmethod
     def get_set_activity_index_query() -> Query:
