@@ -75,6 +75,8 @@ class Importer:
                                        required_labels=required_labels)  # filter nodes according to the
                     # structure
 
+        self._clear_import_directory()
+
     @Performance.track("structure")
     def _reformat_timestamps(self, structure, required_labels):
         datetime_formats = structure.get_datetime_formats()
@@ -140,9 +142,6 @@ class Importer:
                                        "mapping": mapping_str
                                    })
 
-        # delete the file from the import directory
-        self._delete_log_grouped_by_labels(file_name=file_name)
-
     @staticmethod
     def determine_new_file_name(file_name, optional_labels_str):
         if optional_labels_str == "":
@@ -153,10 +152,17 @@ class Importer:
         log = log.drop(columns=["labels"])
         log.to_csv(Path(self.get_import_directory(), file_name), index=False)
 
-    def _delete_log_grouped_by_labels(self, file_name):
-        path = Path(self.get_import_directory(), file_name)
-        if os.path.exists(path):
-            os.remove(path)
+
+    def _clear_import_directory(self):
+        folder = Path(self.get_import_directory())
+        if os.path.exists(folder):
+            for filename in os.listdir(folder):
+                file_path = os.path.join(folder, filename)
+                try:
+                    if os.path.isfile(file_path) or os.path.islink(file_path):
+                        os.unlink(file_path)
+                except Exception as e:
+                    print('Failed to delete %s. Reason: %s' % (file_path, e))
 
     @staticmethod
     def _determine_column_mapping_str(log):
