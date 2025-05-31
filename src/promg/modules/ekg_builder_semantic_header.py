@@ -97,9 +97,21 @@ class EKGUsingSemanticHeaderBuilder:
         for relation_constructor in self.semantic_header.get_relations_constructed_by_relations(relation_types):
             self._create_relations_using_relation(relation_constructor=relation_constructor)
 
+    def create_relations_using_nodes(self, relation_types: Optional[List[str]]) -> None:
+        for relation_constructor in self.semantic_header.get_relations_constructed_by_nodes(relation_types):
+            self._create_relations_using_nodes(relation_constructor=relation_constructor)
+
     @Performance.track("relation_constructor")
     def _create_relations_using_relation(self, relation_constructor):
         self.connection.exec_query(sh_ql.get_create_relation_by_relations_query,
+                                   **{
+                                       "relation_constructor": relation_constructor
+                                   })
+        self._create_corr_from_parents(relation_constructor=relation_constructor)
+
+    @Performance.track("relation_constructor")
+    def _create_relations_using_nodes(self, relation_constructor):
+        self.connection.exec_query(sh_ql.get_create_relation_by_nodes_query,
                                    **{
                                        "relation_constructor": relation_constructor
                                    })
