@@ -74,7 +74,7 @@ class DatabaseConnection:
         if "limit" not in kwargs:  # override limit if NOT already defined
             kwargs["limit"] = self.batch_size
 
-        is_batched = "apoc.periodic.commit" in query_str
+        is_batched = "apoc.periodic.commit" in query_str or "apoc.periodic.iterate" in query_str
 
         return query_str, kwargs, db_name, is_batched
 
@@ -82,8 +82,9 @@ class DatabaseConnection:
         query_str, query_kwargs, db_name, is_batched = self._prepare_query(query)
 
         if is_batched:
+            limit = query_kwargs.pop("limit")
             return self._run_batched_query(query_str=query_str,
-                                           limit=query_kwargs["limit"],
+                                           limit=limit,
                                            db_name=db_name,
                                            **query_kwargs)
         else:
