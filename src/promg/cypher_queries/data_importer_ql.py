@@ -92,7 +92,8 @@ class DataImporterQueryLibrary:
                         CREATE (record:Record)
                         $create_records
                         SET record += row '
-                    , {batchSize:$batch_size, parallel:true, retries: 1, params:{log_name: $log_name}});                    
+                    , {batchSize:$batch_size, parallel:true, retries: 1, params:{log_name: $log_name}});              
+                          
                 '''
 
         return Query(query_str=query_str,
@@ -120,30 +121,57 @@ class DataImporterQueryLibrary:
         @return: Query object to convert the timestamps string into timestamp objects
 
         """
-        offset = datetime_object.timezone_offset
-        offset = f'{attribute}+"{offset}"' if offset != "" else attribute
-
         # language=SQL
         query_str = '''
                 CALL apoc.periodic.iterate(
                 '$match_record_types 
-                WHERE record.$attribute IS NOT NULL AND NOT apoc.meta.cypher.isType(record.$attribute, "$date_type")
-                WITH record, record.$offset as timezone_dt
-                WITH record, datetime(apoc.date.convertFormat(timezone_dt, "$datetime_object_format", 
-                    "$datetime_object_convert_to")) as converted
-                RETURN record, converted',
-                'SET record.$attribute = converted',
-                {batchSize:$batch_size, parallel:true})
+                WHERE record[$attribute] IS NOT NULL
+                RETURN record',
+                'WITH record, toString(record[$attribute]) AS ts, 
+                    coalesce($offset, "+00") AS offset, $dt_from as dt_from, $dt_to as dt_to
+                CALL apoc.case([
+                        // CASE 1: ISO string or datetime with offset already present -> use as is
+                        ts CONTAINS "T" AND ts =~ ".*([+-][0-9]{2}:?[0-9]{2}|Z)$", 
+                        "WITH record, datetime(ts) AS converted RETURN converted",
+                        
+                        // CASE 2: ISO string, but no offset -> append and convert
+                        ts CONTAINS "T", 
+                        "WITH record, datetime(ts + offset) AS CONVERTED RETURN converted",
+                        
+                        // CASE 3: Epoch in seconds
+                        ts =~ "^[0-9]{10}$", 
+                        "WITH record, datetime({ epochSeconds: toInteger(ts) }) AS converted RETURN converted",
+
+                        // CASE 4: Epoch in milliseconds
+                        ts =~ "^[0-9]{13}$", 
+                        "WITH record, datetime({ epochMillis: toInteger(ts) }) AS converted RETURN converted"
+                    ],
+                    // ELSE custom string -> parse using format
+                    "WITH record, datetime(apoc.date.convertFormat(ts + offset, $dt_from, $dt_to)) AS converted 
+                    RETURN converted",
+                    {record: record, ts: ts, offset: offset, dt_from: dt_from, dt_to: dt_to}
+                ) YIELD value
+                WITH record, value.converted AS converted
+                SET record[$attribute] = converted
+                RETURN null',
+                
+                {batchSize:$batch_size, 
+                parallel:true, 
+                params: {dt_from: $dt_from,
+                         dt_to: $dt_to,
+                         offset: $offset,
+                         attribute:$attribute}})
             '''
 
         return Query(query_str=query_str,
                      template_string_parameters={
                          "match_record_types": get_match_record_types_mapping(labels=required_labels),
-                         "datetime_object_format": datetime_object.format,
-                         "datetime_object_convert_to": datetime_object.convert_to,
-                         "date_type": datetime_object.get_date_type(),
+                     },
+                     parameters={
+                         "dt_to": datetime_object.convert_to,
+                         "dt_from": datetime_object.format,
                          "attribute": attribute,
-                         "offset": offset
+                         "offset": datetime_object.timezone_offset
                      })
 
     @staticmethod
@@ -162,6 +190,7 @@ class DataImporterQueryLibrary:
         """
 
         # language=SQL
+        # TODO update method to be in line with the one before
         query_str = '''
                 CALL apoc.periodic.iterate(
                 '$match_record_types 
