@@ -203,6 +203,42 @@ class SemanticHeaderQueryLibrary:
                      })
 
     @staticmethod
+    def get_create_relation_by_nodes_query(relation_constructor: RelationConstructor) -> Query:
+        if relation_constructor.model_as_node:
+            # language=sql
+            merge_str = '''
+                            MERGE ($from_node_name) -[:FROM] -> (relation:$rel_pattern) - [:TO] -> (
+                            $to_node_name)
+                            '''
+        else:
+            merge_str = "MERGE ($from_node_name) -[$rel_pattern] -> ($to_node_name)"
+
+        # language=SQL
+        query_str = '''
+                    CALL apoc.periodic.iterate(
+                    '$node_queries                        
+                    RETURN distinct $from_node_name, $to_node_name',
+                    '$merge_str
+                    $set_properties_str',                        
+                    {batchSize: $batch_size})
+                '''
+
+        query_str = Template(query_str).safe_substitute({
+            "merge_str": merge_str
+        })
+
+        return Query(query_str=query_str,
+                     template_string_parameters={
+                         "node_queries": relation_constructor.get_node_query(),
+                         "from_node_name": relation_constructor.from_node.get_name(),
+                         "to_node_name": relation_constructor.to_node.get_name(),
+                         "rel_pattern": relation_constructor.result.get_pattern(),
+                         "set_properties_str": relation_constructor.get_set_result_properties_query()
+                     })
+
+
+
+    @staticmethod
     def get_create_relation_using_record_query(relation_constructor: RelationConstructor,
                                                logs: Optional[List[str]] = None) -> Query:
         # find events that are related to different entities of which one event also has a reference to the other entity

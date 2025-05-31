@@ -764,6 +764,11 @@ class RelationConstructor:
         relation_query = "\n".join(relation_queries)
         return relation_query
 
+    def get_node_query(self):
+        node_queries = [f"MATCH {node.get_pattern(with_brackets=True)}" for node in self.nodes]
+        node_query = "\n".join(node_queries)
+        return node_query
+
     def get_type_string(self):
         return self.result.get_relation_types_str()
 
@@ -868,7 +873,7 @@ class RecordConstructor:
 
     @staticmethod
     def from_str(obj: str) -> "RecordConstructor":
-        obj = re.sub("[\(\)]", "", obj)
+        obj = re.sub(r"[\(\)]", "", obj)
         _node_name = obj.split(":", maxsplit=1)[0].strip()
         if _node_name == "":
             _node_name = "record"

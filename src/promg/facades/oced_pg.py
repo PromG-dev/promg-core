@@ -120,9 +120,11 @@ class OcedPg:
             for name, files in files.items():
                 self.create_relations_using_record(relation_types=relation_types, logs=files)
                 self.create_relations_using_relations(relation_types=relation_types)
+                self.create_relations_using_nodes(relation_types=relation_types)
         else:
             self.create_relations_using_record(relation_types=relation_types, logs=logs)
             self.create_relations_using_relations(relation_types=relation_types)
+            self.create_relations_using_nodes(relation_types=relation_types)
 
     def create_relations_using_record(self, relation_types: Optional[List[str]] = None,
                                       logs: Optional[List[str]] = None) -> None:
@@ -147,6 +149,17 @@ class OcedPg:
 
         """
         self.ekg_builder.create_relations_using_relations(relation_types)
+
+    def create_relations_using_nodes(self, relation_types: Optional[List[str]] = None) -> None:
+        """
+        Create relations using a subgraph as specified in the semantic header
+
+        Args:
+            relation_types: list of relations that should be created. In case of None, all relations are
+            created as specified in the semantic header
+
+        """
+        self.ekg_builder.create_relations_using_nodes(relation_types)
 
     def create_nodes_by_relations(self, node_types: Optional[List[str]] = None) -> None:
         """
