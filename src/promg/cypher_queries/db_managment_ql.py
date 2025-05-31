@@ -111,10 +111,6 @@ class DBManagementQueryLibrary:
         query_str = '''
                     CREATE CONSTRAINT $constraint_name IF NOT EXISTS 
                     FOR (en:$node_type) REQUIRE $properties IS UNIQUE
-                    // also set the range index
-                    OPTIONS {
-                      indexProvider: 'range-1.0'
-                    }
                 '''
         return Query(query_str=query_str,
                      template_string_parameters={
@@ -129,10 +125,6 @@ class DBManagementQueryLibrary:
         query_str = '''
             CREATE CONSTRAINT unique_entity_ids IF NOT EXISTS 
             FOR (l:Log) REQUIRE l.name IS UNIQUE
-            // also set the range index
-            OPTIONS {
-              indexProvider: 'range-1.0'
-            }
         '''
         return Query(query_str=query_str)
 
