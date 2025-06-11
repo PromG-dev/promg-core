@@ -20,9 +20,6 @@ class TaskIdentification:
 
         self.connection.exec_query(tf_ql.get_create_task_instances_query,
                                    **{"resource": self.resource})
-        self.connection.exec_query(tf_ql.get_split_ti_nodes_create_new_1_query)
-        self.connection.exec_query(tf_ql.get_split_ti_nodes_create_new_2_query)
-        self.connection.exec_query(tf_ql.get_split_ti_nodes_remove_old_query)
         self.connection.exec_query(tf_ql.get_remove_df_joint_query)
         for entity in [self.resource, self.case]:
             self.connection.exec_query(tf_ql.get_correlate_ti_to_entity_query,
