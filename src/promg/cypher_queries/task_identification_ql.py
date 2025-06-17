@@ -7,6 +7,7 @@ class TaskIdentifierLibrary:
     @staticmethod
     def get_combine_df_joint_query(resource, case):
         # language=sql
+        # combines df_resource and df_case edges into a df_joint edge if connected events occur on the same day
         query_str = '''
                 CALL apoc.periodic.iterate(
                 "MATCH (e1:Event)-[:$df_resource]->(e2:Event)
