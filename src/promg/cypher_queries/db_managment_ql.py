@@ -41,12 +41,10 @@ class DBManagementQueryLibrary:
     def get_delete_relationships_query() -> Query:
         # language=SQL
         query_str = '''
-                    CALL apoc.periodic.iterate(
-                        "MATCH () - [r] -> () return id(r) as id", 
-                        "MATCH () - [r] -> () WHERE id(r) = id DELETE r", 
-                        {batchSize:$batch_size})
-                    yield batches, total 
-                    RETURN batches, total
+                    MATCH ()-[r]->() 
+                    CALL { WITH r 
+                    DELETE r 
+                    } IN TRANSACTIONS OF 50000 ROWS;
                 '''
 
         return Query(query_str=query_str)
@@ -55,11 +53,10 @@ class DBManagementQueryLibrary:
     def get_delete_nodes_query() -> Query:
         # language=SQL
         query_str = '''
-                CALL apoc.periodic.iterate(
-                    "MATCH (n) return id(n) as id", 
-                    "MATCH (n) WHERE id(n) = id DETACH DELETE n", {batchSize:$batch_size})
-                yield batches, total 
-                RETURN batches, total
+                MATCH (n)
+                CALL { WITH n
+                DELETE n
+                } IN TRANSACTIONS OF 50000 ROWS;
             '''
 
         return Query(query_str=query_str)
