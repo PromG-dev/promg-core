@@ -40,7 +40,8 @@ class DBManagementQueryLibrary:
     @staticmethod
     def get_delete_relationships_query() -> Query:
         # language=SQL
-        query_str = '''
+        # add :auto as flag to indicate the query should run in an implicit transaction
+        query_str = ''':auto 
                     MATCH ()-[r]->() 
                     CALL { WITH r 
                     DELETE r 
@@ -52,7 +53,9 @@ class DBManagementQueryLibrary:
     @staticmethod
     def get_delete_nodes_query() -> Query:
         # language=SQL
-        query_str = '''
+
+        # add :auto as flag to indicate the query should run in an implicit transaction
+        query_str = ''':auto
                 MATCH (n)
                 CALL { WITH n
                 DELETE n
