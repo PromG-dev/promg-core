@@ -125,9 +125,9 @@ class DataImporterQueryLibrary:
         query_str = '''
                 CALL apoc.periodic.iterate(
                 '$match_record_types 
-                WHERE record[$attribute] IS NOT NULL
+                WHERE record.$attribute IS NOT NULL
                 RETURN record',
-                'WITH record, toString(record[$attribute]) AS ts, 
+                'WITH record, toString(record.$attribute) AS ts, 
                     coalesce($offset, "+00") AS offset, $dt_from as dt_from, $dt_to as dt_to
                 CALL apoc.case([
                         // CASE 1: ISO string or datetime with offset already present -> use as is
@@ -136,7 +136,7 @@ class DataImporterQueryLibrary:
                         
                         // CASE 2: ISO string, but no offset -> append and convert
                         ts CONTAINS "T", 
-                        "WITH record, datetime(ts + offset) AS CONVERTED RETURN converted",
+                        "WITH record, datetime(ts + offset) AS converted RETURN converted",
                         
                         // CASE 3: Epoch in seconds
                         ts =~ "^[0-9]{10}$", 
@@ -152,7 +152,7 @@ class DataImporterQueryLibrary:
                     {record: record, ts: ts, offset: offset, dt_from: dt_from, dt_to: dt_to}
                 ) YIELD value
                 WITH record, value.converted AS converted
-                SET record[$attribute] = converted
+                SET record.$attribute = converted
                 RETURN null',
                 
                 {batchSize:$batch_size, 
@@ -166,11 +166,11 @@ class DataImporterQueryLibrary:
         return Query(query_str=query_str,
                      template_string_parameters={
                          "match_record_types": get_match_record_types_mapping(labels=required_labels),
+                         "attribute": attribute
                      },
                      parameters={
                          "dt_to": datetime_object.convert_to,
                          "dt_from": datetime_object.format,
-                         "attribute": attribute,
                          "offset": datetime_object.timezone_offset
                      })
 
