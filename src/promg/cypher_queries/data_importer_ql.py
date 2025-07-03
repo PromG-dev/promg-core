@@ -159,8 +159,7 @@ class DataImporterQueryLibrary:
                 parallel:true, 
                 params: {dt_from: $dt_from,
                          dt_to: $dt_to,
-                         offset: $offset,
-                         attribute:$attribute}})
+                         offset: $offset}})
             '''
 
         return Query(query_str=query_str,
