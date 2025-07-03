@@ -106,7 +106,10 @@ class DatabaseConnection:
             query_kwargs["batch_size"] = max(10000, query_kwargs["batch_size"])
             attempts += 1
         if failed_batches > 0:
-            raise BatchQueryExecutionError(f"Maximum attempts reached: {result[0]['batchErrors']}")
+            if "iterate" in query_str:
+                raise BatchQueryExecutionError(f"Maximum attempts reached: {result[0]['errorMessages']}")
+            else:
+                raise BatchQueryExecutionError(f"Maximum attempts reached: {result[0]['batchErrors']}")
 
         return result
 
