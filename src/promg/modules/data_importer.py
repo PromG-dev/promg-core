@@ -75,7 +75,7 @@ class Importer:
                                        required_labels=required_labels)  # filter nodes according to the
                     # structure
 
-        self._clear_import_directory()
+        # self._clear_import_directory()
 
     @Performance.track("structure")
     def _reformat_timestamps(self, structure, required_labels):
