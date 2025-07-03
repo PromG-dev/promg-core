@@ -48,15 +48,6 @@ class EKGUsingSemanticHeaderBuilder:
                                        "logs": logs
                                    })
 
-        if merge_first:
-            print(
-                f"Node ({node_constructor.get_pattern(with_properties=False)})"
-                f"using ({node_constructor.get_record_types()}) merged")
-        else:
-            print(f"Node ({node_constructor.get_pattern(with_properties=False)}) "
-                  f"using ({node_constructor.get_record_types()}) "
-                  f"created")
-
     def create_nodes_by_relations(self, node_types: Optional[List[str]]) -> None:
         for node_constructors in self.semantic_header.get_nodes_constructed_by_relations(node_types).values():
             for node_constructor in node_constructors:
