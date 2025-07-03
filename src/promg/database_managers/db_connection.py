@@ -50,7 +50,7 @@ class DatabaseConnection:
 
         return transformed_query
 
-    def _prepare_query(self, query: Query) -> Tuple[str, Dict[str, Any], str, bool]:
+    def _prepare_query(self, query: Query) -> Tuple[str, Dict[str, Any], str, bool, bool]:
         """
         Normalizes a Query object by filling in default parameters and checking if batching is required.
 
@@ -61,6 +61,7 @@ class DatabaseConnection:
             - kwargs (Dict[str, Any]): The processed query parameters.
             - db_name (str): The name of the database to run the query against.
             - is_batched (bool): True if the query uses batching (e.g., via apoc.periodic.commit), False otherwise.
+            - is_implicit (bool): True if the query is an implicit query as indicated by the flag :auto, False otherwise.
         """
 
         # Unpack Query Object
@@ -76,10 +77,14 @@ class DatabaseConnection:
 
         is_batched = "apoc.periodic.commit" in query_str or "apoc.periodic.iterate" in query_str
 
-        return query_str, kwargs, db_name, is_batched
+        is_implicit = query_str.strip().lower().startswith(":auto")
+        if is_implicit:
+            query_str = query_str.replace(":auto", "")
+
+        return query_str, kwargs, db_name, is_batched, is_implicit
 
     def _dispatch_query(self, query: Query) -> QueryResult:
-        query_str, query_kwargs, db_name, is_batched = self._prepare_query(query)
+        query_str, query_kwargs, db_name, is_batched, is_implicit = self._prepare_query(query)
 
         if is_batched:
             limit = query_kwargs.pop("limit")
@@ -90,6 +95,7 @@ class DatabaseConnection:
         else:
             return self._exec_query(query_str=query_str,
                                     db_name=db_name,
+                                    is_implicit=is_implicit,
                                     **query_kwargs)
 
     def _run_batched_query(self, query_str: str, limit: int, db_name: str, **query_kwargs) -> QueryResult:
@@ -113,7 +119,7 @@ class DatabaseConnection:
 
         return result
 
-    def _exec_query(self, query_str: str, db_name: str = None, **query_kwargs) -> QueryResult:
+    def _exec_query(self, query_str: str, db_name: str = None, is_implicit=False, **query_kwargs) -> QueryResult:
         """
         Write a transaction of the query to  the server and return the result
         @param query_str: string, query to be executed
@@ -140,14 +146,21 @@ class DatabaseConnection:
             return _result_records, _summary
 
         if self.verbose:
-            print(query_str)
+            print(f"Executing query in {'IMPLICIT' if is_implicit else 'EXPLICIT'} mode.")
+            print(f"Database: {db_name}")
+            print(f"Query:\n{query_str}")
+            if query_kwargs:
+                print(f"Parameters: {query_kwargs}")
 
         if db_name is None:
             db_name = self.db_name
 
         with self.driver.get_session(database=db_name) as session:
             try:  # try to commit the transaction, if the transaction fails, it is rolled back automatically
-                result, summary = session.execute_write(run_query, query_str, **query_kwargs)
+                if is_implicit:
+                    result = session.run(query_str, **query_kwargs).data()
+                else:
+                    result, summary = session.execute_write(run_query, query_str, **query_kwargs)
                 return result
             except Exception as inst:  # let user know the transaction failed and close the connection
                 print("Latest transaction was rolled back")
