@@ -122,60 +122,30 @@ class DataImporterQueryLibrary:
 
         """
         # language=SQL
+        offset = datetime_object.timezone_offset
+        offset = f'{attribute}+"{offset}"' if offset != "" else attribute
+
+        # language=SQL
         query_str = '''
                 CALL apoc.periodic.iterate(
                 '$match_record_types 
-                WHERE record.$attribute IS NOT NULL
-                RETURN record',
-                'WITH record, toString(record.$attribute) AS ts, $dt_from as dt_from, $dt_to as dt_to, $offset as offset
-                WITH record, dt_from, dt_to, ts, case offset
-                        WHEN not null then ts + offset
-                        ELSE ts 
-                        END as new_ts
-                CALL apoc.case([
-                        // CASE 1: ISO string or datetime with offset already present -> use as is
-                        ts CONTAINS "T" AND ts =~ ".*([+-][0-9]{2}:?[0-9]{2}|Z)$", 
-                        "WITH record, datetime(ts) AS converted RETURN converted",
-                        
-                        // CASE 2: ISO string, but no offset -> append and convert
-                        ts CONTAINS "T", 
-                        "WITH record, datetime(new_ts) AS converted RETURN converted",
-                        
-                        // CASE 3: Epoch in seconds
-                        ts =~ "^[0-9]{10}$", 
-                        "WITH record, datetime({ epochSeconds: toInteger(ts) }) AS converted RETURN converted",
-
-                        // CASE 4: Epoch in milliseconds
-                        ts =~ "^[0-9]{13}$", 
-                        "WITH record, datetime({ epochMillis: toInteger(ts) }) AS converted RETURN converted"
-                    ],
-                    // ELSE custom string -> parse using format
-                    "
-                    WITH record, datetime(apoc.date.convertFormat(new_ts, $dt_from, $dt_to)) AS converted 
-                    RETURN converted",
-                    {record: record, ts: ts, new_ts: new_ts, dt_from: dt_from, dt_to: dt_to}
-                ) YIELD value
-                WITH record, value.converted AS converted, new_ts
-                SET record.not_converted_timestamp = new_ts
-                SET record.$attribute = converted
-                RETURN null',
-                
-                {batchSize:$batch_size, 
-                parallel:true, 
-                params: {dt_from: $dt_from,
-                         dt_to: $dt_to,
-                         offset: $offset}})
+                WHERE record.$attribute IS NOT NULL AND NOT apoc.meta.cypher.isType(record.$attribute, "$date_type")
+                WITH record, record.$offset as timezone_dt
+                WITH record, datetime(apoc.date.convertFormat(timezone_dt, "$datetime_object_format", 
+                    "$datetime_object_convert_to")) as converted
+                RETURN record, converted',
+                'SET record.$attribute = converted',
+                {batchSize:$batch_size, parallel:true})
             '''
 
         return Query(query_str=query_str,
                      template_string_parameters={
                          "match_record_types": get_match_record_types_mapping(labels=required_labels),
-                         "attribute": attribute
-                     },
-                     parameters={
-                         "dt_to": datetime_object.convert_to,
-                         "dt_from": datetime_object.format,
-                         "offset": datetime_object.timezone_offset
+                         "datetime_object_format": datetime_object.format,
+                         "datetime_object_convert_to": datetime_object.convert_to,
+                         "date_type": datetime_object.get_date_type(),
+                         "attribute": attribute,
+                         "offset": offset
                      })
 
     @staticmethod
