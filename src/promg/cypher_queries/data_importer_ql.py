@@ -157,7 +157,7 @@ class DataImporterQueryLibrary:
                 ) YIELD value
                 WITH record, value.converted AS converted, new_ts
                 SET record.not_converted_timestamp = new_ts
-                SET record.old_timestamp = converted
+                SET record.$attribute = converted
                 RETURN null',
                 
                 {batchSize:$batch_size, 
