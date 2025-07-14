@@ -128,7 +128,7 @@ class DataImporterQueryLibrary:
                 WHERE record.$attribute IS NOT NULL
                 RETURN record',
                 'WITH record, toString(record.$attribute) AS ts, $dt_from as dt_from, $dt_to as dt_to, $offset as offset
-                WITH record, dt_from, dt_to, case offset
+                WITH record, dt_from, dt_to, ts, case offset
                         WHEN not null then ts + offset
                         ELSE ts 
                         END as new_ts
