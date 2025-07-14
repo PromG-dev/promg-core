@@ -127,8 +127,11 @@ class DataImporterQueryLibrary:
                 '$match_record_types 
                 WHERE record.$attribute IS NOT NULL
                 RETURN record',
-                'WITH record, toString(record.$attribute) AS ts, 
-                    coalesce($offset, "+00") AS offset, $dt_from as dt_from, $dt_to as dt_to
+                'WITH record, toString(record.$attribute) AS ts, $dt_from as dt_from, $dt_to as dt_to, $offset as offset
+                WITH record, dt_from, dt_to, case offset
+                        WHEN not null then ts + offset
+                        ELSE ts 
+                        END as new_ts
                 CALL apoc.case([
                         // CASE 1: ISO string or datetime with offset already present -> use as is
                         ts CONTAINS "T" AND ts =~ ".*([+-][0-9]{2}:?[0-9]{2}|Z)$", 
@@ -136,7 +139,7 @@ class DataImporterQueryLibrary:
                         
                         // CASE 2: ISO string, but no offset -> append and convert
                         ts CONTAINS "T", 
-                        "WITH record, datetime(ts + offset) AS converted RETURN converted",
+                        "WITH record, datetime(new_ts) AS converted RETURN converted",
                         
                         // CASE 3: Epoch in seconds
                         ts =~ "^[0-9]{10}$", 
@@ -147,11 +150,13 @@ class DataImporterQueryLibrary:
                         "WITH record, datetime({ epochMillis: toInteger(ts) }) AS converted RETURN converted"
                     ],
                     // ELSE custom string -> parse using format
-                    "WITH record, datetime(apoc.date.convertFormat(ts + offset, $dt_from, $dt_to)) AS converted 
+                    "
+                    WITH record, datetime(apoc.date.convertFormat(new_ts, $dt_from, $dt_to)) AS converted 
                     RETURN converted",
-                    {record: record, ts: ts, offset: offset, dt_from: dt_from, dt_to: dt_to}
+                    {record: record, ts: ts, new_ts: new_ts, dt_from: dt_from, dt_to: dt_to}
                 ) YIELD value
-                WITH record, value.converted AS converted
+                WITH record, value.converted AS converted, new_ts
+                SET record.not_converted_timestamp = new_ts
                 SET record.$attribute = converted
                 RETURN null',
                 
