@@ -169,7 +169,7 @@ class Importer:
         mapping = {}
         dtypes = log.dtypes.to_dict()
         for col_name, type in dtypes.items():
-            if type == object:
+            if pd.api.types.is_string_dtype(type):
                 continue  # default is STRING
             elif pd.api.types.is_integer_dtype(type):
                 mapping[col_name] = 'INTEGER'
