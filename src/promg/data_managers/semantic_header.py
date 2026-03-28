@@ -640,6 +640,10 @@ class ConstructedNodes:
     def get_df_ti_label(self):
         return self._get_df_label_affix(include_label=self.include_label_in_df, affix="TI")
 
+    def get_df_ta_label(self):
+        return self._get_df_label_affix(include_label=self.include_label_in_df, affix="TA")
+
+
     def _get_df_label_affix(self, include_label, affix=""):
         df = "DF" if affix == "" else f"DF_{affix}"
         df = f'{df}_{self.type.upper()}' if include_label else df
@@ -841,6 +845,9 @@ class ConstructedRelation:
 
     def get_df_ti_label(self):
         return self._get_df_label_affix(include_label=self.include_label_in_df, affix="TI")
+
+    def get_df_ta_label(self):
+        return self._get_df_label_affix(include_label=self.include_label_in_df, affix="TA")
 
     def _get_df_label_affix(self, include_label, affix=""):
         df = "DF" if affix == "" else f"DF_{affix}"
