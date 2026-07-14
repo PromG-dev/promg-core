@@ -86,13 +86,14 @@ class DataImporterQueryLibrary:
 
         # language=SQL
         query_str = '''
-                    CALL apoc.periodic.iterate('
-                        CALL apoc.load.csv("$file_name" $mapping_str) yield map as row return row',
-                        '$match_record_types
+                    :auto
+                    CALL apoc.load.csv("$file_name" $mapping_str) yield map as row
+                    CALL (row) {
+                        $match_record_types
                         CREATE (record:Record)
                         $create_records
-                        SET record += row '
-                    , {batchSize:$batch_size, parallel:true, retries: 1, params:{log_name: $log_name}});              
+                        SET record += row
+                    } IN TRANSACTIONS            
                           
                 '''
 
