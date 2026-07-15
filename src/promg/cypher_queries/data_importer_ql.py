@@ -29,6 +29,14 @@ def get_match_record_types_mapping(labels):
     return record_types
 
 
+def get_set_records(dtype_mapping: Dict[str, str]):
+    mapping = []
+    for column_name, dtype in dtype_mapping.items():
+        mapping.append(f'record.{column_name} = to{dtype}(row.{column_name})')
+    mapping_str = ', '.join(mapping)
+    return f'SET {mapping_str}'
+
+
 class DataImporterQueryLibrary:
     @staticmethod
     def get_import_directory_query() -> Query:
@@ -38,12 +46,12 @@ class DataImporterQueryLibrary:
         :return: Query object to get import directory of the current running database
         """
 
-        # language=SQL
+        # language=cypher
         query_str = """
-            Call dbms.listConfig() YIELD name, value
-            WHERE name='server.directories.import'
-            RETURN value as directory
-        """
+                    Call dbms.listConfig() YIELD name, value
+                    WHERE name = 'server.directories.import'
+                    RETURN value as directory \
+                    """
 
         return Query(query_str=query_str)
 
@@ -56,7 +64,9 @@ class DataImporterQueryLibrary:
         return Query(query_str=query_str)
 
     @staticmethod
-    def get_create_nodes_by_loading_csv_query(labels: List[str], file_name: str, mapping: str,
+    def get_create_nodes_by_loading_csv_query(labels: List[str],
+                                              file_name: str,
+                                              dtype_mapping: Dict[str, str],
                                               log_name: str = None) -> Query:
         """
         Create event nodes for each row in the batch with labels
@@ -84,25 +94,24 @@ class DataImporterQueryLibrary:
         create_records = "\n".join([f'''CREATE (record) - [:IS_OF_TYPE] -> ({label}_record)''' for label in labels])
         create_records += create_log_str
 
-        # language=SQL
+        # language=cypher
         query_str = '''
                     :auto
-                    CALL apoc.load.csv("$file_name" $mapping_str) yield map as row
+                    LOAD CSV WITH HEADERS FROM '$file_name' AS row
                     CALL (row) {
                         $match_record_types
                         CREATE (record:Record)
                         $create_records
-                        SET record += row
-                    } IN TRANSACTIONS            
-                          
-                '''
+                        $set_records
+                    } IN CONCURRENT TRANSACTIONS ON ERROR RETRY \
+                    '''
 
         return Query(query_str=query_str,
                      template_string_parameters={
-                         "file_name": file_name,
-                         "mapping_str": create_mapping_str(mapping),
+                         "file_name": f'file:///{file_name}',
                          "match_record_types": match_record_types,
-                         "create_records": create_records
+                         "create_records": create_records,
+                         "set_records": get_set_records(dtype_mapping),
                      },
                      parameters={
                          "log_name": log_name
@@ -122,22 +131,22 @@ class DataImporterQueryLibrary:
         @return: Query object to convert the timestamps string into timestamp objects
 
         """
-        # language=SQL
+        # language=cypher
         offset = datetime_object.timezone_offset
         offset = f'{attribute}+"{offset}"' if offset != "" else attribute
 
-        # language=SQL
+        # language=cypher
         query_str = '''
-                CALL apoc.periodic.iterate(
-                '$match_record_types 
-                WHERE record.$attribute IS NOT NULL AND NOT apoc.meta.cypher.isType(record.$attribute, "$date_type")
-                WITH record, record.$offset as timezone_dt
-                WITH record, datetime(apoc.date.convertFormat(timezone_dt, "$datetime_object_format", 
+                    :auto
+                    $match_record_types
+                    WHERE record.$attribute IS NOT NULL AND NOT apoc.meta.cypher.isType(record.$attribute, "$date_type")
+                    WITH record, record.$offset as timezone_dt
+                    WITH record, datetime(apoc.date.convertFormat(timezone_dt, "$datetime_object_format",
                     "$datetime_object_convert_to")) as converted
-                RETURN record, converted',
-                'SET record.$attribute = converted',
-                {batchSize:$batch_size, parallel:true})
-            '''
+                    CALL (record, converted) {
+                        SET record.$attribute = converted
+                    } IN CONCURRENT TRANSACTIONS ON ERROR RETRY \
+                    '''
 
         return Query(query_str=query_str,
                      template_string_parameters={
@@ -164,21 +173,18 @@ class DataImporterQueryLibrary:
 
         """
 
-        # language=SQL
         # TODO update method to be in line with the one before
+        # language=cypher
         query_str = '''
-                CALL apoc.periodic.iterate(
-                '$match_record_types 
-                WHERE record.$attribute IS NOT NULL AND NOT apoc.meta.cypher.isType(record.$attribute, $date_type)
-                WITH record, record.$attribute as timezone_dt
-                WITH record, apoc.date.format(timezone_dt, $unit, $dt_format) as converted
-                RETURN record, converted',
-                'SET record.$attribute = converted',
-                {batchSize:$batch_size, parallel:false, 
-                params: {unit: $unit,
-                        dt_format: $datetime_object_format,
-                        date_type: $date_type}})
-            '''
+                    :auto
+                    $match_record_types
+                    WHERE record.$attribute IS NOT NULL AND NOT apoc.meta.cypher.isType(record.$attribute, $date_type)
+                    WITH record, record.$attribute as timezone_dt
+                    WITH record, apoc.date.format(timezone_dt, $unit, $dt_format) as converted
+                    CALL (record, converted) {
+                        SET record.$attribute = converted
+                    } IN CONCURRENT TRANSACTIONS ON ERROR RETRY \
+                    '''
 
         return Query(query_str=query_str,
                      template_string_parameters={
@@ -212,35 +218,35 @@ def get_filter_records_by_property_query(prop: str, values: Optional[List[str]] 
     if values is None:  # match all events that have a specific property
         negation = "NOT" if exclude else ""
         # query to delete all records and its relationship with property
-        # language=SQL
+        # language=cypher
         query_str = '''
-                    CALL apoc.periodic.iterate(
+                    :auto
                     // match all records that match property
-                    '$match_record_types 
+                    $match_record_types
                     WHERE record.$prop IS $negation NULL
-                    RETURN record',
-                    // delete record and its relationships
-                    'DETACH DELETE record',
-                    // pass the query parameters
-                    {batchSize:$batch_size})
+                    WITH record
+                    CALL (record) {
+                        DETACH
+                        DELETE record
+                    } IN TRANSACTIONS ON ERROR RETRY \
                     '''
         template_string_parameters = {"prop": prop, "negation": negation}
     else:  # match all events with specific property and value
         negation = "" if exclude else "NOT"
         # match all r and delete them and its relationship
-        # language=SQL
+        # language=cypher
         query_str = '''
-            CALL apoc.periodic.iterate(
-                // match all records that match property
-                    '$match_record_types 
+                    :auto
+                    // match all records that match property
+                    $match_record_types
                     WHERE $negation record.$prop IN $values
-                    RETURN record',
-                    // delete record and its relationships
-                    'DETACH DELETE record',
-                    // pass the query parameters
-                    {batchSize:$batch_size, params:{values:$values}})
-                    
-                '''
+                    WITH record
+                    CALL (record) {
+                        // delete record and its relationships
+                        DETACH
+                        DELETE record
+                    } IN TRANSACTIONS ON ERROR RETRY \
+                    '''
         template_string_parameters = {
             "prop": prop,
             "negation": negation,
