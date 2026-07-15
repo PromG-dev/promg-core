@@ -1,6 +1,6 @@
 import os
 from string import Template
-from typing import Optional
+from typing import Optional, Dict
 
 from ..data_managers.semantic_header import SemanticHeader
 from ..database_managers.db_connection import DatabaseConnection
@@ -112,7 +112,7 @@ class Importer:
     @Performance.track("file_name")
     def _import_nodes_from_data(self, df_log, file_name, required_labels):
         grouped_by_optional_labels = df_log.groupby(by="labels")
-        mapping_str = self._determine_column_mapping_str(df_log)
+        dtype_mapping = self._determine_dtype_mapping(df_log)
 
         for optional_labels_str, log in grouped_by_optional_labels:
             optional_labels = optional_labels_str.split(":")
@@ -120,9 +120,9 @@ class Importer:
             labels = list(set(labels))
             labels.remove("")
             new_file_name = self.determine_new_file_name(file_name, optional_labels_str)
-            self.import_log_into_db(file_name=new_file_name, labels=labels, mapping_str=mapping_str, log=log)
+            self.import_log_into_db(file_name=new_file_name, labels=labels, dtype_mapping=dtype_mapping, log=log)
 
-    def import_log_into_db(self, file_name, labels, mapping_str, log):
+    def import_log_into_db(self, file_name, labels, dtype_mapping, log):
         # Temporary save the file in the import directory
         log, log_name = pop_log_name(log)
 
@@ -139,7 +139,7 @@ class Importer:
                                        "file_name": file_name,
                                        "log_name": log_name,
                                        "labels": labels,
-                                       "mapping": mapping_str
+                                       "dtype_mapping": dtype_mapping
                                    })
 
     @staticmethod
@@ -151,7 +151,6 @@ class Importer:
     def _save_log_grouped_by_labels(self, log, file_name):
         log = log.drop(columns=["labels"])
         log.to_csv(Path(self.get_import_directory(), file_name), index=False)
-
 
     def _clear_import_directory(self):
         folder = Path(self.get_import_directory())
@@ -165,26 +164,22 @@ class Importer:
                     print('Failed to delete %s. Reason: %s' % (file_path, e))
 
     @staticmethod
-    def _determine_column_mapping_str(log):
+    def _determine_dtype_mapping(log) -> Dict[str, str]:
         mapping = {}
         dtypes = log.dtypes.to_dict()
-        for col_name, type in dtypes.items():
-            if pd.api.types.is_string_dtype(type):
-                continue  # default is STRING
-            elif pd.api.types.is_integer_dtype(type):
-                mapping[col_name] = 'INTEGER'
-            elif pd.api.types.is_float_dtype(type):
-                mapping[col_name] = 'FLOAT'
-            elif pd.api.types.is_bool_dtype(type):
-                mapping[col_name] = 'BOOLEAN'
+        for col_name, dtype in dtypes.items():
+            if pd.api.types.is_string_dtype(dtype):
+                mapping[col_name] = 'String'
+            elif pd.api.types.is_integer_dtype(dtype):
+                mapping[col_name] = 'Integer'
+            elif pd.api.types.is_float_dtype(dtype):
+                mapping[col_name] = 'Float'
+            elif pd.api.types.is_bool_dtype(dtype):
+                mapping[col_name] = 'Boolean'
             else:
                 raise Exception(f"Type for column {col_name} is not defined")
 
-        template_str = '$col_name:{type:"$type"}'
-        mapping_list = [Template(template_str).substitute({"col_name": col_name, "type": type}) for col_name, type in
-                        mapping.items()]
-        mapping_str = '{' + ','.join(mapping_list) + '}'
-        return mapping_str
+        return mapping
 
     def retrieve_import_directory(self):
         result = self.connection.exec_query(di_ql.get_import_directory_query)
