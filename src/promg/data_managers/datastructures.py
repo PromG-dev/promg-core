@@ -11,6 +11,9 @@ from dataclasses import dataclass
 import numpy as np
 import pandas as pd
 from pandas import DataFrame
+import logging
+
+logger = logging.getLogger(__name__)
 
 from .semantic_header import RecordConstructor
 from ..utilities.auxiliary_functions import replace_undefined_value, create_list
@@ -21,7 +24,7 @@ from ..utilities.configuration import Configuration
 class DatetimeObject:
     format: str
     timezone_offset: str
-    convert_to: str
+    convert_to_datetime: str
     is_epoch: bool
     unit: str
 
@@ -37,14 +40,15 @@ class DatetimeObject:
             return None
         _format = obj.get("format")
         _timezone_offset = replace_undefined_value(obj.get("timezone_offset"), "")
-        _convert_to = "ISO_DATE"
-        if re.search('[hkHK]', _format):
-            _convert_to = "ISO_DATE_TIME"
 
-        # _convert_to = str(obj.get("convert_to"))
         _is_epoch = replace_undefined_value(obj.get("is_epoch"), False)
         _unit = obj.get("unit")
-        return DatetimeObject(_format, _timezone_offset, _convert_to, _is_epoch, _unit)
+
+        _convert_to_datetime = False
+        if re.search('[hkHK]', _format) or is_epoch: #has hours or is in epoch format
+            _convert_to_datetime = True
+
+        return DatetimeObject(_format, _timezone_offset, _convert_to_datetime, _is_epoch, _unit)
 
 
 @dataclass
@@ -363,6 +367,48 @@ class DataStructure:
 
         return df_log
 
+    @staticmethod
+    def _convert_datetime_column(series, datetime_object):
+        if datetime_object.is_epoch:
+            parsed = pd.to_datetime(
+                series,
+                unit=datetime_object.unit,
+                errors="coerce"
+            )
+        else:
+            parsed = pd.to_datetime(
+                series,
+                format=datetime_object.format,
+                errors="coerce"
+            )
+
+        if not datetime_object.convert_to_datetime: #convert to date
+            return parsed.dt.strftime("%Y-%m-%d")
+        else: #convert to datetime
+            return parsed.apply(
+                lambda x: x.isoformat() if pd.notna(x) else None
+            )
+
+    def convert_datetimes(self, df_log):
+        for attribute_name, attribute in self.attributes.items():
+            if not attribute.is_datetime:
+                continue
+
+            df_log[attribute_name] = self._convert_datetime_column(
+                series=df_log[attribute_name],
+                datetime_object=attribute.datetime_object
+            )
+
+            invalid_count = df_log[attribute_name].isna().sum()
+            if invalid_count:
+                logger.warning(
+                    "%s rows contain invalid timestamps in column %s",
+                    df_log[attribute_name].isna().sum(),
+                    attribute_name
+                )
+
+        return df_log
+
     def split_df_log_into_combined_events(self, df_log: DataFrame):
         df_log["idx"] = df_log.reset_index().index
         if "timestamp" in self.attributes:
@@ -545,6 +591,8 @@ class DataStructure:
                                        self.attributes.keys()}
         df_log = df_log[required_attributes]
         df_log = df_log.rename(columns=required_attributes_mapping)
+
+        df_log = self.convert_datetimes(df_log)
 
         if self.split_combined_events:
             df_log = self.split_df_log_into_combined_events(df_log)
