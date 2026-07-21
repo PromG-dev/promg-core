@@ -3,6 +3,7 @@ import os
 import re
 import warnings
 import random
+from numpy.lib import _format_impl
 from pathlib import Path
 
 from typing import List, Dict, Any, Optional
@@ -22,33 +23,82 @@ from ..utilities.configuration import Configuration
 
 @dataclass
 class DatetimeObject:
-    format: str
-    timezone_offset: str
-    convert_to_datetime: str
+    format: Optional[str]
+    offset: Optional[str]
+    timezone: Optional[str]
+    convert_to_datetime: bool
     is_epoch: bool
     unit: str
 
-    def get_date_type(self):
-        if self.convert_to == "ISO_DATE":
-            return "DATE"
+    def get_cypher_type(self) -> str:
+        if self.convert_to_datetime:
+            return "datetime"
         else:
-            return "DATE_TIME"
+            return "date"
 
     @staticmethod
-    def from_dict(obj: Any) -> 'DatetimeObject':
+    def from_dict(obj: Any) -> Optional['DatetimeObject']:
         if obj is None:
             return None
+        # region read values
         _format = obj.get("format")
-        _timezone_offset = replace_undefined_value(obj.get("timezone_offset"), "")
 
-        _is_epoch = replace_undefined_value(obj.get("is_epoch"), False)
+        _is_epoch = obj.get("is_epoch", False)  # default is False
         _unit = obj.get("unit")
 
-        _convert_to_datetime = False
-        if re.search('[hkHK]', _format) or is_epoch: #has hours or is in epoch format
-            _convert_to_datetime = True
+        _offset = obj.get("offset")
+        _timezone = obj.get("timezone")
 
-        return DatetimeObject(_format, _timezone_offset, _convert_to_datetime, _is_epoch, _unit)
+        # endregion
+
+        # region validation check
+        _has_format = bool(_format)
+        _has_epoch = bool(_is_epoch)
+        _has_explicit_offset = _has_format and "%z" in _format
+        _has_manual_offset = bool(_offset)
+        _has_timezone = bool(_timezone)
+        _has_unit = bool(_unit)
+
+        if _has_format and _has_epoch:
+            raise ValueError(
+                "Specify either format or is_epoch, not both."
+            )
+
+        if not _has_format and not _has_epoch:  # format = None and _is_epoch = False
+            raise ValueError("Neither format nor is_epoch is defined, define exactly one.")
+
+        if _has_manual_offset and _has_timezone:
+            raise ValueError("Specify either timezone or offset, not both.")
+
+        if _has_explicit_offset and _has_manual_offset:
+            raise ValueError("Specify either %z in format or offset, not both.")
+
+        if _has_explicit_offset and _has_timezone:
+            raise ValueError("Specify either %z in format or timezone, not both.")
+
+        if _has_epoch and not _has_unit:
+            raise ValueError("Specify an epoch unit since is_epoch = True.")
+        # endregion
+
+        # region determine convert_to_date
+        _convert_to_datetime = (
+                _is_epoch  # epoch should always be converted to datetime
+                or (
+                        _format is not None
+                        and any(
+                    token in _format
+                    for token in ("%H", "%I", "%M", "%S", "%f", "%p")
+                )
+                )
+        )
+        # endregion
+
+        return DatetimeObject(format=_format,
+                              offset=_offset,
+                              timezone=_timezone,
+                              convert_to_datetime=_convert_to_datetime,
+                              is_epoch=_is_epoch,
+                              unit=_unit)
 
 
 @dataclass
@@ -65,12 +115,26 @@ class Column:
         if obj is None:
             return None
         _name = obj.get("name")
-        _dtype = obj.get("dtype")
+        _dtype = replace_undefined_value(obj.get("dtype"), "str")
         _nan_values = replace_undefined_value(obj.get("nan_values"), [])
         _optional = replace_undefined_value(obj.get("optional"), False)
         _range_start = obj.get("range_start")
         _range_end = obj.get("range_end")
         return Column(_name, _dtype, _nan_values, _optional, _range_start, _range_end)
+
+    def get_cypher_type(self) -> str:
+        dtype = (self.dtype or "").lower()
+
+        if "int" in dtype:
+            return "toInteger"
+
+        if "float" in dtype:
+            return "toFloat"
+
+        if "bool" in dtype:
+            return "toBoolean"
+
+        return "toString"
 
 
 @dataclass
@@ -89,6 +153,15 @@ class Attribute:
     use_filter: bool
     is_primary_key: bool
     is_foreign_key: bool
+
+    def get_cypher_type(self) -> str:
+        if self.is_datetime:
+            return self.datetime_object.get_cypher_type()
+
+        if self.is_compound:
+            return "toString"
+
+        return self.columns[0].get_cypher_type()
 
     @staticmethod
     def from_dict(obj: Any) -> Optional['Attribute']:
@@ -251,6 +324,13 @@ class DataStructure:
                             f"defined for {column.name}")
         return dtypes
 
+    def get_cypher_mapping(self) -> Dict[str, str]:
+        mapping = {}
+        for attribute in self.attributes.values():
+            mapping[attribute.name] = attribute.get_cypher_type()
+
+        return mapping
+
     def get_required_columns(self):
         required_columns = set()
         for attribute in self.attributes.values():
@@ -368,42 +448,68 @@ class DataStructure:
         return df_log
 
     @staticmethod
-    def _convert_datetime_column(series, datetime_object):
+    def _convert_datetime_column(series, datetime_object: DatetimeObject):
         if datetime_object.is_epoch:
             parsed = pd.to_datetime(
-                series,
+                pd.to_numeric(series, errors="coerce"),  # convert to Integer first
                 unit=datetime_object.unit,
-                errors="coerce"
+                errors="coerce",
+                utc=True
             )
+
+            if datetime_object.timezone: #not None
+                parsed = parsed.dt.tz_convert(datetime_object.timezone)
+
         else:
+            dt_format = datetime_object.format
+
+            if datetime_object.offset: #not None
+                series = series.where(
+                    series.isna(), #replace where condition is false -> preserve null values
+                    series.astype(str) + datetime_object.offset
+                )
+                dt_format += '%z'
+
             parsed = pd.to_datetime(
                 series,
-                format=datetime_object.format,
+                format=dt_format,
                 errors="coerce"
             )
 
-        if not datetime_object.convert_to_datetime: #convert to date
+            if datetime_object.timezone: #not None
+                parsed = parsed.dt.tz_localize(datetime_object.timezone)
+
+        if not datetime_object.convert_to_datetime:  # convert to date
             return parsed.dt.strftime("%Y-%m-%d")
-        else: #convert to datetime
-            return parsed.apply(
-                lambda x: x.isoformat() if pd.notna(x) else None
-            )
+
+        # convert to datetime
+        return parsed.apply(
+            lambda x: x.isoformat() if pd.notna(x) else None
+        )
 
     def convert_datetimes(self, df_log):
         for attribute_name, attribute in self.attributes.items():
             if not attribute.is_datetime:
                 continue
 
-            df_log[attribute_name] = self._convert_datetime_column(
-                series=df_log[attribute_name],
+            series = df_log[attribute_name].replace("", pd.NA)
+
+            before_null_mask = series.isna()
+
+            converted = self._convert_datetime_column(
+                series=series,
                 datetime_object=attribute.datetime_object
             )
 
-            invalid_count = df_log[attribute_name].isna().sum()
+            df_log[attribute_name] = converted
+            after_null_mask = converted.isna()
+
+            invalid_count = (~before_null_mask & after_null_mask).sum()
+
             if invalid_count:
                 logger.warning(
                     "%s rows contain invalid timestamps in column %s",
-                    df_log[attribute_name].isna().sum(),
+                    invalid_count,
                     attribute_name
                 )
 
