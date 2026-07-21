@@ -1,26 +1,24 @@
 from typing import Dict, Optional, List, Union
 from string import Template
+import re
 
 from ..data_managers.datastructures import DataStructure, DatetimeObject
 from ..data_managers.semantic_header import RecordConstructor
 from ..database_managers.db_connection import Query
 
 
-def create_mapping_str(mapping: str) -> str:
-    """
-    Create the string including the information of the datatypes mapping used when importing records.
+# region Validation helpers
 
-    :param mapping: The dtype mapping of the imported records as string
-    :return: str containing the mapping in Cypher format
-    """
-    if mapping == "":
-        return ""
-    mapping_str = ''',{nullValues: [""], mapping:$mapping}''' if mapping != "" else ""
-    mapping_str = Template(mapping_str).safe_substitute({"mapping": mapping})
-    return mapping_str
+def _sanitize_identifier(value: str) -> str:
+    if not re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]*", value):
+        raise ValueError(f"Invalid identifier: {value}")
+    return value
 
+# endregion
 
-def get_match_record_types_mapping(labels):
+#region Cypher builders
+
+def _build_match_records_with_types_clause(labels):
     if len(labels) == 0:
         return "MATCH (record:Record)"
     record_types = "\n".join(
@@ -29,13 +27,42 @@ def get_match_record_types_mapping(labels):
     return record_types
 
 
-def get_set_records(dtype_mapping: Dict[str, str]):
-    mapping = []
-    for column_name, dtype in dtype_mapping.items():
-        mapping.append(f'record.{column_name} = to{dtype}(row.{column_name})')
-    mapping_str = ', '.join(mapping)
-    return f'SET {mapping_str}'
+def _build_match_record_types_clause(labels: List[str]) -> str:
+    return "\n".join(
+        [f'MATCH ({_sanitize_identifier(label)}_record:RecordType {{type: "{label}"}})' for label in labels])
 
+
+def _build_set_attributes_clause(cypher_conversion_mapping: Dict[str, str]):
+    mapping = []
+    for column_name, cypher_function in cypher_conversion_mapping.items():
+        column = _sanitize_identifier(column_name)
+        mapping.append(f'record.{column} = {cypher_function}(row.{column})')
+
+    if not mapping:  # mapping is empty:
+        return ""
+
+    mapping_str = ", ".join(mapping)
+    return f"SET {mapping_str}"
+
+
+def _build_match_log_clause(log_name: Optional[str]):
+    if log_name is None:
+        return ''
+    return f'''\n MATCH (log:Log {{name: $log_name}})'''
+
+
+def _build_create_log_contains_relation_clause(log_name: Optional[str]):
+    if log_name is None:
+        return ''
+    return '''CREATE (record)<-[:CONTAINS]-(log)'''
+
+
+def _build_create_record_is_of_type_relation_clause(labels):
+    return "\n".join(
+        [f'''CREATE (record)-[:IS_OF_TYPE]->({_sanitize_identifier(label)}_record)''' for label in labels])
+
+
+# endregion
 
 class DataImporterQueryLibrary:
     @staticmethod
@@ -64,10 +91,10 @@ class DataImporterQueryLibrary:
         return Query(query_str=query_str)
 
     @staticmethod
-    def get_create_nodes_by_loading_csv_query(labels: List[str],
-                                              file_name: str,
-                                              dtype_mapping: Dict[str, str],
-                                              log_name: str = None) -> Query:
+    def build_create_nodes_by_loading_csv_query(labels: List[str],
+                                                file_name: str,
+                                                cypher_conversion_mapping: Dict[str, str],
+                                                log_name: str = None) -> Query:
         """
         Create event nodes for each row in the batch with labels
         The properties of each row are also the property of the node
@@ -79,183 +106,93 @@ class DataImporterQueryLibrary:
         @return: Query object to create record nodes by loading csv
         """
 
-        if log_name is not None:
-            match_log_str = '''\n MATCH (log:Log {name:$log_name})'''
-            create_log_str = '''CREATE (record)<-[:CONTAINS]-(log)'''
-        else:
-            match_log_str = ""
-            create_log_str = ""
-            log_name = ""
-
-        match_record_types = "\n".join(
-            [f'''MATCH ({label}_record:RecordType {{type:"{label}"}})''' for label in labels])
-        match_record_types += match_log_str
-
-        create_records = "\n".join([f'''CREATE (record) - [:IS_OF_TYPE] -> ({label}_record)''' for label in labels])
-        create_records += create_log_str
-
         # language=cypher
         query_str = '''
                     :auto
                     LOAD CSV WITH HEADERS FROM '$file_name' AS row
                     CALL (row) {
-                        $match_record_types
-                        CREATE (record:Record)
-                        $create_records
-                        $set_records
+                          $match_log_node
+                          $match_record_type_clauses
+                          CREATE (record:Record)
+                          $create_log_relation
+                          $create_type_relations
+                          $set_records
                     } IN CONCURRENT TRANSACTIONS ON ERROR RETRY \
                     '''
 
         return Query(query_str=query_str,
                      template_string_parameters={
                          "file_name": f'file:///{file_name}',
-                         "match_record_types": match_record_types,
-                         "create_records": create_records,
-                         "set_records": get_set_records(dtype_mapping),
+                         "match_log_node": _build_match_log_clause(log_name=log_name),
+                         "match_record_type_clauses": _build_match_record_types_clause(labels=labels),
+                         "create_log_relation": _build_create_log_contains_relation_clause(log_name=log_name),
+                         "create_type_relations": _build_create_record_is_of_type_relation_clause(labels=labels),
+                         "set_records": _build_set_attributes_clause(cypher_conversion_mapping),
                      },
                      parameters={
-                         "log_name": log_name
+                         "log_name": log_name,
                      })
 
     @staticmethod
-    def get_make_timestamp_date_query(required_labels: List[str], attribute: str,
-                                      datetime_object: DatetimeObject) -> Query:
+    def get_filter_records_by_property_query(prop: str, values: Optional[List[str]] = None,
+                                             exclude: bool = True, required_labels: Optional[List[str]] = None) -> Query:
         """
-        Create a query to convert the strings of the timestamp to the datetime as used in Neo4j
-        Remove the str_timestamp property
+        Create a query to remove nodes and their relationships if they have (exlude) or have not (include) a certain
+        attribute or a certain attribute-value pairs.
 
-        @param required_labels: the required labels of the just imported nodes
-        @param attribute: the name of the attribute that should be converted
-        @param datetime_object: the DatetimeObject describing how the attribute should be converted
+        @param prop: the name of the property
+        @param values: a list of values that the property should (not) have for being removed
+        @param exclude: boolean indicating whether nodes should be removed if they match the criteria (exclude=True)
+        or be kept (exclude = False)
+        @param required_labels: the labels the nodes should have
 
-        @return: Query object to convert the timestamps string into timestamp objects
+        @return: Query object to remove the load status attribute of the just imported nodes
 
         """
-        # language=cypher
-        offset = datetime_object.timezone_offset
-        offset = f'{attribute}+"{offset}"' if offset != "" else attribute
 
-        # language=cypher
-        query_str = '''
-                    :auto
-                    $match_record_types
-                    WHERE record.$attribute IS NOT NULL AND NOT apoc.meta.cypher.isType(record.$attribute, "$date_type")
-                    WITH record, record.$offset as timezone_dt
-                    WITH record, datetime(apoc.date.convertFormat(timezone_dt, "$datetime_object_format",
-                    "$datetime_object_convert_to")) as converted
-                    CALL (record, converted) {
-                        SET record.$attribute = converted
-                    } IN CONCURRENT TRANSACTIONS ON ERROR RETRY \
-                    '''
+        required_labels = required_labels or ["Record"]
 
+        if values is None:  # match all events that have a specific property
+            negation = "NOT" if exclude else ""
+            # query to delete all records and its relationship with property
+            # language=cypher
+            query_str = '''
+                        :auto
+                        // match all records that match property
+                        $match_record_types
+                        WHERE record.$prop IS $negation NULL
+                        WITH record
+                        CALL (record) {
+                            DETACH
+                            DELETE record
+                        } IN TRANSACTIONS ON ERROR RETRY \
+                        '''
+            template_string_parameters = {"prop": prop, "negation": negation}
+        else:  # match all events with specific property and value
+            negation = "" if exclude else "NOT"
+            # match all r and delete them and its relationship
+            # language=cypher
+            query_str = '''
+                        :auto
+                        // match all records that match property
+                        $match_record_types
+                        WHERE $negation record.$prop IN $values
+                        WITH record
+                        CALL (record) {
+                            // delete record and its relationships
+                            DETACH
+                            DELETE record
+                        } IN TRANSACTIONS ON ERROR RETRY \
+                        '''
+            template_string_parameters = {
+                "prop": prop,
+                "negation": negation,
+                "match_record_types": _build_match_records_with_types_clause(labels=required_labels)
+            }
+
+        # execute query
         return Query(query_str=query_str,
-                     template_string_parameters={
-                         "match_record_types": get_match_record_types_mapping(labels=required_labels),
-                         "datetime_object_format": datetime_object.format,
-                         "datetime_object_convert_to": datetime_object.convert_to,
-                         "date_type": datetime_object.get_date_type(),
-                         "attribute": attribute,
-                         "offset": offset
-                     })
-
-    @staticmethod
-    def get_convert_epoch_to_timestamp_query(required_labels: List[str], attribute: str,
-                                             datetime_object: DatetimeObject) -> Query:
-        """
-        Create a query to convert epoch timestamp to the datetime as used in Neo4j
-        Remove the str_timestamp property
-
-        @param required_labels: the required labels of the just imported nodes
-        @param attribute: the name of the attribute that should be converted
-        @param datetime_object: the DatetimeObject describing how the attribute should be converted
-
-        @return: Query object to convert the epoch timestamps into timestamp objects
-
-        """
-
-        # TODO update method to be in line with the one before
-        # language=cypher
-        query_str = '''
-                    :auto
-                    $match_record_types
-                    WHERE record.$attribute IS NOT NULL AND NOT apoc.meta.cypher.isType(record.$attribute, $date_type)
-                    WITH record, record.$attribute as timezone_dt
-                    WITH record, apoc.date.format(timezone_dt, $unit, $dt_format) as converted
-                    CALL (record, converted) {
-                        SET record.$attribute = converted
-                    } IN CONCURRENT TRANSACTIONS ON ERROR RETRY \
-                    '''
-
-        return Query(query_str=query_str,
-                     template_string_parameters={
-                         "attribute": attribute,
-                         "match_record_types": get_match_record_types_mapping(labels=required_labels)
-                     },
+                     template_string_parameters=template_string_parameters,
                      parameters={
-                         "unit": datetime_object.unit,
-                         "datetime_object_format": datetime_object.format,
-                         "date_type": datetime_object.convert_to.replace("ISO_", "")
+                         "values": values
                      })
-
-
-@staticmethod
-def get_filter_records_by_property_query(prop: str, values: Optional[List[str]] = None,
-                                         exclude: bool = True, required_labels=["Record"]) -> Query:
-    """
-    Create a query to remove nodes and their relationships if they have (exlude) or have not (include) a certain
-    attribute or a certain attribute-value pairs.
-
-    @param prop: the name of the property
-    @param values: a list of values that the property should (not) have for being removed
-    @param exclude: boolean indicating whether nodes should be removed if they match the criteria (exclude=True)
-    or be kept (exclude = False)
-    @param required_labels: the labels the nodes should have
-
-    @return: Query object to remove the load status attribute of the just imported nodes
-
-    """
-
-    if values is None:  # match all events that have a specific property
-        negation = "NOT" if exclude else ""
-        # query to delete all records and its relationship with property
-        # language=cypher
-        query_str = '''
-                    :auto
-                    // match all records that match property
-                    $match_record_types
-                    WHERE record.$prop IS $negation NULL
-                    WITH record
-                    CALL (record) {
-                        DETACH
-                        DELETE record
-                    } IN TRANSACTIONS ON ERROR RETRY \
-                    '''
-        template_string_parameters = {"prop": prop, "negation": negation}
-    else:  # match all events with specific property and value
-        negation = "" if exclude else "NOT"
-        # match all r and delete them and its relationship
-        # language=cypher
-        query_str = '''
-                    :auto
-                    // match all records that match property
-                    $match_record_types
-                    WHERE $negation record.$prop IN $values
-                    WITH record
-                    CALL (record) {
-                        // delete record and its relationships
-                        DETACH
-                        DELETE record
-                    } IN TRANSACTIONS ON ERROR RETRY \
-                    '''
-        template_string_parameters = {
-            "prop": prop,
-            "negation": negation,
-            "match_record_types": get_match_record_types_mapping(labels=required_labels)
-        }
-
-    # execute query
-    return Query(query_str=query_str,
-                 template_string_parameters=template_string_parameters,
-                 parameters={
-                     "values": values
-                 })
