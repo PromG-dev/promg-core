@@ -48,6 +48,7 @@ class Importer:
     def import_data(self, to_be_imported_logs) -> None:
         for structure in self.structures:
             required_labels = structure.get_required_labels(records=self.records)
+            cypher_mapping = structure.get_cypher_mapping()
 
             # read in all file names that match this structure
             for file_name in structure.file_names:
@@ -63,12 +64,8 @@ class Importer:
 
                     self._import_nodes_from_data(df_log=df_log,
                                                  file_name=file_name,
-                                                 required_labels=required_labels)
-
-                    if structure.has_datetime_attribute():
-                        # once all events are imported, we convert the string timestamp to the timestamp as used in
-                        # Cypher
-                        self._reformat_timestamps(structure=structure, required_labels=required_labels)
+                                                 required_labels=required_labels,
+                                                 cypher_mapping=cypher_mapping)
 
                     # TODO: move filtering to pandas dataframe
                     self._filter_nodes(structure=structure,
@@ -76,25 +73,6 @@ class Importer:
                     # structure
 
         # self._clear_import_directory()
-
-    @Performance.track("structure")
-    def _reformat_timestamps(self, structure, required_labels):
-        datetime_formats = structure.get_datetime_formats()
-        for attribute, datetime_format in datetime_formats.items():
-            if datetime_format.is_epoch:
-                self.connection.exec_query(di_ql.get_convert_epoch_to_timestamp_query,
-                                           **{
-                                               "required_labels": required_labels,
-                                               "attribute": attribute,
-                                               "datetime_object": datetime_format
-                                           })
-
-            self.connection.exec_query(di_ql.get_make_timestamp_date_query,
-                                       **{
-                                           "required_labels": required_labels,
-                                           "attribute": attribute,
-                                           "datetime_object": datetime_format
-                                       })
 
     @Performance.track("structure")
     def _filter_nodes(self, structure, required_labels):
@@ -110,9 +88,8 @@ class Importer:
                                            })
 
     @Performance.track("file_name")
-    def _import_nodes_from_data(self, df_log, file_name, required_labels):
+    def _import_nodes_from_data(self, df_log, file_name, required_labels, cypher_mapping: Dict[str, str]):
         grouped_by_optional_labels = df_log.groupby(by="labels")
-        dtype_mapping = self._determine_dtype_mapping(df_log)
 
         for optional_labels_str, log in grouped_by_optional_labels:
             optional_labels = optional_labels_str.split(":")
@@ -120,9 +97,9 @@ class Importer:
             labels = list(set(labels))
             labels.remove("")
             new_file_name = self.determine_new_file_name(file_name, optional_labels_str)
-            self.import_log_into_db(file_name=new_file_name, labels=labels, dtype_mapping=dtype_mapping, log=log)
+            self.import_log_into_db(file_name=new_file_name, labels=labels, cypher_mapping=cypher_mapping, log=log)
 
-    def import_log_into_db(self, file_name, labels, dtype_mapping, log):
+    def import_log_into_db(self, file_name, labels, cypher_mapping, log):
         # Temporary save the file in the import directory
         log, log_name = pop_log_name(log)
 
@@ -134,12 +111,12 @@ class Importer:
                                        "log_name": log_name
                                    })
         # when creating the records nodes, relations between the record types and log nodes are created
-        self.connection.exec_query(di_ql.get_create_nodes_by_loading_csv_query,
+        self.connection.exec_query(di_ql.build_create_nodes_by_loading_csv_query,
                                    **{
                                        "file_name": file_name,
                                        "log_name": log_name,
                                        "labels": labels,
-                                       "dtype_mapping": dtype_mapping
+                                       "cypher_conversion_mapping": cypher_mapping
                                    })
 
     @staticmethod
@@ -169,13 +146,13 @@ class Importer:
         dtypes = log.dtypes.to_dict()
         for col_name, dtype in dtypes.items():
             if pd.api.types.is_string_dtype(dtype):
-                mapping[col_name] = 'String'
+                mapping[col_name] = 'toString'
             elif pd.api.types.is_integer_dtype(dtype):
-                mapping[col_name] = 'Integer'
+                mapping[col_name] = 'toInteger'
             elif pd.api.types.is_float_dtype(dtype):
-                mapping[col_name] = 'Float'
+                mapping[col_name] = 'toFloat'
             elif pd.api.types.is_bool_dtype(dtype):
-                mapping[col_name] = 'Boolean'
+                mapping[col_name] = 'toBoolean'
             else:
                 raise Exception(f"Type for column {col_name} is not defined")
 
