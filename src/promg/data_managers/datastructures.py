@@ -184,10 +184,15 @@ class Attribute:
         _is_foreign_key = replace_undefined_value(obj.get("is_foreign_key"), False)
         return Attribute(name=_name, optional=_optional, columns=_columns, separator=_separator,
                          is_compound=_is_compound,
-                         is_datetime=_is_datetime, datetime_object=_datetime_object,
-                         na_rep_value=_na_rep_value, na_rep_columns=_na_rep_columns,
-                         filter_exclude_values=_filter_exclude_values, filter_include_values=_filter_include_values,
-                         use_filter=_use_filter, is_primary_key=_is_primary_key, is_foreign_key=_is_foreign_key)
+                         is_datetime=_is_datetime,
+                         datetime_object=_datetime_object,
+                         na_rep_value=_na_rep_value,
+                         na_rep_columns=_na_rep_columns,
+                         filter_exclude_values=_filter_exclude_values,
+                         filter_include_values=_filter_include_values,
+                         use_filter=_use_filter,
+                         is_primary_key=_is_primary_key,
+                         is_foreign_key=_is_foreign_key)
 
 
 @dataclass
@@ -225,7 +230,9 @@ class DataStructure:
                  labels: List[str], true_values: List[str], false_values: List[str],
                  add_log: bool, add_index: bool,
                  samples: Dict[str, Sample], attributes: Dict[str, Attribute],
-                 split_combined_events: bool):
+                 split_combined_events: bool,
+                 config_timezone: Optional[str],
+                 timezone: Optional[str]):
         self.include = include
         self.name = name
         self.file_directory = file_directory
@@ -245,6 +252,8 @@ class DataStructure:
         self.attributes = attributes
         self.split_combined_events = split_combined_events
         self.required_labels = None
+        self.config_timezone = config_timezone
+        self.timezone = timezone
 
     def __repr__(self):
         return self.name
@@ -259,7 +268,7 @@ class DataStructure:
         return self.has_datetime_attribute() and contains_composed_events
 
     @staticmethod
-    def from_dict(obj: Any) -> Optional['DataStructure']:
+    def from_dict(obj: Any, config_timezone=None) -> Optional['DataStructure']:
         if obj is None:
             return None
 
@@ -280,6 +289,7 @@ class DataStructure:
         _false_values = obj.get("false_values")
         _add_log = replace_undefined_value(obj.get("add_log"), False)
         _add_index = replace_undefined_value(obj.get("add_index"), True)
+        _timezone = obj.get("timezone")
 
         _samples_obj = obj.get("samples") if obj.get("samples") is not None else obj.get("sample")
         if len(_file_names) == 1:  # single file name is defined
@@ -292,9 +302,23 @@ class DataStructure:
         _attributes = {attribute.name: attribute for attribute in _attributes}
         _split_combined_events = replace_undefined_value(obj.get("split_combined_events"), False)
 
-        return DataStructure(_include, _name, _file_directory, _file_names, _encoding, _seperator, _decimal,
-                             _labels, _true_values, _false_values, _add_log, _add_index,
-                             _samples, _attributes, _split_combined_events)
+        return DataStructure(include=_include,
+                             name=_name,
+                             file_directory=_file_directory,
+                             file_names=_file_names,
+                             encoding=_encoding,
+                             seperator=_seperator,
+                             decimal=_decimal,
+                             labels=_labels,
+                             true_values=_true_values,
+                             false_values=_false_values,
+                             add_log=_add_log,
+                             add_index=_add_index,
+                             samples=_samples,
+                             attributes=_attributes,
+                             split_combined_events=_split_combined_events,
+                             config_timezone=config_timezone,
+                             timezone=_timezone)
 
     def get_primary_keys(self):
         return [attribute_name for attribute_name, attribute in self.attributes.items() if attribute.is_primary_key]
@@ -448,7 +472,65 @@ class DataStructure:
         return df_log
 
     @staticmethod
-    def _convert_datetime_column(series, datetime_object: DatetimeObject):
+    def _warn_overridden(attribute_name, overrides, overridden_by):
+        logger.warning(
+            f"Timezone mismatch for {attribute_name}: {overridden_by} overrides {overrides}.")
+
+    def _warn_timezone_overridden(self, attribute_name, timezone):
+        if self.timezone is not None and self.timezone != timezone:
+            self._warn_overridden(attribute_name, overridden_by="attribute timezone",
+                                  overrides="datastructure timezone")
+        if self.config_timezone is not None and self.config_timezone != timezone:
+            self._warn_overridden(attribute_name, overridden_by="attribute timezone", overrides="config timezone")
+
+    def _warn_offset_overridden(self, attribute_name):
+        if self.timezone is not None:
+            self._warn_overridden(attribute_name, overridden_by="manual offset",
+                                  overrides="datastructure timezone")
+        if self.config_timezone is not None:
+            self._warn_overridden(attribute_name, overridden_by="manual offset", overrides="config timezone")
+
+    def _warn_format_overridden(self, attribute_name):
+        if self.timezone is not None:
+            self._warn_overridden(attribute_name, overridden_by="embedded offset",
+                                  overrides="datastructure timezone")
+        if self.config_timezone is not None:
+            self._warn_overridden(attribute_name, overridden_by="embedded offset", overrides="config timezone")
+
+    def _get_timezone(self, attribute_name: str, dt: DatetimeObject) -> Optional[str]:
+
+        if dt.timezone:
+            self._warn_timezone_overridden(attribute_name, dt.timezone)
+            return dt.timezone
+
+        if dt.offset:
+            self._warn_offset_overridden(attribute_name)
+            return None
+
+        if dt.format is not None and '%z' in dt.format:
+            self._warn_format_overridden(attribute_name)
+            return None
+
+
+        # dt_timezone is None
+        if self.timezone is not None:
+            if self.config_timezone is not None and self.config_timezone != self.timezone:
+                logger.warning(
+                    f"Timezone mismatch for {attribute_name}: timezone specified for datastucture {self.name} for {attribute_name} does not match timezone of config. "
+                    f"Datastructure timezone overrules.")
+            return self.timezone
+
+        if self.config_timezone is not None:
+            return self.config_timezone
+
+        logger.warning(
+            f"No timezone has been defined for {attribute_name}. Default UTC timezone is used.")
+
+        return "UTC"
+
+    def _convert_datetime_column(self, attribute_name: str, series: pd.Series, datetime_object: DatetimeObject):
+        timezone = self._get_timezone(attribute_name=attribute_name, datetime_object=datetime_object)
+
         if datetime_object.is_epoch:
             parsed = pd.to_datetime(
                 pd.to_numeric(series, errors="coerce"),  # convert to Integer first
@@ -456,16 +538,15 @@ class DataStructure:
                 errors="coerce",
                 utc=True
             )
-
-            if datetime_object.timezone: #not None
-                parsed = parsed.dt.tz_convert(datetime_object.timezone)
+            if timezone:
+                parsed = parsed.dt.tz_convert(timezone)
 
         else:
             dt_format = datetime_object.format
 
-            if datetime_object.offset: #not None
+            if datetime_object.offset:  # not None
                 series = series.where(
-                    series.isna(), #replace where condition is false -> preserve null values
+                    series.isna(),  # replace where condition is false -> preserve null values
                     series.astype(str) + datetime_object.offset
                 )
                 dt_format += '%z'
@@ -476,8 +557,8 @@ class DataStructure:
                 errors="coerce"
             )
 
-            if datetime_object.timezone: #not None
-                parsed = parsed.dt.tz_localize(datetime_object.timezone)
+            if parsed.dt.tz is None:
+                parsed = parsed.dt.tz_localize(timezone)
 
         if not datetime_object.convert_to_datetime:  # convert to date
             return parsed.dt.strftime("%Y-%m-%d")
@@ -835,7 +916,8 @@ class DatasetDescriptions:
         with open(path, encoding='utf-8') as f:
             json_event_tables = json.load(f)
 
-        self.structures = [DataStructure.from_dict(item) for item in json_event_tables]
+        self.structures = [DataStructure.from_dict(item, config_timezone=config.get_timezone()) for item in
+                           json_event_tables]
         self.structures = [item for item in self.structures if item is not None]
 
     def get_structure_name_file_mapping(self):
