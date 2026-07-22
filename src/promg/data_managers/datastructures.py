@@ -19,45 +19,53 @@ logger = logging.getLogger(__name__)
 from .semantic_header import RecordConstructor
 from ..utilities.auxiliary_functions import replace_undefined_value, create_list
 from ..utilities.configuration import Configuration
+from enum import Enum
 
 
-@dataclass
-class DatetimeObject:
-    format: Optional[str]
-    offset: Optional[str]
-    timezone: Optional[str]
-    convert_to_datetime: bool
-    is_epoch: bool
-    unit: str
+class TemporalType(Enum):
+    NONE = "none"
+    DATE = "date"
+    DATETIME = "datetime"
+
+
+class TemporalDefinition:
+    def __init__(self,
+                 str_format: Optional[str],
+                 offset: Optional[str],
+                 timezone: Optional[str],
+                 is_epoch: bool,
+                 unit: str):
+        self.str_format = str_format
+        self.offset = offset
+        self.timezone = timezone
+        self.temporal_type = self._determine_temporal_type()
+        self.is_epoch = is_epoch
+        self.unit = unit
+
+        self.validate()
 
     def get_cypher_type(self) -> str:
-        if self.convert_to_datetime:
-            return "datetime"
-        else:
-            return "date"
+        return self.temporal_type.value
 
-    @staticmethod
-    def from_dict(obj: Any) -> Optional['DatetimeObject']:
-        if obj is None:
-            return None
-        # region read values
-        _format = obj.get("format")
+    def _determine_temporal_type(self) -> TemporalType:
+        convert_to_datetime = (self.is_epoch  # epoch should always be converted to datetime
+                               or
+                               (self.str_format is not None
+                                and
+                                any(
+                                    token in self.str_format
+                                    for token in ("%H", "%I", "%M", "%S", "%f", "%p")
+                                ))
+                               )
+        return TemporalType.DATETIME if convert_to_datetime else TemporalType.DATE
 
-        _is_epoch = obj.get("is_epoch", False)  # default is False
-        _unit = obj.get("unit")
-
-        _offset = obj.get("offset")
-        _timezone = obj.get("timezone")
-
-        # endregion
-
-        # region validation check
-        _has_format = bool(_format)
-        _has_epoch = bool(_is_epoch)
-        _has_explicit_offset = _has_format and "%z" in _format
-        _has_manual_offset = bool(_offset)
-        _has_timezone = bool(_timezone)
-        _has_unit = bool(_unit)
+    def validate(self):
+        _has_format = bool(self.str_format)
+        _has_epoch = bool(self.is_epoch)
+        _has_explicit_offset = _has_format and "%z" in self.str_format
+        _has_manual_offset = bool(self.offset)
+        _has_timezone = bool(self.timezone)
+        _has_unit = bool(self.unit)
 
         if _has_format and _has_epoch:
             raise ValueError(
@@ -78,27 +86,112 @@ class DatetimeObject:
 
         if _has_epoch and not _has_unit:
             raise ValueError("Specify an epoch unit since is_epoch = True.")
-        # endregion
 
-        # region determine convert_to_date
-        _convert_to_datetime = (
-                _is_epoch  # epoch should always be converted to datetime
-                or (
-                        _format is not None
-                        and any(
-                    token in _format
-                    for token in ("%H", "%I", "%M", "%S", "%f", "%p")
-                )
-                )
-        )
-        # endregion
+    @staticmethod
+    def _warn_override(attribute_name: str, overriding_source: str, dataset_timezone: Optional[str],
+                       config_timezone: Optional[str], effective_timezone: str) -> None:
+        overrides_list = []
+        if dataset_timezone is not None and dataset_timezone != effective_timezone:
+            overrides_list.append(f"data structure timezone '{dataset_timezone}'")
+        if config_timezone is not None and config_timezone != effective_timezone:
+            overrides_list.append(f"config timezone '{config_timezone}'")
 
-        return DatetimeObject(format=_format,
-                              offset=_offset,
-                              timezone=_timezone,
-                              convert_to_datetime=_convert_to_datetime,
-                              is_epoch=_is_epoch,
-                              unit=_unit)
+        if not overrides_list:
+            return
+
+        overrides = " and ".join(overrides_list)
+        logger.warning(
+            f"Timezone mismatch for {attribute_name}: {overriding_source} '{effective_timezone}' overrides "
+            f"{overrides}.")
+
+    @staticmethod
+    def _warn_ignore_timezone(attribute_name: str, source: str, dataset_timezone: Optional[str],
+                              config_timezone: Optional[str]) -> None:
+        overrides_list = []
+        if dataset_timezone is not None:
+            overrides_list.append(f"dataset description '{dataset_timezone}'")
+        if config_timezone is not None:
+            overrides_list.append(f"config '{config_timezone}'")
+
+        if not overrides_list:
+            return
+
+        overrides = " and ".join(overrides_list)
+        logger.warning(
+            f"Timezone configuration ({overrides}) ignored for {attribute_name} "
+            f"because the timestamp contains explicit offset information through {source}.")
+
+    def resolve_timezone(self, attribute_name: str, dataset_timezone: Optional[str],
+                         config_timezone: Optional[str]) -> None:
+        if self.temporal_type == TemporalType.DATE:
+            if self.timezone or self.offset or (self.str_format and "%z" in self.str_format):
+                logger.warning(
+                    f"Timezone information for {attribute_name} is ignored because the attribute is of type DATE."
+                )
+
+            return  # dates do not have timezones
+
+        if self.timezone:
+            self._warn_override(attribute_name=attribute_name,
+                                overriding_source="attribute timezone",
+                                dataset_timezone=dataset_timezone,
+                                config_timezone=config_timezone,
+                                effective_timezone=self.timezone)
+            return  # do nothing, timezone is already defined
+
+        if self.offset:
+            self._warn_ignore_timezone(attribute_name=attribute_name,
+                                       source="manual offset",
+                                       dataset_timezone=dataset_timezone,
+                                       config_timezone=config_timezone)
+            return  # do nothing, timezone is already embedded
+
+        if self.str_format is not None and '%z' in self.str_format:
+            self._warn_ignore_timezone(attribute_name=attribute_name,
+                                       source="timestamp embedded offset",
+                                       dataset_timezone=dataset_timezone,
+                                       config_timezone=config_timezone)
+            return  # do nothing, timezone is already embedded
+
+        if dataset_timezone is not None:
+            self.timezone = dataset_timezone
+            logger.info(
+                f"No timezone defined for {attribute_name}. Using dataset timezone '{dataset_timezone}'.")
+            self._warn_override(attribute_name=attribute_name,
+                                overriding_source="dataset timezone",
+                                dataset_timezone=None,
+                                config_timezone=config_timezone,
+                                effective_timezone=dataset_timezone)
+            return
+
+        if config_timezone is not None:
+            self.timezone = config_timezone
+            logger.info(
+                f"No timezone defined for {attribute_name}. Using config timezone '{config_timezone}'.")
+            return
+
+        self.timezone = "UTC"
+        logger.info(
+            f"No timezone has been defined for {attribute_name}. Default UTC timezone is used.")
+
+    @staticmethod
+    def from_dict(obj: Any) -> Optional['TemporalDefinition']:
+        if obj is None:
+            return None
+        # region read values
+        _format = obj.get("format")
+
+        _is_epoch = obj.get("is_epoch", False)  # default is False
+        _unit = obj.get("unit")
+
+        _offset = obj.get("offset")
+        _timezone = obj.get("timezone")
+
+        return TemporalDefinition(str_format=_format,
+                                  offset=_offset,
+                                  timezone=_timezone,
+                                  is_epoch=_is_epoch,
+                                  unit=_unit)
 
 
 @dataclass
@@ -145,7 +238,7 @@ class Attribute:
     is_datetime: bool
     is_compound: bool
     optional: bool
-    datetime_object: DatetimeObject
+    datetime_object: TemporalDefinition
     na_rep_value: Any
     na_rep_columns: List[Column]
     filter_exclude_values: List[str]
@@ -171,7 +264,7 @@ class Attribute:
         _columns = create_list(Column, obj.get("columns"))
         _is_compound = len(_columns) > 1
         _optional = bool(obj.get("optional"))
-        _datetime_object = DatetimeObject.from_dict(obj.get("datetime_object"))
+        _datetime_object = TemporalDefinition.from_dict(obj.get("datetime_object"))
         _is_datetime = _datetime_object is not None
         _na_rep_value = obj.get("na_rep_value")
         _na_rep_columns = create_list(Column, obj.get("na_rep_columns"))
@@ -224,49 +317,7 @@ class Sample:
         return Sample(_file_name, _use_random_sample, _population_column, _size, _ids, _between, _format)
 
 
-class DataStructure:
-    def __init__(self, include: bool, name: str, file_directory: str, file_names: List[str],
-                 encoding: str, seperator: str, decimal: str,
-                 labels: List[str], true_values: List[str], false_values: List[str],
-                 add_log: bool, add_index: bool,
-                 samples: Dict[str, Sample], attributes: Dict[str, Attribute],
-                 split_combined_events: bool,
-                 config_timezone: Optional[str],
-                 timezone: Optional[str]):
-        self.include = include
-        self.name = name
-        self.file_directory = file_directory
-        self.preprocessed_file_directory = os.path.join(self.file_directory, "preprocessed_files")
-        self.file_names = file_names
-        self.encoding = encoding
-        self.seperator = seperator
-        self.decimal = decimal
-        self.labels = labels
-        if self.labels == ["Record"]:
-            self.labels = None
-        self.true_values = true_values
-        self.false_values = false_values
-        self.add_log = add_log
-        self.add_index = add_index
-        self.samples = samples
-        self.attributes = attributes
-        self.split_combined_events = split_combined_events
-        self.required_labels = None
-        self.config_timezone = config_timezone
-        self.timezone = timezone
-
-    def __repr__(self):
-        return self.name
-
-    def has_datetime_attribute(self):
-        return any([attribute.is_datetime for attribute in self.attributes.values()])
-        # return "Event" in self.labels or "EventRecord" in self.labels
-
-    def contains_composed_events(self):
-        contains_composed_events = "startTimestamp" in self.get_datetime_formats() \
-                                   or "completeTimestamp" in self.get_datetime_formats()
-        return self.has_datetime_attribute() and contains_composed_events
-
+class DataStructureParser:
     @staticmethod
     def from_dict(obj: Any, config_timezone=None) -> Optional['DataStructure']:
         if obj is None:
@@ -320,6 +371,50 @@ class DataStructure:
                              config_timezone=config_timezone,
                              timezone=_timezone)
 
+
+class DataStructure:
+    def __init__(self, include: bool, name: str, file_directory: str, file_names: List[str],
+                 encoding: str, seperator: str, decimal: str,
+                 labels: List[str], true_values: List[str], false_values: List[str],
+                 add_log: bool, add_index: bool,
+                 samples: Dict[str, Sample], attributes: Dict[str, Attribute],
+                 split_combined_events: bool,
+                 config_timezone: Optional[str],
+                 timezone: Optional[str]):
+        self.include = include
+        self.name = name
+        self.file_directory = file_directory
+        self.preprocessed_file_directory = os.path.join(self.file_directory, "preprocessed_files")
+        self.file_names = file_names
+        self.encoding = encoding
+        self.seperator = seperator
+        self.decimal = decimal
+        self.labels = labels
+        if self.labels == ["Record"]:
+            self.labels = None
+        self.true_values = true_values
+        self.false_values = false_values
+        self.add_log = add_log
+        self.add_index = add_index
+        self.samples = samples
+        self.attributes = attributes
+        self.split_combined_events = split_combined_events
+        self.required_labels = None
+        self.config_timezone = config_timezone
+        self.timezone = timezone
+
+    def __repr__(self):
+        return self.name
+
+    def has_datetime_attribute(self):
+        return any([attribute.is_datetime for attribute in self.attributes.values()])
+        # return "Event" in self.labels or "EventRecord" in self.labels
+
+    def contains_composed_events(self):
+        contains_composed_events = "startTimestamp" in self.get_datetime_formats() \
+                                   or "completeTimestamp" in self.get_datetime_formats()
+        return self.has_datetime_attribute() and contains_composed_events
+
     def get_primary_keys(self):
         return [attribute_name for attribute_name, attribute in self.attributes.items() if attribute.is_primary_key]
 
@@ -330,7 +425,9 @@ class DataStructure:
         return primary_key_string
 
     def get_label_string(self):
-        return ":".join(self.labels)
+        if self.labels:
+            return ":".join(self.labels)
+        return ""
 
     def get_foreign_keys(self):
         return [attribute_name for attribute_name, attribute in self.attributes.items() if attribute.is_foreign_key]
@@ -471,64 +568,7 @@ class DataStructure:
 
         return df_log
 
-    @staticmethod
-    def _warn_overridden(attribute_name, overrides, overridden_by):
-        logger.warning(
-            f"Timezone mismatch for {attribute_name}: {overridden_by} overrides {overrides}.")
-
-    def _warn_timezone_overridden(self, attribute_name, timezone):
-        if self.timezone is not None and self.timezone != timezone:
-            self._warn_overridden(attribute_name, overridden_by="attribute timezone",
-                                  overrides="datastructure timezone")
-        if self.config_timezone is not None and self.config_timezone != timezone:
-            self._warn_overridden(attribute_name, overridden_by="attribute timezone", overrides="config timezone")
-
-    def _warn_offset_overridden(self, attribute_name):
-        if self.timezone is not None:
-            self._warn_overridden(attribute_name, overridden_by="manual offset",
-                                  overrides="datastructure timezone")
-        if self.config_timezone is not None:
-            self._warn_overridden(attribute_name, overridden_by="manual offset", overrides="config timezone")
-
-    def _warn_format_overridden(self, attribute_name):
-        if self.timezone is not None:
-            self._warn_overridden(attribute_name, overridden_by="embedded offset",
-                                  overrides="datastructure timezone")
-        if self.config_timezone is not None:
-            self._warn_overridden(attribute_name, overridden_by="embedded offset", overrides="config timezone")
-
-    def _get_timezone(self, attribute_name: str, dt: DatetimeObject) -> Optional[str]:
-
-        if dt.timezone:
-            self._warn_timezone_overridden(attribute_name, dt.timezone)
-            return dt.timezone
-
-        if dt.offset:
-            self._warn_offset_overridden(attribute_name)
-            return None
-
-        if dt.format is not None and '%z' in dt.format:
-            self._warn_format_overridden(attribute_name)
-            return None
-
-
-        # dt_timezone is None
-        if self.timezone is not None:
-            if self.config_timezone is not None and self.config_timezone != self.timezone:
-                logger.warning(
-                    f"Timezone mismatch for {attribute_name}: timezone specified for datastucture {self.name} for {attribute_name} does not match timezone of config. "
-                    f"Datastructure timezone overrules.")
-            return self.timezone
-
-        if self.config_timezone is not None:
-            return self.config_timezone
-
-        logger.warning(
-            f"No timezone has been defined for {attribute_name}. Default UTC timezone is used.")
-
-        return "UTC"
-
-    def _convert_datetime_column(self, attribute_name: str, series: pd.Series, datetime_object: DatetimeObject):
+    def _convert_datetime_column(self, attribute_name: str, series: pd.Series, datetime_object: TemporalDefinition):
         timezone = self._get_timezone(attribute_name=attribute_name, datetime_object=datetime_object)
 
         if datetime_object.is_epoch:
@@ -542,7 +582,7 @@ class DataStructure:
                 parsed = parsed.dt.tz_convert(timezone)
 
         else:
-            dt_format = datetime_object.format
+            dt_format = datetime_object.str_format
 
             if datetime_object.offset:  # not None
                 series = series.where(
@@ -560,7 +600,7 @@ class DataStructure:
             if parsed.dt.tz is None:
                 parsed = parsed.dt.tz_localize(timezone)
 
-        if not datetime_object.convert_to_datetime:  # convert to date
+        if datetime_object.temporal_type == TemporalType.DATE:  # convert to date
             return parsed.dt.strftime("%Y-%m-%d")
 
         # convert to datetime
@@ -625,8 +665,8 @@ class DataStructure:
 
     def update_attributes(self):
         if "startTimestamp" in self.attributes and "completeTimestamp" in self.attributes:
-            start_dt_format = self.get_datetime_formats()["startTimestamp"].format
-            complete_dt_format = self.get_datetime_formats()["completeTimestamp"].format
+            start_dt_format = self.get_datetime_formats()["startTimestamp"].str_format
+            complete_dt_format = self.get_datetime_formats()["completeTimestamp"].str_format
             if start_dt_format != complete_dt_format:
                 raise ValueError("startTimestamp and completeTimestamp have a different format")
 
@@ -889,7 +929,7 @@ class DataStructure:
                     column_name].str.endswith(column_value)
         return where_condition_satisfied
 
-    def get_datetime_formats(self) -> Dict[str, DatetimeObject]:
+    def get_datetime_formats(self) -> Dict[str, TemporalDefinition]:
         datetime_formats = {}
 
         for attribute_name, attribute in self.attributes.items():
@@ -909,16 +949,22 @@ class DataStructure:
 
 
 class DatasetDescriptions:
-    def __init__(self, config: Configuration):
-        path = config.dataset_description_path
+    def __init__(self, structures):
+        self.structures = structures
 
+    @classmethod
+    def from_file(cls, path: str, timezone):
         random.seed(1)
         with open(path, encoding='utf-8') as f:
-            json_event_tables = json.load(f)
+            data = json.load(f)
 
-        self.structures = [DataStructure.from_dict(item, config_timezone=config.get_timezone()) for item in
-                           json_event_tables]
-        self.structures = [item for item in self.structures if item is not None]
+            structures = [
+                DataStructureParser.from_dict(item, config_timezone=timezone)
+                for item in data
+            ]
+            structures = [item for item in structures if item is not None]
+
+            return cls(structures)
 
     def get_structure_name_file_mapping(self):
         # request the file names per structure
