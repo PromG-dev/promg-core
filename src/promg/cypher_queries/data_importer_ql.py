@@ -2,7 +2,7 @@ from typing import Dict, Optional, List, Union
 from string import Template
 import re
 
-from ..data_managers.datastructures import DataStructure, DatetimeObject
+from ..data_managers.datastructures import DataStructure, TemporalDefinition
 from ..data_managers.semantic_header import RecordConstructor
 from ..database_managers.db_connection import Query
 
