@@ -1,3 +1,4 @@
+import datetime
 import json
 import os
 import re
@@ -27,6 +28,12 @@ class TemporalType(Enum):
     DATE = "date"
     DATETIME = "datetime"
 
+    def get_cypher_type(self) -> Optional[str]:
+        if self == TemporalType.NONE:
+            return None
+        else:
+            return str(self.value)
+
 
 class TemporalDefinition:
     def __init__(self,
@@ -34,15 +41,20 @@ class TemporalDefinition:
                  offset: Optional[str],
                  timezone: Optional[str],
                  is_epoch: bool,
-                 unit: str):
+                 unit: str,
+                 attribute_name: str,
+                 dataset_timezone: Optional[str],
+                 config_timezone: Optional[str]):
         self.str_format = str_format
         self.offset = offset
         self.timezone = timezone
-        self.temporal_type = self._determine_temporal_type()
         self.is_epoch = is_epoch
         self.unit = unit
 
         self.validate()
+        self.temporal_type = self._determine_temporal_type()
+        self.resolve_timezone(attribute_name=attribute_name, dataset_timezone=dataset_timezone,
+                              config_timezone=config_timezone)
 
     def get_cypher_type(self) -> str:
         return self.temporal_type.value
@@ -101,7 +113,7 @@ class TemporalDefinition:
 
         overrides = " and ".join(overrides_list)
         logger.warning(
-            f"Timezone mismatch for {attribute_name}: {overriding_source} '{effective_timezone}' overrides "
+            f"Timezone mismatch for attribute `{attribute_name}`: {overriding_source} '{effective_timezone}' overrides "
             f"{overrides}.")
 
     @staticmethod
@@ -118,7 +130,7 @@ class TemporalDefinition:
 
         overrides = " and ".join(overrides_list)
         logger.warning(
-            f"Timezone configuration ({overrides}) ignored for {attribute_name} "
+            f"Timezone configuration ({overrides}) ignored for attribute `{attribute_name}` "
             f"because the timestamp contains explicit offset information through {source}.")
 
     def resolve_timezone(self, attribute_name: str, dataset_timezone: Optional[str],
@@ -126,7 +138,7 @@ class TemporalDefinition:
         if self.temporal_type == TemporalType.DATE:
             if self.timezone or self.offset or (self.str_format and "%z" in self.str_format):
                 logger.warning(
-                    f"Timezone information for {attribute_name} is ignored because the attribute is of type DATE."
+                    f"Timezone information for attribute `{attribute_name}` is ignored because the attribute is of type DATE."
                 )
 
             return  # dates do not have timezones
@@ -156,7 +168,7 @@ class TemporalDefinition:
         if dataset_timezone is not None:
             self.timezone = dataset_timezone
             logger.info(
-                f"No timezone defined for {attribute_name}. Using dataset timezone '{dataset_timezone}'.")
+                f"No timezone defined for attribute `{attribute_name}`. Using dataset timezone '{dataset_timezone}'.")
             self._warn_override(attribute_name=attribute_name,
                                 overriding_source="dataset timezone",
                                 dataset_timezone=None,
@@ -167,21 +179,22 @@ class TemporalDefinition:
         if config_timezone is not None:
             self.timezone = config_timezone
             logger.info(
-                f"No timezone defined for {attribute_name}. Using config timezone '{config_timezone}'.")
+                f"No timezone defined for attribute `{attribute_name}`. Using config timezone '{config_timezone}'.")
             return
 
         self.timezone = "UTC"
         logger.info(
-            f"No timezone has been defined for {attribute_name}. Default UTC timezone is used.")
+            f"No timezone has been defined for attribute `{attribute_name}`. Default UTC timezone is used.")
 
     @staticmethod
-    def from_dict(obj: Any) -> Optional['TemporalDefinition']:
+    def from_dict(obj: Any, attribute_name: str, dataset_timezone: Optional[str], config_timezone: Optional[str]) -> \
+            Optional['TemporalDefinition']:
         if obj is None:
             return None
         # region read values
         _format = obj.get("format")
 
-        _is_epoch = obj.get("is_epoch", False)  # default is False
+        _is_epoch = bool(obj.get("is_epoch"))  # default is False
         _unit = obj.get("unit")
 
         _offset = obj.get("offset")
@@ -191,7 +204,10 @@ class TemporalDefinition:
                                   offset=_offset,
                                   timezone=_timezone,
                                   is_epoch=_is_epoch,
-                                  unit=_unit)
+                                  unit=_unit,
+                                  attribute_name=attribute_name,
+                                  dataset_timezone=dataset_timezone,
+                                  config_timezone=config_timezone)
 
 
 @dataclass
@@ -235,10 +251,10 @@ class Attribute:
     name: str
     columns: List[Column]
     separator: str
-    is_datetime: bool
     is_compound: bool
     optional: bool
-    datetime_object: TemporalDefinition
+    datetime_object: Optional[TemporalDefinition]
+    temporal_type: TemporalType
     na_rep_value: Any
     na_rep_columns: List[Column]
     filter_exclude_values: List[str]
@@ -247,9 +263,13 @@ class Attribute:
     is_primary_key: bool
     is_foreign_key: bool
 
+    def is_temporal(self):
+        return self.temporal_type != TemporalType.NONE
+
     def get_cypher_type(self) -> str:
-        if self.is_datetime:
-            return self.datetime_object.get_cypher_type()
+        temporal_type = self.temporal_type.get_cypher_type()
+        if temporal_type is not None:
+            return temporal_type
 
         if self.is_compound:
             return "toString"
@@ -257,15 +277,19 @@ class Attribute:
         return self.columns[0].get_cypher_type()
 
     @staticmethod
-    def from_dict(obj: Any) -> Optional['Attribute']:
+    def from_dict(obj: Any, dataset_timezone: Optional[str], config_timezone: Optional[str]) -> Optional['Attribute']:
         if obj is None:
             return None
         _name = obj.get("name")
         _columns = create_list(Column, obj.get("columns"))
         _is_compound = len(_columns) > 1
         _optional = bool(obj.get("optional"))
-        _datetime_object = TemporalDefinition.from_dict(obj.get("datetime_object"))
-        _is_datetime = _datetime_object is not None
+        _datetime_object = TemporalDefinition.from_dict(obj.get("datetime_object"),
+                                                        attribute_name=_name,
+                                                        dataset_timezone=dataset_timezone,
+                                                        config_timezone=config_timezone)
+        _temporal_type: TemporalType = _datetime_object.temporal_type if _datetime_object is not None else (
+            TemporalType.NONE)
         _na_rep_value = obj.get("na_rep_value")
         _na_rep_columns = create_list(Column, obj.get("na_rep_columns"))
         _separator = obj.get("separator")
@@ -277,7 +301,7 @@ class Attribute:
         _is_foreign_key = replace_undefined_value(obj.get("is_foreign_key"), False)
         return Attribute(name=_name, optional=_optional, columns=_columns, separator=_separator,
                          is_compound=_is_compound,
-                         is_datetime=_is_datetime,
+                         temporal_type=_temporal_type,
                          datetime_object=_datetime_object,
                          na_rep_value=_na_rep_value,
                          na_rep_columns=_na_rep_columns,
@@ -319,7 +343,7 @@ class Sample:
 
 class DataStructureParser:
     @staticmethod
-    def from_dict(obj: Any, config_timezone=None) -> Optional['DataStructure']:
+    def from_dict(obj: Any, config_timezone: Optional[str] = None) -> Optional['DataStructure']:
         if obj is None:
             return None
 
@@ -349,7 +373,7 @@ class DataStructureParser:
             _samples = create_list(Sample, _samples_obj)
 
         _samples = {sample.file_name: sample for sample in _samples}
-        _attributes = create_list(Attribute, obj.get("attributes"))
+        _attributes = create_list(Attribute, obj.get("attributes"), _timezone, config_timezone)
         _attributes = {attribute.name: attribute for attribute in _attributes}
         _split_combined_events = replace_undefined_value(obj.get("split_combined_events"), False)
 
@@ -407,7 +431,8 @@ class DataStructure:
         return self.name
 
     def has_datetime_attribute(self):
-        return any([attribute.is_datetime for attribute in self.attributes.values()])
+        has_temporal_attribute = [attribute.is_temporal() for attribute in self.attributes.values()]
+        return any(has_temporal_attribute)
         # return "Event" in self.labels or "EventRecord" in self.labels
 
     def contains_composed_events(self):
@@ -568,9 +593,7 @@ class DataStructure:
 
         return df_log
 
-    def _convert_datetime_column(self, attribute_name: str, series: pd.Series, datetime_object: TemporalDefinition):
-        timezone = self._get_timezone(attribute_name=attribute_name, datetime_object=datetime_object)
-
+    def _convert_datetime_column(self, series: pd.Series, datetime_object: TemporalDefinition):
         if datetime_object.is_epoch:
             parsed = pd.to_datetime(
                 pd.to_numeric(series, errors="coerce"),  # convert to Integer first
@@ -578,8 +601,8 @@ class DataStructure:
                 errors="coerce",
                 utc=True
             )
-            if timezone:
-                parsed = parsed.dt.tz_convert(timezone)
+            if datetime_object.timezone:
+                parsed = parsed.dt.tz_convert(datetime_object.timezone)
 
         else:
             dt_format = datetime_object.str_format
@@ -597,8 +620,8 @@ class DataStructure:
                 errors="coerce"
             )
 
-            if parsed.dt.tz is None:
-                parsed = parsed.dt.tz_localize(timezone)
+            if parsed.dt.tz is None and datetime_object.timezone:
+                parsed = parsed.dt.tz_localize(datetime_object.timezone)
 
         if datetime_object.temporal_type == TemporalType.DATE:  # convert to date
             return parsed.dt.strftime("%Y-%m-%d")
@@ -610,7 +633,7 @@ class DataStructure:
 
     def convert_datetimes(self, df_log):
         for attribute_name, attribute in self.attributes.items():
-            if not attribute.is_datetime:
+            if not attribute.is_temporal():
                 continue
 
             series = df_log[attribute_name].replace("", pd.NA)
@@ -933,7 +956,7 @@ class DataStructure:
         datetime_formats = {}
 
         for attribute_name, attribute in self.attributes.items():
-            if attribute.is_datetime:
+            if attribute.is_temporal():
                 datetime_formats[attribute_name] = attribute.datetime_object
 
         return datetime_formats
@@ -953,13 +976,13 @@ class DatasetDescriptions:
         self.structures = structures
 
     @classmethod
-    def from_file(cls, path: str, timezone):
+    def from_file(cls, path: str, config_timezone):
         random.seed(1)
         with open(path, encoding='utf-8') as f:
             data = json.load(f)
 
             structures = [
-                DataStructureParser.from_dict(item, config_timezone=timezone)
+                DataStructureParser.from_dict(item, config_timezone=config_timezone)
                 for item in data
             ]
             structures = [item for item in structures if item is not None]
