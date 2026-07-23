@@ -87,18 +87,19 @@ class SemanticHeaderQueryLibrary:
         # then we create/merge the resulting node and set all labels, properties and inferred relations
         # language=SQL
         query_str = '''
-                    CALL apoc.periodic.iterate(
-                    'MATCH ($record) $log_check_str
+                    :auto
+                    MATCH ($record) $log_check_str
                     $record_matches
                     // order records by elementId, this will determine the order in which events are created
                     // this is important for the temporal ordering of :Event nodes 
                     // when creating DF edges in case the timestamps are similar
-                          RETURN record ORDER BY elementId(record)',
-                          '$merge_or_create_node
+                          WITH record ORDER BY elementId(record)
+                    CALL (record) {
+                        $merge_or_create_node
                           $set_label_str
                           $set_property_str
                           $infer_corr_str
-                          $infer_observed_str', {batchSize:$batch_size})
+                          $infer_observed_str} IN TRANSACTIONS
                     '''
 
         query_str = Template(query_str).safe_substitute({
@@ -150,14 +151,15 @@ class SemanticHeaderQueryLibrary:
             from_or_to = "TO"
 
         # add correlation to a child node if its parent is correlated to an event
+        # language=cypher
         query_str = '''
-            CALL apoc.periodic.iterate('
-                MATCH (e:Event) --> ($node) - [:$from_or_to] - (relation:$relation_label_str)
-                WHERE NOT EXISTS ((e) - [:CORR] -> (relation))
-                RETURN DISTINCT relation, e',
-                'MERGE (e) - [:$corr_type] -> (relation)',
-                {batchSize:$batch_size}
-                )       
+            :auto
+            MATCH (e:Event) --> ($node) - [:$from_or_to] - (relation:$relation_label_str)
+            WHERE NOT EXISTS ((e) - [:CORR] -> (relation))
+            WITH DISTINCT relation, e
+            CALL (relation, e) {
+                MERGE (e) - [:$corr_type] -> (relation)
+            } IN TRANSACTIONS   
             '''
 
         return Query(query_str=query_str,
@@ -181,12 +183,13 @@ class SemanticHeaderQueryLibrary:
 
         # language=SQL
         query_str = '''
-                CALL apoc.periodic.iterate(
-                '$relation_queries                        
-                RETURN distinct $from_node_name, $to_node_name',
-                '$merge_str
-                $set_properties_str',                        
-                {batchSize: $batch_size})
+                :auto
+                $relation_queries                        
+                WITH distinct $from_node_name, $to_node_name
+                CALL ($from_node_name, $to_node_name) {
+                    $merge_str
+                    $set_properties_str
+                } IN TRANSACTIONS
             '''
 
         query_str = Template(query_str).safe_substitute({
@@ -215,12 +218,13 @@ class SemanticHeaderQueryLibrary:
 
         # language=SQL
         query_str = '''
-                    CALL apoc.periodic.iterate(
-                    '$node_queries                        
-                    RETURN distinct $from_node_name, $to_node_name',
-                    '$merge_str
-                    $set_properties_str',                        
-                    {batchSize: $batch_size})
+                    :auto
+                    $node_queries                        
+                    WITH distinct $from_node_name, $to_node_name
+                    CALL ($from_node_name, $to_node_name) {
+                        $merge_str
+                        $set_properties_str
+                    } IN TRANSACTIONS
                 '''
 
         query_str = Template(query_str).safe_substitute({
@@ -264,16 +268,16 @@ class SemanticHeaderQueryLibrary:
         # then match all from and to nodes that are extracted from these records
         # merge the resulting node
         # set the optional properties
-        query_str = '''     CALL apoc.periodic.iterate('
+        query_str = '''     :auto
                             MATCH ($record) $log_check_str
                             $record_matches
-                            RETURN record',
-                            '
-                            MATCH ($from_node) - [:EXTRACTED_FROM] -> (record)
-                            MATCH ($to_node) - [:EXTRACTED_FROM] -> (record)
-                            $merge_str
-                            $set_properties_str',
-                            {batchSize:$batch_size})
+                            WITH record
+                            CALL (record) {
+                                MATCH ($from_node) - [:EXTRACTED_FROM] -> (record)
+                                MATCH ($to_node) - [:EXTRACTED_FROM] -> (record)
+                                $merge_str
+                                $set_properties_str
+                            } IN TRANSACTIONS
                         '''
 
         query_str = Template(query_str).safe_substitute({
@@ -302,12 +306,15 @@ class SemanticHeaderQueryLibrary:
             # INT, FLOAT --> save difference between second and first
             add_duration_str = '''
                 , CASE 
-                    WHEN apoc.meta.cypher.type(first.timestamp) IN ["DATE_TIME", "TIME", "DATE"] 
-                        AND apoc.meta.cypher.type(second.timestamp) IN ["DATE_TIME", "TIME", "DATE"] 
+                    WHEN first.timestamp is :: DATE 
+                        AND second.timestamp IS :: DATE
                         THEN duration.between(first.timestamp, second.timestamp)
-                    WHEN apoc.meta.cypher.type(first.timestamp) IN ["INTEGER", "FLOAT"]
-                     AND apoc.meta.cypher.type(second.timestamp) IN ["INTEGER", "FLOAT"]
-                     THEN  second.timestamp - first.timestamp
+                    WHEN first.timestamp IS :: ZONED DATETIME
+                        AND second.timestamp IS :: ZONED DATETIME
+                        THEN duration.between(first.timestamp, second.timestamp)
+                    WHEN first.timestamp is :: INTEGER | FLOAT 
+                        AND second.timestamp IS :: INTEGER | FLOAT 
+                     THEN  second.timestamp*1.0 - first.timestamp*1.0
                     ELSE NULL
                 END AS duration
             '''
@@ -334,8 +341,8 @@ class SemanticHeaderQueryLibrary:
         if event_label == "CompoundEvent":
             if entity.type == "Resource":
                 query_str = '''
-                     CALL apoc.periodic.iterate(
-                        'MATCH (n:$entity_labels_string) <-[:$corr_type_string]- (e:$event_label)
+                     :auto
+                     MATCH (n:$entity_labels_string) <-[:$corr_type_string]- (e:$event_label)
                         CALL {
                                 WITH e
                                 MATCH (e) - [:CONSISTS_OF] -> (single_event:Event)
@@ -346,18 +353,18 @@ class SemanticHeaderQueryLibrary:
                         WITH n , collect (nodes) as nodeList
                         UNWIND range(0,size(nodeList)-2) AS i
                         WITH n , nodeList[i] as first, nodeList[i+1] as second
-                        RETURN n, first, second $add_duration_str',
-                        'MERGE (first) -[df:$df_entity {entityType: "$entity_type"}]->(second)
-                         SET df.type = "DF"
-                         SET df.entityId = n.sysId
-                         SET df.duration = duration
-                        ',
-                        {batchSize: $batch_size})
+                        WITH n, first, second $add_duration_str
+                        CALL (n, first, second, duration){
+                            MERGE (first) -[df:$df_entity {entityType: "$entity_type"}]->(second)
+                            SET df.type = "DF"
+                            SET df.entityId = n.sysId
+                            SET df.duration = duration
+                         } IN TRANSACTIONS
                     '''
             else:
                 query_str = '''
-                                     CALL apoc.periodic.iterate(
-                                        'MATCH (n:$entity_labels_string) <-[:$corr_type_string]- (e:$event_label)
+                                     :auto
+                                     MATCH (n:$entity_labels_string) <-[:$corr_type_string]- (e:$event_label)
                                         CALL {
                                                 WITH e
                                                 MATCH (e) - [:CONSISTS_OF] -> (single_event:Event)
@@ -368,28 +375,28 @@ class SemanticHeaderQueryLibrary:
                                         WITH n , collect (nodes) as nodeList
                                         UNWIND range(0,size(nodeList)-2) AS i
                                         WITH n , nodeList[i] as first, nodeList[i+1] as second
-                                        RETURN first, second $add_duration_str',
-                                        'MERGE (first) -[df:$df_entity {entityType: "$entity_type"}]->(second)
+                                        WITH first, second $add_duration_str
+                                         CALL (first, second, duration){
+                                        MERGE (first) -[df:$df_entity {entityType: "$entity_type"}]->(second)
                                          SET df.type = "DF"
                                          SET df.duration = duration
-                                        ',
-                                        {batchSize: $batch_size})
+                                     } IN TRANSACTIONS
                                     '''
 
         else:
             query_str = '''
-                             CALL apoc.periodic.iterate(
-                                'MATCH (n:$entity_labels_string) <-[:$corr_type_string]- (e:$event_label)
-                                WITH n , e as nodes ORDER BY e.timestamp, ID(e)
-                                WITH n , collect (nodes) as nodeList
-                                UNWIND range(0,size(nodeList)-2) AS i
-                                WITH n , nodeList[i] as first, nodeList[i+1] as second
-                                RETURN first, second $add_duration_str',
-                                'MERGE (first) -[df:$df_entity {entityType: "$entity_type"}]->(second)
-                                 SET df.type = "DF"
-                                 SET df.duration = duration
-                                ',
-                                {batchSize: $batch_size})
+                        :auto
+                        MATCH (n:$entity_labels_string) <-[:$corr_type_string]- (e:$event_label)
+                        WITH n , e as nodes ORDER BY e.timestamp, ID(e)
+                        WITH n , collect (nodes) as nodeList
+                        UNWIND range(0,size(nodeList)-2) AS i
+                            WITH n , nodeList[i] as first, nodeList[i+1] as second
+                            WITH first, second $add_duration_str
+                            CALL (first, second, duration) {
+                                MERGE (first) -[df:$df_entity {entityType: "$entity_type"}]->(second)
+                                SET df.type = "DF"
+                                SET df.duration = duration
+                        } IN TRANSACTIONS
                             '''
 
         return Query(query_str=query_str,
