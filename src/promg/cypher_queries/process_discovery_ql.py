@@ -17,7 +17,7 @@ class AnalysisQueryLibrary:
             # corresponds to aggregate_df_relations &  aggregate_df_relations_for_entities in graphdb-event-logs
             # aggregate only for a specific entity type and event classifier
 
-            # language=sql
+            # language=cypher
             query_str = '''
                                 MATCH 
                                 (c1:Activity) -[:OBSERVED]-> (e1:Event) 
@@ -34,7 +34,7 @@ class AnalysisQueryLibrary:
             # aggregate only for a specific entity type and event classifier
             # include only edges with a minimum threshold, drop weak edges (similar to heuristics miner)
 
-            # language=sql
+            # language=cypher
             query_str = '''
                                 MATCH 
                                 (c1:Activity) 
