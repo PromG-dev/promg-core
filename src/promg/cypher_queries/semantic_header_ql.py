@@ -51,14 +51,14 @@ class SemanticHeaderQueryLibrary:
                 infer_corr_str += infer_rel_str
         elif node_constructor.infer_corr_from_event_record:
             # only one correlation is created, create a string for this with the corr type
-            # language=SQL
+            # language=cypher
             infer_corr_str = '''
             WITH record, $result_node_name
                                 MATCH (event:$event_label) - [:EXTRACTED_FROM] -> (record) <- [:EXTRACTED_FROM] - (
                                 $result_node_name)
                                 MERGE (event) - [:$corr_type] -> ($result_node_name)'''
         elif node_constructor.infer_corr_from_entity_record:  # TODO update such that only correct events are considered
-            # language=SQL
+            # language=cypher
             infer_corr_str = '''
                         WITH record, $result_node_name
                                 MATCH (event:$event_label) - [:EXTRACTED_FROM] -> (record) <- [:EXTRACTED_FROM] - (
@@ -68,7 +68,7 @@ class SemanticHeaderQueryLibrary:
         # in case an observed relations needs to be created, we define the string
         infer_observed_str = ""
         if node_constructor.infer_observed:
-            # language=SQL
+            # language=cypher
             infer_observed_str = '''
             WITH record, $result_node_name
                                 MATCH (event:$event_label) - [:EXTRACTED_FROM] -> (record) <- [:EXTRACTED_FROM] - (
@@ -85,7 +85,7 @@ class SemanticHeaderQueryLibrary:
 
         # create the overall query where we match the correct record nodes
         # then we create/merge the resulting node and set all labels, properties and inferred relations
-        # language=SQL
+        # language=cypher
         query_str = '''
                     :auto
                     MATCH ($record) $log_check_str
@@ -173,7 +173,7 @@ class SemanticHeaderQueryLibrary:
     @staticmethod
     def get_create_relation_by_relations_query(relation_constructor: RelationConstructor) -> Query:
         if relation_constructor.model_as_node:
-            # language=sql
+            # language=cypher
             merge_str = '''
                             MERGE ($from_node_name) -[:FROM] -> (relation:$rel_pattern) - [:TO] -> (
                             $to_node_name)
@@ -181,7 +181,7 @@ class SemanticHeaderQueryLibrary:
         else:
             merge_str = "MERGE ($from_node_name) -[$rel_pattern] -> ($to_node_name)"
 
-        # language=SQL
+        # language=cypher
         query_str = '''
                 :auto
                 $relation_queries                        
@@ -208,7 +208,7 @@ class SemanticHeaderQueryLibrary:
     @staticmethod
     def get_create_relation_by_nodes_query(relation_constructor: RelationConstructor) -> Query:
         if relation_constructor.model_as_node:
-            # language=sql
+            # language=cypher
             merge_str = '''
                             MERGE ($from_node_name) -[:FROM] -> (relation:$rel_pattern) - [:TO] -> (
                             $to_node_name)
@@ -216,7 +216,7 @@ class SemanticHeaderQueryLibrary:
         else:
             merge_str = "MERGE ($from_node_name) -[$rel_pattern] -> ($to_node_name)"
 
-        # language=SQL
+        # language=cypher
         query_str = '''
                     :auto
                     $node_queries                        
@@ -248,7 +248,7 @@ class SemanticHeaderQueryLibrary:
         # find events that are related to different entities of which one event also has a reference to the other entity
         # create a relation between these two entities
         if relation_constructor.model_as_node:
-            # language=sql
+            # language=cypher
             merge_str = '''
                             MERGE ($from_node_name) -[:FROM] -> (relation:$rel_pattern) - [:TO] -> (
                             $to_node_name)
@@ -336,7 +336,7 @@ class SemanticHeaderQueryLibrary:
         # unwind the list from 0 to the one-to-last node
         # find neighbouring nodes and add an edge between
 
-        # language=sql
+        # language=cypher
 
         if event_label == "CompoundEvent":
             if entity.type == "Resource":
@@ -412,7 +412,7 @@ class SemanticHeaderQueryLibrary:
     @staticmethod
     def get_merge_duplicate_df_entity_query(node: ConstructedNodes) -> Query:
 
-        # language=sql
+        # language=cypher
         query_str = '''
                         MATCH (n1:Event)-[rel:$df_entity {entityType: '$entity_type'}]->(n2:Event)
                         WITH n1, n2, collect(rel) AS rels
