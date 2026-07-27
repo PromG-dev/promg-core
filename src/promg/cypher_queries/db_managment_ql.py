@@ -9,7 +9,7 @@ class DBManagementQueryLibrary:
     def get_all_rel_types_query() -> Query:
         # find all relations and return the distinct types
 
-        # language=SQL
+        # language=cypher
         query_str = '''
                 MATCH () - [rel] - () RETURN DISTINCT type(rel) AS rel_type
             '''
@@ -20,7 +20,7 @@ class DBManagementQueryLibrary:
     def get_all_node_labels_query() -> Query:
         # find all nodes and return the distinct labels
 
-        # language=SQL
+        # language=cypher
         query_str = '''
             MATCH (n) RETURN DISTINCT labels(n) AS label
         '''
@@ -29,7 +29,7 @@ class DBManagementQueryLibrary:
 
     @staticmethod
     def get_clear_db_query(db_name) -> Query:
-        # language=SQL
+        # language=cypher
         query_str = '''
             CREATE OR REPLACE DATABASE $db_name
             WAIT
@@ -39,7 +39,7 @@ class DBManagementQueryLibrary:
 
     @staticmethod
     def get_delete_relationships_query() -> Query:
-        # language=SQL
+        # language=cypher
         # add :auto as flag to indicate the query should run in an implicit transaction
         query_str = ''':auto 
                     MATCH ()-[r]->() 
@@ -52,7 +52,7 @@ class DBManagementQueryLibrary:
 
     @staticmethod
     def get_delete_nodes_query() -> Query:
-        # language=SQL
+        # language=cypher
 
         # add :auto as flag to indicate the query should run in an implicit transaction
         query_str = ''':auto
@@ -66,7 +66,7 @@ class DBManagementQueryLibrary:
 
     @staticmethod
     def get_replace_db_query(db_name) -> Query:
-        # language=SQL
+        # language=cypher
         query_str = '''
                     CREATE OR REPLACE DATABASE $db_name
                     WAIT
@@ -88,7 +88,7 @@ class DBManagementQueryLibrary:
     def get_constraint_unique_entity_uid_query(node_type=None, entity_key_name="sysId") -> Query:
         if node_type is None:
             node_type = "Entity"
-        # language=SQL
+        # language=cypher
         query_str = '''
             CREATE CONSTRAINT $constraint_name IF NOT EXISTS 
             FOR (en:$node_type) REQUIRE en.$entity_key_name IS UNIQUE
@@ -107,7 +107,7 @@ class DBManagementQueryLibrary:
     @staticmethod
     def get_set_identifier_index_query(node_type: str, identifier_properties: List[str]):
         properties = f"( {','.join(['en.' + prop for prop in identifier_properties])})"
-        # language=SQL
+        # language=cypher
         query_str = '''
                     CREATE CONSTRAINT $constraint_name IF NOT EXISTS 
                     FOR (en:$node_type) REQUIRE $properties IS UNIQUE
@@ -121,7 +121,7 @@ class DBManagementQueryLibrary:
 
     @staticmethod
     def get_set_unique_log_name_index_query() -> Query:
-        # language=SQL
+        # language=cypher
         query_str = '''
             CREATE CONSTRAINT unique_entity_ids IF NOT EXISTS 
             FOR (l:Log) REQUIRE l.name IS UNIQUE
@@ -130,7 +130,7 @@ class DBManagementQueryLibrary:
 
     @staticmethod
     def get_set_sysid_index_query(entity_key_name) -> Query:
-        # language=SQL
+        # language=cypher
         query_str = '''
             CREATE RANGE INDEX entity_sys_id_index 
             IF NOT EXISTS FOR (n:Entity) ON (n.$entity_key_name)
@@ -142,7 +142,7 @@ class DBManagementQueryLibrary:
 
     @staticmethod
     def get_set_activity_index_query() -> Query:
-        # language=SQL
+        # language=cypher
         query_str = '''
                 CREATE RANGE INDEX activity_index 
                 IF NOT EXISTS FOR (a:Activity) ON (a.activity)
@@ -151,7 +151,7 @@ class DBManagementQueryLibrary:
 
     @staticmethod
     def get_set_record_id_as_range_query() -> Query:
-        # language=SQL
+        # language=cypher
         query_str = '''
                 CREATE RANGE INDEX record_id_range 
                 IF NOT EXISTS FOR (r:Record) ON (r.recordId)
@@ -160,7 +160,7 @@ class DBManagementQueryLibrary:
 
     @staticmethod
     def get_set_record_type_range_query() -> Query:
-        # language=SQL
+        # language=cypher
         query_str = '''
                 CREATE RANGE INDEX record_type_range 
                 IF NOT EXISTS FOR (rt:RecordType) ON (rt.type)
@@ -169,7 +169,7 @@ class DBManagementQueryLibrary:
 
     @staticmethod
     def get_node_count_query() -> Query:
-        # language=SQL
+        # language=cypher
         query_str = '''
                 // List all node types and counts
                 MATCH (n) 
@@ -188,7 +188,7 @@ class DBManagementQueryLibrary:
 
     @staticmethod
     def get_edge_count_query() -> Query:
-        # language=SQL
+        # language=cypher
         query_str = '''
                 // List all agg rel types and counts
                 MATCH () - [r] -> ()
@@ -206,7 +206,7 @@ class DBManagementQueryLibrary:
 
     @staticmethod
     def get_aggregated_edge_count_query() -> Query:
-        # language=SQL
+        # language=cypher
         query_str = '''
                 // List all rel types and counts
                 MATCH () - [r] -> ()
