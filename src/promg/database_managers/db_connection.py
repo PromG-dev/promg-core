@@ -50,7 +50,8 @@ class DatabaseConnection:
 
         return transformed_query
 
-    def _prepare_query(self, query: Query) -> Tuple[str, Dict[str, Any], str, bool, bool]:
+    @staticmethod
+    def _prepare_query(query: Query) -> Tuple[str, Dict[str, Any], Optional[str], bool]:
         """
         Normalizes a Query object by filling in default parameters and checking if batching is required.
 
@@ -60,66 +61,29 @@ class DatabaseConnection:
             - query_str (str): The Cypher query string.
             - kwargs (Dict[str, Any]): The processed query parameters.
             - db_name (str): The name of the database to run the query against.
-            - is_batched (bool): True if the query uses batching (e.g., via apoc.periodic.commit), False otherwise.
             - is_implicit (bool): True if the query is an implicit query as indicated by the flag :auto, False otherwise.
         """
 
         # Unpack Query Object
-        query_str = query.query_string
+        query_str: str = query.query_string
         kwargs = query.kwargs or {}  # replace None value by an emtpy dictionary
         db_name = query.database
-
-        if "batch_size" not in kwargs:  # override batch_size if NOT already defined
-            kwargs["batch_size"] = self.batch_size
-
-        if "limit" not in kwargs:  # override limit if NOT already defined
-            kwargs["limit"] = self.batch_size
-
-        is_batched = "apoc.periodic.commit" in query_str or "apoc.periodic.iterate" in query_str
 
         is_implicit = query_str.strip().lower().startswith(":auto")
         if is_implicit:
             query_str = query_str.replace(":auto", "")
 
-        return query_str, kwargs, db_name, is_batched, is_implicit
+        return query_str, kwargs, db_name, is_implicit
 
     def _dispatch_query(self, query: Query) -> QueryResult:
-        query_str, query_kwargs, db_name, is_batched, is_implicit = self._prepare_query(query)
+        query_str, query_kwargs, db_name, is_implicit = self._prepare_query(query)
 
-        if is_batched:
-            limit = query_kwargs.pop("limit")
-            return self._run_batched_query(query_str=query_str,
-                                           limit=limit,
-                                           db_name=db_name,
-                                           **query_kwargs)
-        else:
-            return self._exec_query(query_str=query_str,
-                                    db_name=db_name,
-                                    is_implicit=is_implicit,
-                                    **query_kwargs)
+        return self._exec_query(query_str=query_str,
+                                db_name=db_name,
+                                is_implicit=is_implicit,
+                                **query_kwargs)
 
-    def _run_batched_query(self, query_str: str, limit: int, db_name: str, **query_kwargs) -> QueryResult:
-        failed_batches = 1
-        attempts = 0
-        result = None
-        while failed_batches > 0 and attempts <= 10:
-            result = self._exec_query(
-                query_str=query_str,
-                db_name=db_name,
-                **query_kwargs)
-            failed_batches = result[0]['failedBatches']
-            query_kwargs["batch_size"] = int(limit / 2)
-            query_kwargs["batch_size"] = max(10000, query_kwargs["batch_size"])
-            attempts += 1
-        if failed_batches > 0:
-            if "iterate" in query_str:
-                raise BatchQueryExecutionError(f"Maximum attempts reached: {result[0]['errorMessages']}")
-            else:
-                raise BatchQueryExecutionError(f"Maximum attempts reached: {result[0]['batchErrors']}")
-
-        return result
-
-    def _exec_query(self, query_str: str, db_name: str = None, is_implicit=False, **query_kwargs) -> QueryResult:
+    def _exec_query(self, query_str: str, db_name: Optional[str] = None, is_implicit=False, **query_kwargs) -> QueryResult:
         """
         Write a transaction of the query to  the server and return the result
         @param query_str: string, query to be executed
