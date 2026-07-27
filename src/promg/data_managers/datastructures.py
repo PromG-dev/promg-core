@@ -4,8 +4,6 @@ import os
 import re
 import warnings
 import random
-from numpy.lib import _format_impl
-from pathlib import Path
 
 from typing import List, Dict, Any, Optional
 from dataclasses import dataclass
@@ -138,7 +136,8 @@ class TemporalDefinition:
         if self.temporal_type == TemporalType.DATE:
             if self.timezone or self.offset or (self.str_format and "%z" in self.str_format):
                 logger.warning(
-                    f"Timezone information for attribute `{attribute_name}` is ignored because the attribute is of type DATE."
+                    f"Timezone information for attribute `{attribute_name}` is ignored because the attribute is of "
+                    f"type DATE."
                 )
 
             return  # dates do not have timezones
@@ -645,17 +644,21 @@ class DataStructure:
                 datetime_object=attribute.datetime_object
             )
 
-            df_log[attribute_name] = converted
             after_null_mask = converted.isna()
 
             invalid_count = (~before_null_mask & after_null_mask).sum()
 
             if invalid_count:
                 logger.warning(
-                    "%s rows contain invalid timestamps in column %s",
+                    "%s rows contain invalid timestamps in column %s (%s), we have e.g. %s and format %s",
                     invalid_count,
-                    attribute_name
+                    attribute_name,
+                    self.name,
+                    df_log.loc[df_log[attribute_name] != "", attribute_name][0],
+                    attribute.datetime_object.str_format
                 )
+
+            df_log[attribute_name] = converted
 
         return df_log
 
@@ -976,7 +979,7 @@ class DatasetDescriptions:
         self.structures = structures
 
     @classmethod
-    def from_file(cls, path: str, config_timezone):
+    def from_file(cls, path: str, config_timezone: Optional[str] = None):
         random.seed(1)
         with open(path, encoding='utf-8') as f:
             data = json.load(f)
