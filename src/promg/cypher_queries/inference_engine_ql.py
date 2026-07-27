@@ -5,7 +5,7 @@ from ..database_managers.db_connection import Query
 class InferenceEngineQueryLibrary:
     @staticmethod
     def get_query_infer_items_propagate_upwards_multiple_levels(entity: ConstructedNodes, is_load=True) -> Query:
-        # language=sql
+        # language=cypher
         query_str = '''
                 MATCH (f2:Event) - [:CORR] -> (n:$entity)
                 MATCH (f2) - [:CORR] ->  (equipment:Equipment)
@@ -35,7 +35,7 @@ class InferenceEngineQueryLibrary:
     def get_query_infer_items_propagate_downwards_multiple_level_w_batching(entity: ConstructedNodes,
                                                                             relative_position: ConstructedNodes) -> \
             Query:
-        # language=sql
+        # language=cypher
         query_str = '''
                 MATCH (f2:Event) - [:CORR] -> (bp:$relative_position)
                 MATCH (f2) - [:CORR] -> (equipment :Equipment)
@@ -68,7 +68,7 @@ class InferenceEngineQueryLibrary:
 
     @staticmethod
     def get_query_infer_items_propagate_downwards_one_level(entity: ConstructedNodes) -> Query:
-        # language=sql
+        # language=cypher
         query_str = '''
                         MATCH (f1 :Event) - [:CORR] -> (equipment :Equipment)
                         MATCH (f1) - [:OBSERVED] -> (a1:Activity) -[:AT]-> (l:Location)
@@ -101,7 +101,7 @@ class InferenceEngineQueryLibrary:
 
     @staticmethod
     def get_match_entity_with_batch_position_query(entity: ConstructedNodes, relative_position: ConstructedNodes) -> Query:
-        # language=sql
+        # language=cypher
         query_str = '''
                     MATCH (e:Event) - [:CORR] -> (b:Box)
                     MATCH (e) - [:CORR] -> (bp:$relative_position)
