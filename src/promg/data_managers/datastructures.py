@@ -473,6 +473,8 @@ class DataStructure:
         mapping = {}
         for attribute in self.attributes.values():
             mapping[attribute.name] = attribute.get_cypher_type()
+        if self.add_index:
+            mapping["index"] = "toString"
 
         return mapping
 
@@ -855,7 +857,7 @@ class DataStructure:
             df_log["log"] = file_name
 
         if self.add_index:
-            df_log["index"] = df_log.index
+            df_log["index"] = f"{self.name}_{df_log.index}"
 
         # drop all columns with only nan values
         df_log = df_log.dropna(how='all', axis=1)  # drop all columns in which all values are nan (empty)
