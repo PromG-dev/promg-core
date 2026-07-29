@@ -21,11 +21,14 @@ class DBManagement:
 
         """
         if replace:
-            result = self.connection.exec_query(dbm_ql.get_replace_db_query, **{"db_name": self.connection.db_name})
-            if result[0]['state'] == 'CaughtUp' and result[0]['success']:
-                return True
-            else:
-                return False
+            self.connection.exec_query(dbm_ql.get_replace_db_query, **{"db_name": self.connection.db_name})
+            record = self.connection.exec_query(f"SHOW DATABASE {self.connection.db_name}")
+
+            return (
+                    record is not None
+                    and "currentStatus" in record[0]
+                    and record[0]["currentStatus"].lower() == "online"
+            )
         else:
             self.connection.exec_query(dbm_ql.get_delete_relationships_query)
             self.connection.exec_query(dbm_ql.get_delete_nodes_query)
